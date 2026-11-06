@@ -59,7 +59,7 @@
 - [ ] Preset 5 de fábrica del Slim Phatty (pendiente de que Jorge pase los valores o una grabación).
 
 ## Ideas de Jorge para más adelante
-- [ ] Pantalla «Sistema» en la web (pedido 6-11-2026): todo lo que afecte al funcionamiento debe poder cambiarlo Jorge sin terminal ni Claude: interfaz de audio, buffer, frecuencia, salidas y entradas, puertos MIDI, núcleos, red, apagar y reiniciar. Hoy esas opciones van en el arranque del servicio: pasarlas a un archivo propio que Freon lea, y aplicar cambios reabriendo el audio, con vuelta atrás si la interfaz nueva falla.
+- [x] Pantalla «System» en Settings: audio, buffer, frecuencia, núcleos, salidas, MIDI, apagar y reiniciar, con vuelta atrás (6-11-2026). Faltan red y latencia de cada interfaz.
 - [x] Web: el scroll con dos dedos mueve la página; los knobs solo cambian arrastrando, o con ⌥ + scroll (5-11-2026).
 - [ ] Mezclador: en la tira de cada sinte, un knob que sea el Volume del propio motor que tenga la pista (no un Gain nuevo), aparte del fader (pedido 5-11-2026). Así se guarda con el preset. Al cambiar de motor debe pasar a mandar el Volume del motor nuevo.
 

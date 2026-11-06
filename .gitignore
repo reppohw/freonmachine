@@ -12,3 +12,5 @@ breaks/*
 !breaks/.keep
 # sistema
 .DS_Store
+# ajustes de cada máquina
+freon-sistema.txt*

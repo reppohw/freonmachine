@@ -346,6 +346,15 @@ y la vuelve a abrir en cuanto reaparece.
 
 **Prueba de estrés:** `./bin/freon-machine --estres 30 --nucleos 4` toca el peor caso (18 voces de Juno, batería, 4 efectos de envío y todos los efectos moviéndose al azar) y dice cuánto gasta. «Pico de cálculo» es lo que cuesta de verdad; «pico de reloj» incluye las veces que el sistema le quita el procesador. En un Mac sin tiempo real el de reloj sale alto y no significa nada; en la Pi, con el servicio parado (`sudo systemctl stop freon-machine`) y si la prueba dice «Tiempo real: sí», tiene que quedar por debajo del 100 %.
 
+## Ajustes de sistema, sin terminal
+
+En la pestaña **Settings**, tarjeta **System**, eliges salida y entradas de audio, buffer, frecuencia, núcleos, salidas y qué puertos MIDI se usan. Con **Apply and restart Freon** se guarda y Freon se reinicia sola en unos segundos.
+
+- Si lo elegido no funciona al arrancar, vuelve sola a lo anterior y lo avisa.
+- Si la interfaz no está (por ejemplo, desconectada), usa la de por defecto; y si no hay ninguna, arranca sin audio, para que siempre puedas arreglarlo desde la web.
+- Ahí mismo ves temperatura, CPU, pico y cortes, y tienes Restart Freon y Power off.
+- Se guarda en `freon-sistema.txt` y manda sobre las opciones de arranque. Si borras ese archivo, vuelven las de arranque.
+
 ## En la Raspberry Pi (arranque automático, sin pantalla)
 
 1. Copia la carpeta a la Pi (por ejemplo a `~/freon-machine`) y entra en ella.

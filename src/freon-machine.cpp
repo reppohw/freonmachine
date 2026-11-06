@@ -778,6 +778,7 @@ struct Control {
     }
     std::chrono::steady_clock::time_point dirtyAt{}; bool dirty = false;
     unsigned lastXr = 0; bool wasDirty = false; std::chrono::steady_clock::time_point dirtySince{};
+    std::function<std::string()> sysInfo, sysStatus; std::function<void(const std::string&)> sysApply, sysAction;
     std::function<void()> tick; std::chrono::steady_clock::time_point lastTick{};
     unsigned midiSeen_ = ~0u; std::string midiPorts_ = "-";
 
@@ -1214,6 +1215,10 @@ struct Control {
                 if (w != "all" && std::atoi(w.c_str()) != l) continue;
                 for (int fi = 0; fi < 14; ++fi) { const char* f = kLaneKeys[fi]; { const std::string k = "d.l" + std::to_string(l) + "." + f; if (defs.count(k) && st[k] != defs[k]) set(k, defs[k], -1); } }
             } }
+        else if (op == "sys") { if (sysInfo) srv.send(client, "sys " + sysInfo()); }
+        else if (op == "sysst") { if (sysStatus) srv.send(client, "sysst " + sysStatus()); }
+        else if (op == "sysapply") { std::string rest; std::getline(is, rest); if (sysApply) sysApply(rest); }
+        else if (op == "sysact") { std::string w; if (is >> w && sysAction) sysAction(w); }
         else if (op == "combo") { std::string w; int n; if (is >> w >> n) { if (w == "save") comboSave(n); else if (w == "down") comboPress(n, true); else if (w == "up") comboPress(n, false); else if (w == "off") comboOff(); } }
         else if (op == "msnap") { std::string w; int n; if (is >> w >> n) { if (w == "save") snapSave(n); else if (w == "load") snapLoad(n); } }
         else if (op == "sset") { std::string k; if (is >> k) { std::string v; std::getline(is, v); if (!v.empty() && v[0] == ' ') v.erase(0, 1); sset(k, v, client); } }
@@ -1814,6 +1819,10 @@ struct MidiHub {
     // En Linux, los puertos que abre el propio programa también aparecen en la lista. Si se abrieran, cada búsqueda
     // crearía más y Freon acabaría conectada a sí misma sin parar. Solo se abren aparatos de verdad.
     static bool notADevice(const std::string& nm) { const std::string l = lower(nm); return l.find("through") != std::string::npos || l.find("rtmidi") != std::string::npos; }
+    // nombre estable de un puerto: en Linux acaba en « 24:0», un número que cambia entre arranques
+    static std::string portKey(std::string nm) { const size_t sp = nm.rfind(' '); if (sp != std::string::npos && nm.find(':', sp) != std::string::npos && std::isdigit(static_cast<unsigned char>(nm.back()))) nm.resize(sp); return nm; }
+    std::vector<std::string> ignored;   // puertos desactivados en la pantalla de sistema
+    bool isIgnored(const std::string& nm) const { return std::find(ignored.begin(), ignored.end(), portKey(nm)) != ignored.end(); }
     void scan(bool first) {
         bool changed = false;
         try {
@@ -1832,7 +1841,7 @@ struct MidiHub {
             for (unsigned i = 0; i < n; ++i) {
                 const std::string& nm = now[i];
                 if (only >= 0 && static_cast<int>(i) != only) continue;
-                if (notADevice(nm)) continue;
+                if (notADevice(nm) || isIgnored(nm)) continue;
                 bool have = false; for (auto& p : ports) have |= p->name == nm;
                 if (have) continue;
                 auto p = std::make_unique<Port>(); p->name = nm; p->hub = this; p->idx = nextIdx++;
@@ -1848,7 +1857,7 @@ struct MidiHub {
             for (size_t k = 0; k < outs.size();) { if (std::find(now.begin(), now.end(), outs[k]->name) != now.end()) { ++k; continue; } outs.erase(outs.begin() + static_cast<long>(k)); changed = true; }
             for (unsigned i = 0; i < n; ++i) {
                 const std::string& nm = now[i];
-                if (notADevice(nm)) continue;
+                if (notADevice(nm) || isIgnored(nm)) continue;
                 bool have = false; for (auto& o : outs) have |= o->name == nm;
                 if (have) continue;
                 auto o = std::make_unique<Out>(); o->name = nm; o->out = std::make_unique<RtMidiOut>(); o->out->openPort(i);
@@ -1887,6 +1896,19 @@ std::string exeDir(const char* argv0) {
     const auto slash = p.rfind('/'); return slash == std::string::npos ? "." : p.substr(0, slash);
 }
 // --audio y --entrada aceptan un número o parte del nombre ("Scarlett", "MacBook")
+// --- ajustes de sistema: se eligen en la pantalla, no en la terminal. Un archivo de texto clave=valor junto al programa.
+using SysCfg = std::map<std::string, std::string>;
+SysCfg sysLoad(const std::string& path) {
+    SysCfg c; std::ifstream f(path); std::string l;
+    while (std::getline(f, l)) { const size_t e = l.find('='); if (e != std::string::npos) c[l.substr(0, e)] = l.substr(e + 1); }
+    return c;
+}
+bool sysSave(const std::string& path, const SysCfg& c) {
+    const std::string tmp = path + ".tmp"; { std::ofstream f(tmp); for (auto& [k, v] : c) f << k << '=' << v << '\n'; if (!f) return false; }
+    return std::rename(tmp.c_str(), path.c_str()) == 0;
+}
+int cpuTempC() { std::ifstream f("/sys/class/thermal/thermal_zone0/temp"); long t = 0; return f >> t ? static_cast<int>(t / 1000) : -1; }
+std::string piThrottled() { std::ifstream f("/sys/devices/platform/soc/soc:firmware/get_throttled"); std::string s; return f >> s ? s : "-"; }
 int findDevice(RtAudio& a, const std::string& want, bool input) {
     if (want.empty()) return -1;
     if (std::all_of(want.begin(), want.end(), [](char c) { return std::isdigit(static_cast<unsigned char>(c)); })) {
@@ -1922,13 +1944,22 @@ int main(int argc, char** argv) {
     if (hasArg(argc, argv, "--estres")) return stressTest(std::max(1, argInt(argc, argv, "--estres", 30)));
     if (hasArg(argc, argv, "--render")) return renderTest(argStr(argc, argv, "--render", "prueba.wav"));
 
-    const unsigned rate = static_cast<unsigned>(argInt(argc, argv, "--rate", 48000));
-    unsigned frames = static_cast<unsigned>(argInt(argc, argv, "--buffer", 128));
+    // ajustes de sistema: lo elegido en la pantalla manda sobre las opciones de arranque
+    const std::string base = exeDir(argv[0]) + "/..", sysFile = base + "/freon-sistema.txt", sysPrev = sysFile + ".previo", sysPend = sysFile + ".probando", sysBack = sysFile + ".revertido";
+    SysCfg cfg = sysLoad(sysFile); bool forceDefault = false;
+    const auto cfgS = [&](const char* k, const char* arg) { const auto it = cfg.find(k); return it != cfg.end() && !it->second.empty() ? it->second : argStr(argc, argv, arg); };
+    const auto cfgI = [&](const char* k, const char* arg, int def) { const std::string s = cfgS(k, arg); const int v = s.empty() ? def : std::atoi(s.c_str()); return v > 0 ? v : def; };
+    gNuc = std::clamp(cfgI("nucleos", "--nucleos", nucDef), 1, std::min(4, hw));
+    const unsigned rate = static_cast<unsigned>(cfgI("rate", "--rate", 48000));
+    unsigned frames = static_cast<unsigned>(cfgI("buffer", "--buffer", 128));
+    const auto reexec = [&]() {   // reinicio limpio: mismo programa y mismas opciones
+        std::fflush(stdout); for (int fd = 3; fd < 1024; ++fd) ::close(fd);
+        execv(argv[0], argv); std::perror("No se pudo reiniciar"); std::_Exit(1);
+    };
 #if defined(__linux__)
     if (mlockall(MCL_CURRENT | MCL_FUTURE) != 0) std::printf("Aviso: no se pudo bloquear la memoria (mlockall); puede haber cortes si el sistema pagina.\n");
 #endif
     // la carpeta del proyecto es la que contiene bin/ (así da igual desde dónde se abra)
-    const std::string base = exeDir(argv[0]) + "/..";
     auto au = std::make_unique<Audio>(); au->prepare(static_cast<float>(rate));
     { const int got = au->par.start(gNuc - 1, 80); std::printf("Núcleos para el audio: %d de %d pedidos\n", 1 + got, gNuc); }
     dx7::libInit(base + "/dx7");   // sonidos del DX7: los de serie y los bancos .syx de la carpeta dx7/
@@ -1950,6 +1981,7 @@ int main(int argc, char** argv) {
 
     // --- MIDI: se abren todas las entradas (USB, Bluetooth, controladores) y se buscan nuevas cada 2 s
     MidiHub hub; hub.au = au.get(); hub.only = argInt(argc, argv, "--midi", -1);
+    { std::stringstream ms(cfg["midioff"]); std::string one; while (std::getline(ms, one, '|')) if (!one.empty()) hub.ignored.push_back(one); }
     hub.onPortsChanged = [&ctl](const std::string&) { ctl.dumpPending = true; ctl.forceDump = true; };   // controladora nueva: se le manda todo
     hub.scan(true);
     ctl.tick = [&hub]() { hub.scan(false); };
@@ -1971,7 +2003,7 @@ int main(int argc, char** argv) {
         if (audio && audio->isStreamOpen()) { if (audio->isStreamRunning()) audio->stopStream(); audio->closeStream(); }
         audio = std::make_unique<RtAudio>();
         if (audio->getDeviceIds().empty()) { if (!quiet) std::printf("No hay interfaces de audio. Prueba con --sin-audio.\n"); return false; }
-        const std::string wantOut = argStr(argc, argv, "--audio"), wantIn = argStr(argc, argv, "--entrada");
+        const std::string wantOut = forceDefault ? std::string() : cfgS("audio", "--audio"), wantIn = cfgS("entrada", "--entrada");
         int od = findDevice(*audio, wantOut, false);
         if (od == -2) { if (!quiet) std::printf("No encuentro la salida de audio '%s' (mira --list).\n", wantOut.c_str()); return false; }
         out.deviceId = od >= 0 ? static_cast<unsigned>(od) : audio->getDefaultOutputDevice();
@@ -1982,14 +2014,14 @@ int main(int argc, char** argv) {
         out.nChannels = std::min(16u, (info.outputChannels - out.firstChannel) & ~1u);   // todas las salidas (por pares), hasta 16
         // el jack de la Raspberry dice tener 8 canales, pero es estéreo
         if (lower(info.name).find("bcm2835") != std::string::npos) out.nChannels = 2;
-        out.nChannels = std::min(out.nChannels, static_cast<unsigned>(std::max(2, argInt(argc, argv, "--salidas", 16))));
+        out.nChannels = std::min(out.nChannels, static_cast<unsigned>(std::max(2, cfgI("salidas", "--salidas", 16))));
         au->outCh = static_cast<int>(out.nChannels);
         // entradas: la misma interfaz si tiene; un micro distinto de la salida solo si se pide con --entrada (dos relojes)
-        int id = findDevice(*audio, wantIn, true);
+        int id = findDevice(*audio, wantIn == "none" ? std::string() : wantIn, true);
         if (id == -2) { if (!quiet) std::printf("No encuentro la entrada '%s'; sigo sin entradas.\n", wantIn.c_str()); id = -1; }
         inp.firstChannel = 0; inp.deviceId = id >= 0 ? static_cast<unsigned>(id) : out.deviceId;
         const auto iinfo = audio->getDeviceInfo(inp.deviceId); inName = iinfo.name;
-        inp.nChannels = hasArg(argc, argv, "--sin-entradas") || (id < 0 && (!wantIn.empty() || info.inputChannels == 0)) ? 0 : std::min(4u, iinfo.inputChannels);
+        inp.nChannels = hasArg(argc, argv, "--sin-entradas") || wantIn == "none" || (id < 0 && (!wantIn.empty() || info.inputChannels == 0)) ? 0 : std::min(4u, iinfo.inputChannels);
         opts = {}; opts.flags = RTAUDIO_SCHEDULE_REALTIME; opts.priority = 80;   // sin MINIMIZE_LATENCY: en el Mac elegía buffers de 15 muestras y crujía
         bool ok = false;
         if (inp.nChannels > 0) { au->inCh = static_cast<int>(inp.nChannels); ok = audio->openStream(&out, &inp, RTAUDIO_FLOAT32, rate, &frames, cb, au.get(), &opts) == RTAUDIO_NO_ERROR; }
@@ -2008,16 +2040,55 @@ int main(int argc, char** argv) {
         return true;
     };
     std::signal(SIGINT, onSignal); std::signal(SIGTERM, onSignal);
+    std::string audioNote; const bool rolledBack = std::filesystem::exists(sysBack);
+    { std::error_code ec; std::filesystem::remove(sysBack, ec); }
+    std::atomic<bool> restart{false};
+    const auto startFake = [&]() { fake = std::thread([&]() { std::vector<float> b(512); while (!gQuit) { au->process(b.data(), 2, nullptr, 0, 256); std::this_thread::sleep_for(std::chrono::microseconds(256 * 1000000 / rate)); } }); };
+    ctl.sysStatus = [&]() { return std::to_string(cpuTempC()) + " " + piThrottled() + " " + std::to_string(au->xruns.load()) + " " + jnum(au->cpu.load()) + " " + jnum(au->cpuPeak.exchange(0.0f)); };
+    ctl.sysInfo = [&]() {
+        std::string o = "{\"outs\":["; std::string in = "\"ins\":[", mid = "\"midi\":[", off = "\"midioff\":["; bool fo = true, fi = true, fm = true;
+        try { RtAudio a; for (unsigned id : a.getDeviceIds()) { const auto inf = a.getDeviceInfo(id); if (inf.outputChannels) { o += (fo ? "" : ",") + jstr(inf.name.c_str()); fo = false; } if (inf.inputChannels) { in += (fi ? "" : ",") + jstr(inf.name.c_str()); fi = false; } } } catch (...) {}
+        try { RtMidiIn m; for (unsigned i = 0; i < m.getPortCount(); ++i) { const std::string n = m.getPortName(i); if (!MidiHub::notADevice(n)) { mid += (fm ? "" : ",") + jstr(MidiHub::portKey(n).c_str()); fm = false; } } } catch (...) {}
+        for (const auto& n : hub.ignored) { if (!fm || mid.back() != '[') mid += ","; mid += jstr(n.c_str()); fm = false; off += (off.back() == '[' ? "" : ",") + jstr(n.c_str()); }
+        return o + "]," + in + "]," + mid + "]," + off + "],\"audio\":" + jstr(cfgS("audio", "--audio").c_str()) + ",\"entrada\":" + jstr(cfgS("entrada", "--entrada").c_str()) +
+               ",\"buffer\":" + std::to_string(frames) + ",\"rate\":" + std::to_string(rate) + ",\"nucleos\":" + std::to_string(gNuc) + ",\"hw\":" + std::to_string(std::min(4, hw)) + ",\"salidas\":" + std::to_string(cfgI("salidas", "--salidas", 16)) +
+               ",\"cur\":" + jstr(outName.c_str()) + ",\"curIn\":" + jstr(au->inCh > 0 ? inName.c_str() : "") + ",\"note\":" + jstr(audioNote.c_str()) + ",\"rolled\":" + (rolledBack ? "true" : "false") + ",\"power\":" + (ctl.powerOffEnabled ? "true" : "false") + "}";
+    };
+    ctl.sysApply = [&](const std::string& line) {   // «clave=valor» separados por tabuladores
+        static const std::vector<std::string> keys = {"audio", "entrada", "buffer", "rate", "nucleos", "salidas", "midioff"};
+        SysCfg next = cfg; std::stringstream ss(line); std::string kv;
+        while (std::getline(ss, kv, '\t')) { const size_t e = kv.find('='); if (e == std::string::npos) continue; size_t b = kv.find_first_not_of(' '); const std::string k = kv.substr(b, e - b); std::string v = kv.substr(e + 1); v.erase(std::remove(v.begin(), v.end(), '\n'), v.end()); if (std::find(keys.begin(), keys.end(), k) != keys.end() && v.size() < 400) next[k] = v; }
+        const auto num = [&](const char* k, std::initializer_list<int> ok) { const auto it = next.find(k); if (it == next.end() || it->second.empty()) return; const int v = std::atoi(it->second.c_str()); if (std::find(ok.begin(), ok.end(), v) == ok.end()) next.erase(k); };
+        num("buffer", {64, 128, 256, 512, 1024, 2048}); num("rate", {44100, 48000}); num("nucleos", {1, 2, 3, 4}); num("salidas", {2, 4, 6, 8, 16});
+        { std::error_code ec; if (std::filesystem::exists(sysFile)) std::filesystem::copy_file(sysFile, sysPrev, std::filesystem::copy_options::overwrite_existing, ec); else std::filesystem::remove(sysPrev, ec); }
+        if (!sysSave(sysFile, next)) { std::printf("Aviso: no se pudieron guardar los ajustes de sistema.\n"); return; }
+        { std::ofstream f(sysPend); f << "1"; }
+        restart = true; gQuit = true;
+    };
+    ctl.sysAction = [&](const std::string& w) {
+        if (w == "restart") { restart = true; gQuit = true; }
+        else if (w == "poweroff" && ctl.powerOffEnabled) { std::printf("Apagando desde la pantalla...\n"); if (ctl.dirty) ctl.save(); if (std::system("sudo -n /sbin/poweroff || systemctl poweroff") != 0) std::printf("No se pudo apagar.\n"); }
+    };
     if (noAudio) {
-        fake = std::thread([&]() { std::vector<float> b(512); while (!gQuit) { au->process(b.data(), 2, nullptr, 0, 256); std::this_thread::sleep_for(std::chrono::microseconds(256 * 1000000 / rate)); } });
+        startFake();
         std::printf("Audio: sin tarjeta de sonido (modo de prueba)\n");
     } else {
         // en la Pi la interfaz USB puede tardar en aparecer al arrancar: se espera hasta --esperar-audio segundos
         const int wait = argInt(argc, argv, "--esperar-audio", 0);
+        const bool trying = std::filesystem::exists(sysPend);
         bool ok = openAudio(false);
-        for (int t = 0; !ok && t < wait && !gQuit; t += 2) { std::this_thread::sleep_for(std::chrono::seconds(2)); ok = openAudio(true); }
-        if (!ok) return 1;
-        ctl.watchAudio = true;
+        for (int t = 0; !ok && t < (trying ? 6 : wait) && !gQuit; t += 2) { std::this_thread::sleep_for(std::chrono::seconds(2)); ok = openAudio(true); }
+        std::error_code ec;
+        if (!ok && trying) {   // lo último elegido no funciona: se vuelve a lo anterior y se reinicia
+            std::printf("Aviso: los ajustes nuevos no funcionan; vuelvo a los anteriores.\n");
+            std::filesystem::remove(sysFile, ec); if (std::filesystem::exists(sysPrev)) std::filesystem::rename(sysPrev, sysFile, ec);
+            std::filesystem::remove(sysPend, ec); { std::ofstream f(sysBack); f << "1"; }
+            reexec();
+        }
+        std::filesystem::remove(sysPend, ec);
+        // la interfaz elegida no está: mejor la de por defecto, y si tampoco hay, sin audio. La pantalla debe seguir accesible para arreglarlo
+        if (!ok) { std::printf("Aviso: no encuentro la interfaz elegida; pruebo la de por defecto.\n"); forceDefault = true; ok = openAudio(true); audioNote = ok ? "default" : "none"; }
+        if (!ok) { std::printf("Aviso: sin interfaz de audio. Elige otra en la pantalla.\n"); startFake(); } else ctl.watchAudio = true;
         ctl.onStall = [&]() { if (!openAudio(true)) std::printf("Aún sin audio; lo vuelvo a intentar.\n"); };
     }
     std::printf("\nPantalla: abre http://%s:%d en Chrome o Safari.\nPara salir: Ctrl+C.\n", host == "0.0.0.0" ? "localhost" : host.c_str(), port);
@@ -2025,5 +2096,6 @@ int main(int argc, char** argv) {
     if (fake.joinable()) fake.join();
     if (audio) { if (audio->isStreamRunning()) audio->stopStream(); if (audio->isStreamOpen()) audio->closeStream(); }
     std::printf("\nEstado guardado en %s. Hasta luego.\n", ctl.file.c_str());
+    if (restart) reexec();
     return 0;
 }
