@@ -393,6 +393,12 @@ struct CycVoice {
     }
 };
 inline const int kLaneOut[8] = {0, 1, 1, 2, 2, 2, 2, 2};
+// Igualación medida con --niveles: dB por kit y sonido (bombo, caja, clap, rim, tom, HH cerrado, HH abierto, perc)
+inline float kitTrim(int kit, int l) {
+    static const float D[5][8] = {{1.9f, -2.4f, 0f, 6.2f, -2.3f, -0.6f, -3.1f, -0.5f}, {1.6f, -1f, -1.9f, -3.6f, 0.7f, 1.1f, 0.8f, 1.5f}, {-3.2f, -0.1f, -2.6f, -10.2f, -6.3f, -3.9f, -4.1f, -13f}, {-3.3f, -4.8f, -2.5f, 2.6f, -5f, -3f, -4.9f, -8.5f}, {3.8f, 11.2f, 5.1f, 3.7f, -1.9f, -1.3f, 6f, 3.7f}};
+    const int k = kit == KIT_P808 ? 0 : kit == KIT_P909 ? 1 : kit == KIT_CYC ? 2 : kit == KIT_GB ? 3 : kit == KIT_EXP ? 4 : -1;
+    return k < 0 ? 1.0f : std::pow(10.0f, D[k][std::clamp(l, 0, 7)] / 20.0f);
+}
 
 class DrumMachine {
 public:
@@ -412,7 +418,7 @@ public:
     void hit(int l, int vel) {
         const DrumLane& L = lane[static_cast<size_t>(l)];
         const float v01 = std::clamp(vel, 1, 127) / 127.0f, vs = std::clamp(L.vel, 0.0f, 1.0f);
-        const float g = (1.0f - vs + vs * std::pow(v01, 1.6f)) * L.level;   // velocidad → volumen
+        const float g = (1.0f - vs + vs * std::pow(v01, 1.6f)) * L.level * kitTrim(kit, l);   // velocidad → volumen
         lastVel_[l] = v01;
         if (l == 5) { v_[6].choke(); pchoke_ = true; cy_[6].on = false; ht_[6].choke(); }   // el HH cerrado corta el abierto
         if (kit == KIT_P808 || kit == KIT_P909) { hitPlaits(l, L, v01, vs, g); return; }

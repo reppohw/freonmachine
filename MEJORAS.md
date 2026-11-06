@@ -31,6 +31,7 @@
 - [ ] El contador de cortes no ve los fallos: el audio está abierto sin aviso de xrun.
 - [x] Pi 3: buffer mínimo 256. Con 64 y 128 hubo cortes y el USB de la Clarett se bloqueó en el sistema (estado D en `usb_kill_urb`), que ni `kill -9` puede romper.
 - [ ] Probar con buffer 256 mucho rato; si se repite el bloqueo, subir el mínimo a 512.
+- [x] Batería igualada entre kits (`--niveles`): bombo −13, caja −15, clap −17, rim −20, tom −15, HH cerrado −21, HH abierto −18, perc −20 dB (ventana de 100 ms, ponderación K).
 - [ ] Sub colgado: Jorge tiene que confirmar qué pasó exactamente y si vuelve a ocurrir.
 - [ ] Saber qué controladoras usa Jorge, para elegir el modo de knobs por defecto.
 

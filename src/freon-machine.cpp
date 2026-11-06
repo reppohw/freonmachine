@@ -1697,6 +1697,23 @@ int levelsTest() {
         }
         std::printf("%-10s MEDIA: %.1f dB\n\n", kEng[e].name, sum / std::max(cnt, 1));
     }
+    // batería: un golpe a velocidad 110, ventana de 100 ms
+    static const char* KN[5] = {"808", "909", "FM", "Chip", "Exp"}; static const int KI[5] = {KIT_P808, KIT_P909, KIT_CYC, KIT_GB, KIT_EXP}; static const char* SN[8] = {"Bombo", "Caja", "Clap", "Rim", "Tom", "HH cer", "HH abi", "Perc"};
+    std::printf("%-6s", ""); for (auto* n : KN) std::printf("%14s", n); std::printf("\n");
+    for (int l = 0; l < 8; ++l) {
+        std::printf("%-6s", SN[l]);
+        for (int k = 0; k < 5; ++k) {
+            DrumMachine d; d.prepare(sr); d.kit = KI[k]; d.hit(l, 110);
+            float b[8][256]; float* o[8]; for (int i = 0; i < 8; ++i) o[i] = b[i];
+            Shelf sh; BQ hp; sh.set(1, 1500, 4, 0.7f, sr); hp.set(1, 60, 0.7f, sr);
+            std::vector<double> win; float pk = 0;
+            for (int q = 0; q < static_cast<int>(sr * 0.8f / 256); ++q) { d.render(o, 256); double acc = 0; for (int i = 0; i < 256; ++i) { pk = std::max(pk, std::fabs(b[l][i])); const float a = hp.process(sh.process(b[l][i])); acc += a * a; } win.push_back(acc / 256.0); }
+            double best = 0, cur = 0; const size_t W = static_cast<size_t>(0.1f * sr / 256);
+            for (size_t i = 0; i < win.size(); ++i) { cur += win[i]; if (i >= W) cur -= win[i - W]; best = std::max(best, cur / static_cast<double>(W)); }
+            std::printf("  %6.1f (%.2f)", 10 * std::log10(best + 1e-12), pk);
+        }
+        std::printf("\n");
+    }
     return 0;
 }
 // Prueba de estrés: el peor caso que se puede tocar, con los efectos moviéndose al azar. Sirve para medir la Pi.
