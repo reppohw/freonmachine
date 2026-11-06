@@ -777,6 +777,7 @@ struct Control {
         au.recState = 0; srv.broadcast("rec 0");
     }
     std::chrono::steady_clock::time_point dirtyAt{}; bool dirty = false;
+    std::map<std::string, float> webPend_; std::chrono::steady_clock::time_point lastWeb{};
     unsigned lastXr = 0; bool wasDirty = false; std::chrono::steady_clock::time_point dirtySince{};
     std::function<std::string()> sysInfo, sysStatus; std::function<void(const std::string&)> sysApply, sysAction;
     std::function<void()> tick; std::chrono::steady_clock::time_point lastTick{};
@@ -1178,7 +1179,8 @@ struct Control {
         const float old = st[k];
         st[k] = v; Cmd c; if (toCmd(k, v, c)) au.cmds.push(c);
         dirty = true; dirtyAt = std::chrono::steady_clock::now();
-        srv.broadcast("set " + k + " " + jnum(v), from);
+        // lo que llega por MIDI puede venir a cientos por segundo (un LFO del Oxi): a la web se le manda solo el último valor
+        if (from == kMidiSrc) webPend_[k] = v; else srv.broadcast("set " + k + " " + jnum(v), from);
         queueFb(k);
         // solo exclusivo (X-OR): al encender un solo se apagan los demás
         if (v >= 0.5f && st["solo.mode"] >= 0.5f && k.size() > 5 && k.compare(k.size() - 5, 5, ".solo") == 0 && (k[0] == 'c' || k[0] == 'g'))
@@ -1548,10 +1550,11 @@ struct Control {
                       srv.broadcast("midimon " + std::to_string(c) + " " + std::to_string(v >> 16) + " " + std::to_string((v >> 8) & 0xFF) + " " + std::to_string(v & 0xFF) + " " + pn + "\t" + ports);
                   } }
             }
-            // se guarda tras 800 ms de calma; con CC moviéndose sin parar, como mucho cada 10 s
+            if (!webPend_.empty() && now - lastWeb > std::chrono::milliseconds(40)) { lastWeb = now; for (auto& [k, v] : webPend_) srv.broadcast("set " + k + " " + jnum(v), kMidiSrc); webPend_.clear(); }
+            // se guarda tras 800 ms de calma; con CC moviéndose sin parar, como mucho cada minuto: escribir sin parar desgasta la tarjeta y frena el sistema
             if (dirty && !wasDirty) dirtySince = now;
             wasDirty = dirty;
-            if (dirty && (now - dirtyAt > std::chrono::milliseconds(800) || now - dirtySince > std::chrono::seconds(10))) { save(); wasDirty = dirty; }
+            if (dirty && (now - dirtyAt > std::chrono::milliseconds(800) || now - dirtySince > std::chrono::seconds(60))) { save(); wasDirty = dirty; }
             if (tick && now - lastTick > std::chrono::seconds(2)) { lastTick = now; tick(); }
         }
         if (dirty) save();

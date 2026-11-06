@@ -12,7 +12,7 @@ MODEL="$(tr -d '\0' < /proc/device-tree/model 2>/dev/null || true)"
 case "$MODEL" in
   *"Raspberry Pi 5"*) FLAGS="$FLAGS -mcpu=cortex-a76" ;;
   *"Raspberry Pi 4"*) FLAGS="$FLAGS -mcpu=cortex-a72 -DJUNO_OS=1" ;;   # Pi 3 y 4: Juno sin sobremuestreo (menos CPU)
-  *"Raspberry Pi 3"*) FLAGS="$FLAGS -mcpu=cortex-a53 -DJUNO_OS=1" ;;
+  *"Raspberry Pi 3"*) FLAGS="$FLAGS -mcpu=cortex-a53 -DJUNO_OS=1 -DJUNO_VOICES=4" ;;   # Pi 3: además, 4 voces
 esac
 # con poca memoria (Pi 3: 1 GB) se compila sin información de depuración, que es lo que más memoria gasta
 MEM_KB="$(awk '/MemTotal/ {print $2}' /proc/meminfo 2>/dev/null || echo 0)"

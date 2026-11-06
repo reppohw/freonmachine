@@ -15,6 +15,9 @@
 #ifndef JUNO_OS
 #define JUNO_OS 2   // sobremuestreo del Juno (1, 2 o 4)
 #endif
+#ifndef JUNO_VOICES
+#define JUNO_VOICES 6   // el original tiene 6; en la Pi 3, 4 (ver build.sh)
+#endif
 
 namespace gb {
 
@@ -36,10 +39,10 @@ struct JunoParams {
 class JunoSynth {
 public:
     JunoParams p;
-    JunoSynth() : k_(std::make_unique<::KR106DSP<float>>(6)) {}
+    JunoSynth() : k_(std::make_unique<::KR106DSP<float>>(JUNO_VOICES)) {}
 
     void prepare(float sr) {
-        auto& k = *k_;
+        auto& k = *k_; idleMax_ = static_cast<int>(sr * 0.5f);
         // Juno-6: mismo arreglo que hace el plugin al pasar a J60, y luego el modelo J6
         k.SetParam(kAdsrMode, 0);
         k.mSynthModel = kr106::kJ6;
@@ -47,7 +50,7 @@ public:
         k.mLFO.mModel = kr106::kJ6; k.mHPF.mModel = kr106::kJ6;
         k.Reset(sr, 256);
         k.SetOversample(JUNO_OS);
-        k.SetActiveVoices(6);
+        k.SetActiveVoices(JUNO_VOICES);
         k.mIgnoreVelocity = false;
         k.mNoiseFloorMul = 0.0f; k.mMainsMul = 0.0f;   // sin ruido de fondo ni zumbido de red
         k.SetParam(kPortaMode, 1); k.SetParam(kLfoMode, 0); k.SetParam(kVcaLevel, 0.5);
@@ -65,6 +68,10 @@ public:
 
     void render(float* L, float* R, int n) {
         apply();
+        // sin voces y pasada la cola del chorus no hay nada que calcular: es el motor más caro y no debe gastar en silencio
+        bool busy = false; for (int v = 0; v < JUNO_VOICES; ++v) busy |= k_->GetVoice(v)->GetBusy();
+        idle_ = busy ? 0 : std::min(idle_ + n, idleMax_);
+        if (idle_ >= idleMax_) { std::fill(L, L + n, 0.0f); std::fill(R, R + n, 0.0f); return; }
         float* outs[2] = {L, R};
         k_->ProcessBlock(nullptr, outs, 2, n);
         for (int i = 0; i < n; ++i) { L[i] *= kGain; R[i] *= kGain; }
@@ -102,7 +109,7 @@ private:
         last_ = p; dirty_ = false;
     }
     std::unique_ptr<::KR106DSP<float>> k_;
-    JunoParams last_; bool dirty_ = true;
+    JunoParams last_; bool dirty_ = true; int idle_ = 0, idleMax_ = 24000;
 };
 
 }  // namespace gb
