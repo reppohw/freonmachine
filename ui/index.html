@@ -490,7 +490,7 @@ function buildInst() {
   }
   // Sub: módulo aparte con su canal MIDI (en el Oxi, la nota grave del secuenciador de acordes a este canal)
   const sc = el("section", { class: "card" }), sk = el("div", { class: "knobs" });
-  [["oct", { l: "Octave", min: -3, max: 0, step: 1, def: -2, fmt: "i", names: "oct" }, 16], ["tone", { l: "Tone", min: 0, max: 1, step: 0.01, def: 0.2, fmt: "p" }, 17], ["glide", { l: "Glide", min: 0.005, max: 0.3, step: 0, def: 0.03, fmt: "s", log: true }, 18]]
+  [["oct", { l: "Octave", min: -3, max: 0, step: 1, def: -2, fmt: "i", names: "oct" }, 16], ["tone", { l: "Tone", min: 0, max: 1, step: 0.01, def: 0.2, fmt: "p" }, 17], ["glide", { l: "Glide", min: 0.005, max: 0.3, step: 0, def: 0.03, fmt: "s", log: true }, 18], ["vol", { l: "Volume", min: 0, max: 1, step: 0.01, def: 1, fmt: "p" }, 19]]
     .forEach(([f, q, c]) => { const w = el("div", { class: "kslot" }); specKnob(w, "sub." + f, q, (a, b) => topMsg("Sub · " + a, b), "sm"); w.append(el("i", {}, `CC ${c}`)); sk.append(w); });
   sc.append(el("div", { class: "chead" }, el("div", { class: "cname" }, el("b", {}, "Sub"), el("span", {}, `MIDI channel ${ST["sub.ch"] || "off"} · plays the notes it gets on its channel (on the Oxi: the chord sequencer’s lowest note)`)),
     toggleKey("sub.on", "Sub on · CC 110", (v) => topMsg("Sub", v ? "on" : "off"))), sk);
@@ -693,6 +693,13 @@ function stripEl(id, title, sub, grp, cls) {
   a = sk(); kn(a, P + "scAmt", "SC amount", 0, 1, 0.01, PCT, 0.5, "sm"); kn(a, P + "scRel", "SC release", 0.02, 0.6, 0.01, (v) => Math.round(v * 1000) + " ms", 0.12, "sm"); s.append(a);
   s.append(el("div", { class: "sec" }, "Sends"));
   a = sk(); for (let f = 0; f < 4; f++) kn(a, P + "s" + f, "Send " + "ABCD"[f], 0, 1, 0.01, PCT, 0, "sm"); s.append(a);
+  // volumen del propio instrumento (el del preset), aparte del fader
+  const chI = /^c(\d+)$/.exec(id) ? Number(id.slice(1)) : -1;
+  if (chI === 3) { a = sk(); kn(a, "sub.vol", "Volume", 0, 1, 0.01, PCT, 1, "sm"); s.append(el("div", { class: "sec" }, "Instrument"), a); }
+  else if (chI >= 4 && chI <= 6) {
+    const T = chI - 2, e = SPEC.engines[ST[`t${T}.eng`]], vi = e.params.findIndex(q => q.l === "Volume");
+    if (vi >= 0) { a = sk(); specKnob(a, `t${T}.${e.key}.${vi}`, e.params[vi], (x, y) => topMsg(`${title} · ${x}`, y), "sm"); s.append(el("div", { class: "sec" }, "Instrument"), a); }
+  }
   const fd = vfader(P + "lvl", `Volume of ${title}`);
   s.append(el("div", { class: "frow" }, meterEl(), fd.f), fd.read, el("div", { class: "tms" }, msBtn(P + "mute", "Mute", "m"), msBtn(P + "solo", "Solo", "s"), msBtn(P + "cue", "Cue", "c")));
   return s;
@@ -718,16 +725,11 @@ function buildSnaps() {
 function buildMix() {
   const box = $("#mixStrips"); box.textContent = ""; mixUI.meters = [];
   const unit = (title) => { const r = el("div", { class: "units" }); box.append(el("div", { class: "unit" }, el("span", { class: "label" }, title), r)); return r; };
-  const u1 = unit("Drums, sub and synths"), u2 = unit("Live and inputs"), u3 = unit("Groups, returns and master");
+  const u1 = unit("Drums, sub and synths"), u2 = unit("Live and inputs"), u3 = unit("Groups and master");
   for (let i = 0; i < 15; i++) {
     (i < 7 ? u1 : u2).append(stripEl(`c${i}`, chName(i), chSub(i), false, i >= 11 && i - 11 >= SPEC.ins ? "dim" : ""));
   }
   for (let g = 0; g < 2; g++) u3.append(stripEl(`g${g}`, g ? "B" : "A", "Group", true));
-  for (let f = 0; f < 4; f++) {
-    const fd = vfader(`fx${f}.ret`, `Return ${"ABCD"[f]}`);
-    u3.append(el("div", { class: "strip" }, el("div", { class: "sname" }, el("span", {}, "Return"), el("b", {}, "ABCD"[f])), el("span", { class: "hint" }, SPEC.fx[ST[`fx${f}.type`]].name),
-      el("div", { class: "frow" }, el("div", { class: "meter", "aria-hidden": "true" }), fd.f), fd.read));
-  }
   const a = el("div", { class: "sk" });
   kn(a, "m.lim", "Limiter", -12, 0, 0.5, (v) => v.toFixed(1) + " dB", -3, "sm"); kn(a, "m.cueLvl", "Cue level", 0, 1.2, 0.01, PCT, 0.8, "sm");
   const fd = vfader("m.vol", "Master volume"); mixUI.grRead = el("span", { class: "limread" });

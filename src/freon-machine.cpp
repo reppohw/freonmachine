@@ -95,7 +95,7 @@ inline const char* const* drumSlots(int uiKit, const char*& extra) {
     if (uiKit == 2) { extra = "contour"; return kCy; }
     extra = nullptr; return kRc;
 }
-const char* kSubKeys[5] = {"ch", "on", "oct", "tone", "glide"};
+const char* kSubKeys[6] = {"ch", "on", "oct", "tone", "glide", "vol"};
 // Parámetros de canal y grupo (mismo orden en las claves y en el audio)
 enum SP { SP_LVL, SP_PAN, SP_MUTE, SP_SOLO, SP_CUE, SP_OUT, SP_DTYPE, SP_DRIVE, SP_DTONE, SP_DMIX, SP_LOW, SP_MID, SP_HIGH, SP_LIM, SP_SC, SP_SCAMT, SP_SCREL, SP_S0, SP_S1, SP_S2, SP_S3, SP_FILT, SP_RES, SP_COUNT };
 const char* kSP[SP_COUNT] = {"lvl", "pan", "mute", "solo", "cue", "out", "dtype", "drive", "dtone", "dmix", "low", "mid", "high", "lim", "sc", "scAmt", "scRel", "s0", "s1", "s2", "s3", "filt", "res"};
@@ -123,7 +123,7 @@ struct NoteSet {
 struct SubVoice {
     float sr = 48000, ph = 0, semi = 36, target = 36, amp = 0, lp = 0;
     bool on = false;
-    void render(float* o, int n, float tone, float glide) {
+    void render(float* o, int n, float tone, float glide, float vol) {
         const float gl = 1.0f - std::exp(-1.0f / (std::max(glide, 0.002f) * 0.33f * sr));
         const float dg = 1.0f + tone * 7.0f, norm = 1.0f / std::tanh(dg), lpc = 1.0f - std::exp(-2 * kPi * (160 + tone * 1400) / sr);
         for (int i = 0; i < n; ++i) {
@@ -132,7 +132,7 @@ struct SubVoice {
             ph += mtof(semi) / sr; if (ph >= 1) ph -= 1;
             const float x = std::tanh(fsin(ph) * dg) * norm;
             lp += (x - lp) * lpc;
-            o[i] = lp * amp * 0.5f;
+            o[i] = lp * amp * 0.5f * vol;
         }
     }
 };
@@ -174,7 +174,7 @@ struct Audio {
     DrumMachine drums;
     MeloEngines mel[NT];          // pistas 2-4 (índices 1..3); la 0 es la batería
     int ch[NT] = {10, 2, 3, 4};
-    SubVoice sub; NoteSet subHeld; int subCh = 9; bool subOn = true; float subOct = -2, subTone = 0.2f, subGlide = 0.03f;
+    SubVoice sub; NoteSet subHeld; int subCh = 9; bool subOn = true; float subOct = -2, subTone = 0.2f, subGlide = 0.03f, subVol = 1;
     NoteSet held[NT];
     Strip st[NCH], grp[NGRP];
     SendFx fx[NSEND]; float fxTail[NSEND] = {};
@@ -317,7 +317,7 @@ struct Audio {
                                case 15: L.out = std::clamp(static_cast<int>(c.v), 0, 2); break; }
                 break; }
             case K_SUB: switch (c.b) { case 0: subCh = static_cast<int>(c.v); subHeld.clear(); subUpdate(); break; case 1: subOn = c.v >= 0.5f; subUpdate(); break; case 2: subOct = c.v; subUpdate(); break;
-                                       case 3: subTone = c.v; break; case 4: subGlide = c.v; break; } break;
+                                       case 3: subTone = c.v; break; case 4: subGlide = c.v; break; case 5: subVol = c.v; break; } break;
             case K_NOTE: {
                 const int n = std::clamp<int>(c.b, 0, 127), v = std::clamp<int>(c.c, 0, 127);
                 if (c.a >= 10 && c.a < 10 + LM_COUNT) liveNote(c.a - 10, n, v);
@@ -415,7 +415,7 @@ struct Audio {
             Strip& s = st[std::clamp(L.out, 0, 2)];
             for (int i = 0; i < k; ++i) { s.L[i] += lanes[l][i] * gl; s.R[i] += lanes[l][i] * gr; }
         }
-        sub.render(mono, k, subTone, subGlide); std::copy(mono, mono + k, st[CH_SUB].L); std::copy(mono, mono + k, st[CH_SUB].R);
+        sub.render(mono, k, subTone, subGlide, subVol); std::copy(mono, mono + k, st[CH_SUB].L); std::copy(mono, mono + k, st[CH_SUB].R);
         for (int q = 0; q < 4; ++q) { if (in && q < ic) for (int i = 0; i < k; ++i) inRaw[q][i] = in[i * ic + q]; else std::fill(inRaw[q], inRaw[q] + k, 0.0f); }
         for (int q = 0; q < std::min(ic, 4); ++q) { Strip& s = st[CH_IN + q]; std::copy(inRaw[q], inRaw[q] + k, s.L); std::copy(inRaw[q], inRaw[q] + k, s.R); }
         {   // la voz va después: lee las pistas
@@ -830,7 +830,7 @@ struct Control {
             st[L + "tone"] = 0.5f; st[L + "color"] = kCycColor[l]; st[L + "shape"] = kCycShape[l]; st[L + "contour"] = kCycContour[l];
             st[L + "mute"] = 0; st[L + "note"] = static_cast<float>(N[l]); st[L + "out"] = static_cast<float>(kLaneOut[l]);
         }
-        st["sub.ch"] = 9; st["sub.on"] = 1; st["sub.oct"] = -2; st["sub.tone"] = 0.2f; st["sub.glide"] = 0.03f;
+        st["sub.ch"] = 9; st["sub.on"] = 1; st["sub.oct"] = -2; st["sub.tone"] = 0.2f; st["sub.glide"] = 0.03f; st["sub.vol"] = 1;
         // canales
         for (int i = 0; i < NCH; ++i) { Strip s; for (int p = 0; p < SP_COUNT; ++p) st["c" + std::to_string(i) + "." + kSP[p]] = s.p[p]; }
         // punto de partida limpio (lo pidió Jorge): envíos bajados, sin grupos, todo al máster, sin distorsión, EQ ni sidechain
@@ -1150,7 +1150,7 @@ struct Control {
             c.k = K_LANE; c.a = static_cast<int16_t>(k[3] - '0'); const std::string f = k.substr(5);
             const int i = find(f, kLaneKeys, kNLane); if (i < 0) return false; c.b = static_cast<int16_t>(i); return true;
         }
-        if (k.rfind("sub.", 0) == 0) { const int i = find(k.substr(4), kSubKeys, 5); if (i < 0) return false; c.k = K_SUB; c.b = static_cast<int16_t>(i); return true; }
+        if (k.rfind("sub.", 0) == 0) { const int i = find(k.substr(4), kSubKeys, 6); if (i < 0) return false; c.k = K_SUB; c.b = static_cast<int16_t>(i); return true; }
         if (k.rfind("m.", 0) == 0) { const int i = find(k.substr(2), kMP, MP_COUNT); if (i < 0) return false; c.k = K_MST; c.b = static_cast<int16_t>(i); return true; }
         if (k.rfind("fx", 0) == 0) {
             c.k = K_FX; c.a = static_cast<int16_t>(k[2] - '0'); const std::string f = k.substr(4);
@@ -1314,7 +1314,7 @@ struct Control {
         { const int ch = chOf("gran.ch"); if (ch >= 0) { for (int j = 0; j < GR_COUNT; ++j) mapKey(ch, 16 + j, "gran." + std::to_string(j), kGrSpec[j]); mapRange(ch, 110, "gran.on", 0, 1, 1, 1); mapRange(ch, 111, "gran.frz", 0, 1, 1, 1); } }
         { const int ch = chOf("voz.ch"); if (ch >= 0) { for (int j = 0; j < VZ_COUNT; ++j) mapKey(ch, j < 16 ? 16 + j : 40 + j - 16, "voz." + std::to_string(j), kVzSpec[j]); mapRange(ch, 110, "voz.on", 0, 1, 1, 1); } }
         // Sub: octava, tono y glide; CC 110 lo enciende y apaga
-        { const int ch = chOf("sub.ch"); if (ch >= 0) { mapRange(ch, 16, "sub.oct", -3, 0, 1); mapRange(ch, 17, "sub.tone", 0, 1); mapRange(ch, 18, "sub.glide", 0.005f, 0.3f); ccMap[addrCC(ch, 18)].log = true; mapRange(ch, 110, "sub.on", 0, 1, 1, 1); } }
+        { const int ch = chOf("sub.ch"); if (ch >= 0) { mapRange(ch, 16, "sub.oct", -3, 0, 1); mapRange(ch, 17, "sub.tone", 0, 1); mapRange(ch, 19, "sub.vol", 0, 1); mapRange(ch, 18, "sub.glide", 0.005f, 0.3f); ccMap[addrCC(ch, 18)].log = true; mapRange(ch, 110, "sub.on", 0, 1, 1, 1); } }
         // mezclador
         const int mc = mixCh();
         if (mc >= 0) {

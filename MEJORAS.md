@@ -71,7 +71,8 @@
 ## Ideas de Jorge para más adelante
 - [x] Pantalla «System» en Settings: audio, buffer, frecuencia, núcleos, salidas, MIDI, apagar y reiniciar, con vuelta atrás (6-11-2026). Faltan red y latencia de cada interfaz.
 - [x] Web: el scroll con dos dedos mueve la página; los knobs solo cambian arrastrando, o con ⌥ + scroll (5-11-2026).
-- [ ] Mezclador: en la tira de cada sinte, un knob que sea el Volume del propio motor que tenga la pista (no un Gain nuevo), aparte del fader (pedido 5-11-2026). Así se guarda con el preset. Al cambiar de motor debe pasar a mandar el Volume del motor nuevo.
+- [x] Mixer: knob Volume del instrumento en Sub y sintes, aparte del fader. Game Boy no tiene Volume.
+- [x] Sidechain rehecho: antes solo bajaba 3,8 dB al 100 %.
 
 ## Ideas para más adelante (de la auditoría)
 - [ ] CC de 14 bits o NRPN para cutoff y niveles (más resolución que 128 pasos).

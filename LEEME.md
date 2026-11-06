@@ -341,6 +341,10 @@ el archivo queda dañado, se carga la copia.
 Si la interfaz de audio se desconecta en pleno concierto, el programa lo nota en un segundo
 y la vuelve a abrir en cuanto reaparece.
 
+**Volumen de instrumento:** en cada tira de Mixer de Sub y sintes hay un knob Volume aparte del fader: es el del propio instrumento, y en los sintes se guarda con el preset. El del Sub también va por CC 19 en su canal.
+
+**Sidechain:** al 100 % un golpe fuerte baja unos −30 dB; al 50 %, unos −6 dB.
+
 **Núcleos:** en la Pi el audio se reparte entre 4 núcleos (batería, cada pista de sinte, sampler, breaks, granular y cada efecto de envío pueden ir por separado). En el Mac va en uno, porque allí no hay tiempo real para los demás. `--nucleos 1` lo pone todo en un núcleo, y suena exactamente igual: es la salida de emergencia si algo fallara en la Pi. Si un núcleo no consigue prioridad de tiempo real, se queda fuera y el programa lo avisa al arrancar («Núcleos para el audio»).
 
 **Niveles:** `./bin/freon-machine --niveles` mide la sonoridad de todos los motores y presets (ponderación K, ventana de 400 ms). El objetivo es −22 dB en sintes. La batería se mide por golpe: bombo −13, caja −15, clap −17, rim −20, tom −15, HH cerrado −21, HH abierto −18 y perc −20 dB.
