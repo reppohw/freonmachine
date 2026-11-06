@@ -822,7 +822,7 @@ struct Control {
         st["d.kit"] = 0;
         st["cb.amt"] = 1; st["cb.sel"] = -1; for (int n = 0; n < kCombos; ++n) { st["cb." + std::to_string(n) + ".on"] = 0; st["cb." + std::to_string(n) + ".act"] = 0; }   // combinaciones de efectos
         st["solo.mode"] = 0;   // solos: 0 = se suman (latch), 1 = exclusivo (X-OR)
-        st["midi.mixch"] = 16; st["midi.knob"] = 1; st["midi.fb"] = 1; ss["midi.skip"] = "oxi";   // canal del mezclador, modo de knobs, devolver valores, a quién no
+        st["midi.mixch"] = 16; st["midi.knob"] = 1; st["midi.fb"] = 1; ss["midi.skip"] = "oxi,mc-24";   // canal del mezclador, modo de knobs, devolver valores, a quién no
         const int N[8] = {36, 38, 39, 37, 45, 42, 46, 56};
         for (int l = 0; l < 8; ++l) {
             const std::string L = "d.l" + std::to_string(l) + ".";

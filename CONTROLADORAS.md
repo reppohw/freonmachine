@@ -153,4 +153,6 @@ Manda por el canal 3, potenciómetros absolutos: fila 1 CC 8–15, fila 2 CC 16�
 - Cada fila: Cutoff, Reso, Env, A, B, C, D y Volume.
 - Último knob de la fila 3: crossfader Dry–Wet, en lugar del Volume de T4.
 
+No debe recibir MIDI: lo que le llega atasca su USB (`urb status -32`) y deja de mandar. Por eso está en «Don’t send to» (`midi.skip`). Si ocurre, se recupera reenchufándolo.
+
 Escribirle la configuración por MIDI desde la Pi no funcionó: lo dejó colgado hasta reenchufarlo y no guardó nada.
