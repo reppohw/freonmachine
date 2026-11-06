@@ -1927,6 +1927,9 @@ bool sysSave(const std::string& path, const SysCfg& c) {
     const std::string tmp = path + ".tmp"; { std::ofstream f(tmp); for (auto& [k, v] : c) f << k << '=' << v << '\n'; if (!f) return false; }
     return std::rename(tmp.c_str(), path.c_str()) == 0;
 }
+// Buffer mínimo seguro. En la Pi 3, con 64 y 128 se encadenaron cortes y el USB de la Clarett se quedó bloqueado en el
+// sistema, en un estado que ningún programa puede interrumpir: solo se sale quitando la corriente.
+int minBuffer() { std::ifstream f("/proc/device-tree/model"); std::string m; std::getline(f, m); return m.find("Raspberry Pi 3") != std::string::npos ? 256 : 64; }
 int cpuTempC() { std::ifstream f("/sys/class/thermal/thermal_zone0/temp"); long t = 0; return f >> t ? static_cast<int>(t / 1000) : -1; }
 std::string piThrottled() { std::ifstream f("/sys/devices/platform/soc/soc:firmware/get_throttled"); std::string s; return f >> s ? s : "-"; }
 int findDevice(RtAudio& a, const std::string& want, bool input) {
@@ -1971,7 +1974,7 @@ int main(int argc, char** argv) {
     const auto cfgI = [&](const char* k, const char* arg, int def) { const std::string s = cfgS(k, arg); const int v = s.empty() ? def : std::atoi(s.c_str()); return v > 0 ? v : def; };
     gNuc = std::clamp(cfgI("nucleos", "--nucleos", nucDef), 1, std::min(4, hw));
     const unsigned rate = static_cast<unsigned>(cfgI("rate", "--rate", 48000));
-    unsigned frames = static_cast<unsigned>(cfgI("buffer", "--buffer", 128));
+    unsigned frames = static_cast<unsigned>(std::max(cfgI("buffer", "--buffer", 128), minBuffer()));
     const auto reexec = [&]() {   // reinicio limpio: mismo programa y mismas opciones
         std::fflush(stdout); for (int fd = 3; fd < 1024; ++fd) ::close(fd);
         execv(argv[0], argv); std::perror("No se pudo reiniciar"); std::_Exit(1);
@@ -2071,7 +2074,7 @@ int main(int argc, char** argv) {
         try { RtMidiIn m; for (unsigned i = 0; i < m.getPortCount(); ++i) { const std::string n = m.getPortName(i); if (!MidiHub::notADevice(n)) { mid += (fm ? "" : ",") + jstr(utf8Clean(MidiHub::portKey(n)).c_str()); fm = false; } } } catch (...) {}
         for (const auto& n : hub.ignored) { if (!fm || mid.back() != '[') mid += ","; mid += jstr(n.c_str()); fm = false; off += (off.back() == '[' ? "" : ",") + jstr(n.c_str()); }
         return o + "]," + in + "]," + mid + "]," + off + "],\"audio\":" + jstr(cfgS("audio", "--audio").c_str()) + ",\"entrada\":" + jstr(cfgS("entrada", "--entrada").c_str()) +
-               ",\"buffer\":" + std::to_string(frames) + ",\"bloques\":" + std::to_string(std::clamp(cfgI("bloques", "--bloques", 3), 2, 4)) + ",\"rate\":" + std::to_string(rate) + ",\"nucleos\":" + std::to_string(gNuc) + ",\"hw\":" + std::to_string(std::min(4, hw)) + ",\"salidas\":" + std::to_string(cfgI("salidas", "--salidas", 16)) +
+               ",\"buffer\":" + std::to_string(frames) + ",\"minbuf\":" + std::to_string(minBuffer()) + ",\"bloques\":" + std::to_string(std::clamp(cfgI("bloques", "--bloques", 3), 2, 4)) + ",\"rate\":" + std::to_string(rate) + ",\"nucleos\":" + std::to_string(gNuc) + ",\"hw\":" + std::to_string(std::min(4, hw)) + ",\"salidas\":" + std::to_string(cfgI("salidas", "--salidas", 16)) +
                ",\"cur\":" + jstr(utf8Clean(outName).c_str()) + ",\"curIn\":" + jstr(au->inCh > 0 ? utf8Clean(inName).c_str() : "") + ",\"note\":" + jstr(audioNote.c_str()) + ",\"rolled\":" + (rolledBack ? "true" : "false") + ",\"power\":" + (ctl.powerOffEnabled ? "true" : "false") + "}";
     };
     ctl.sysApply = [&](const std::string& line) {   // «clave=valor» separados por tabuladores
@@ -2079,7 +2082,7 @@ int main(int argc, char** argv) {
         SysCfg next = cfg; std::stringstream ss(line); std::string kv;
         while (std::getline(ss, kv, '\t')) { const size_t e = kv.find('='); if (e == std::string::npos) continue; size_t b = kv.find_first_not_of(' '); const std::string k = kv.substr(b, e - b); std::string v = kv.substr(e + 1); v.erase(std::remove(v.begin(), v.end(), '\n'), v.end()); if (std::find(keys.begin(), keys.end(), k) != keys.end() && v.size() < 400) next[k] = v; }
         const auto num = [&](const char* k, std::initializer_list<int> ok) { const auto it = next.find(k); if (it == next.end() || it->second.empty()) return; const int v = std::atoi(it->second.c_str()); if (std::find(ok.begin(), ok.end(), v) == ok.end()) next.erase(k); };
-        num("buffer", {64, 128, 256, 512, 1024, 2048}); num("rate", {44100, 48000}); num("nucleos", {1, 2, 3, 4}); num("bloques", {2, 3, 4}); num("salidas", {2, 4, 6, 8, 16});
+        num("buffer", {64, 128, 256, 512, 1024, 2048}); if (next.count("buffer") && std::atoi(next["buffer"].c_str()) < minBuffer()) next["buffer"] = std::to_string(minBuffer()); num("rate", {44100, 48000}); num("nucleos", {1, 2, 3, 4}); num("bloques", {2, 3, 4}); num("salidas", {2, 4, 6, 8, 16});
         { std::error_code ec; if (std::filesystem::exists(sysFile)) std::filesystem::copy_file(sysFile, sysPrev, std::filesystem::copy_options::overwrite_existing, ec); else std::filesystem::remove(sysPrev, ec); }
         if (!sysSave(sysFile, next)) { std::printf("Aviso: no se pudieron guardar los ajustes de sistema.\n"); return; }
         { std::ofstream f(sysPend); f << "1"; }

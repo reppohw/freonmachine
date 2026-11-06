@@ -857,7 +857,7 @@ function buildSys() {
   const sel = (label, value, pairs) => { const s = el("select", { "aria-label": label }); pairs.forEach(([v, n]) => s.append(el("option", { value: v }, n))); if (![...s.options].some(o => o.value === String(value))) s.append(el("option", { value }, value + " (not found)")); s.value = String(value); box.append(el("label", { class: "field" }, el("span", { class: "label" }, label), s)); return s; };
   const devPairs = (list, none) => [["", "Default"], ...(none ? [["none", "No inputs"]] : []), ...list.map(n => [n, n])];
   const a = sel("Audio output", SYS.audio, devPairs(SYS.outs)), i = sel("Audio inputs", SYS.entrada, devPairs(SYS.ins, true));
-  const b = sel("Buffer", SYS.buffer, [64, 128, 256, 512, 1024, 2048].map(n => [n, `${n} · ${(1000 * n / SYS.rate).toFixed(1)} ms`]));
+  const b = sel("Buffer", SYS.buffer, [64, 128, 256, 512, 1024, 2048].filter(n => n >= (SYS.minbuf || 64)).map(n => [n, `${n} · ${(1000 * n / SYS.rate).toFixed(1)} ms`]));
   const q = sel("Safety blocks", SYS.bloques, [[2, "2 · lowest delay"], [3, "3 · balanced"], [4, "4 · safest"]]);
   const r = sel("Sample rate", SYS.rate, [[44100, "44.1 kHz"], [48000, "48 kHz"]]);
   const c = sel("CPU cores", SYS.nucleos, Array.from({ length: SYS.hw }, (_, k) => [k + 1, String(k + 1)]));

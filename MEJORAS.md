@@ -29,6 +29,8 @@
 - [x] CPU en la Pi 3 (Oxi tocando): Juno 18 puntos, Summing 5, sidechain 2, kit FM 2, entradas 2, envíos 1–2. Juno apagado sin voces y 4 voces en la Pi 3; Summing a 0 y entradas 1-2 en mute.
 - [x] Un LFO del Oxi manda ~150 CC/s: la web recibe solo el último valor cada 40 ms y el estado se guarda como mucho cada minuto.
 - [ ] El contador de cortes no ve los fallos: el audio está abierto sin aviso de xrun.
+- [x] Pi 3: buffer mínimo 256. Con 64 y 128 hubo cortes y el USB de la Clarett se bloqueó en el sistema (estado D en `usb_kill_urb`), que ni `kill -9` puede romper.
+- [ ] Probar con buffer 256 mucho rato; si se repite el bloqueo, subir el mínimo a 512.
 - [ ] Sub colgado: Jorge tiene que confirmar qué pasó exactamente y si vuelve a ocurrir.
 - [ ] Saber qué controladoras usa Jorge, para elegir el modo de knobs por defecto.
 

@@ -352,6 +352,7 @@ y la vuelve a abrir en cuanto reaparece.
 En la pestaña **Settings**, tarjeta **System**, eliges salida y entradas de audio, buffer, frecuencia, núcleos, salidas y qué puertos MIDI se usan. Con **Apply and restart Freon** se guarda y Freon se reinicia sola en unos segundos.
 
 - **Latencia:** el retraso de salida es buffer × Safety blocks. Bájalo poco a poco y mira el contador de cortes (dropouts).
+- **Pi 3:** el buffer mínimo es 256. Con menos, los cortes pueden bloquear el USB de la interfaz, y entonces solo se sale quitando la corriente de la Pi.
 - Si lo elegido no funciona al arrancar, vuelve sola a lo anterior y lo avisa.
 - Si la interfaz no está (por ejemplo, desconectada), usa la de por defecto; y si no hay ninguna, arranca sin audio, para que siempre puedas arreglarlo desde la web.
 - Ahí mismo ves temperatura, CPU, pico y cortes, y tienes Restart Freon y Power off.
