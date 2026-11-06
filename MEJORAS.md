@@ -73,7 +73,8 @@
 - [x] Pantalla «System» en Settings: audio, buffer, frecuencia, núcleos, salidas, MIDI, apagar y reiniciar, con vuelta atrás (6-11-2026). Faltan red y latencia de cada interfaz.
 - [x] Web: el scroll con dos dedos mueve la página; los knobs solo cambian arrastrando, o con ⌥ + scroll (5-11-2026).
 - [x] Mixer: knob Volume del instrumento en Sub y sintes, aparte del fader. Game Boy no tiene Volume.
-- [x] Sidechain rehecho: antes solo bajaba 3,8 dB al 100 %.
+- [x] Sidechain rehecho: bombeo real, con subida lineal en Release (hasta 1 s). Antes solo bajaba 3,8 dB al 100 %.
+- [x] Mixer: Volume junto al Limiter, enlazado con Instruments, y Trim en las tiras de batería.
 
 ## Ideas para más adelante (de la auditoría)
 - [ ] CC de 14 bits o NRPN para cutoff y niveles (más resolución que 128 pasos).

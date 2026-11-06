@@ -254,6 +254,7 @@ function connect() {
 function setStatus(ok) { const s = $("#conn"); s.textContent = ok ? "Engine connected" : "No engine: is the program running?"; s.className = "conn " + (ok ? "ok" : "bad"); }
 function send(k, v) {
   ST[k] = v; pending.set(k, v);
+  (draws.get(k) || []).forEach(f => f());   // el mismo parámetro puede estar en varios sitios: se mueven todos a la vez
   if (pending.size === 1) requestAnimationFrame(() => { if (ws && ws.readyState === 1) pending.forEach((val, key) => ws.send(`set ${key} ${val}`)); pending.clear(); });
 }
 function sendRaw(s) { if (ws && ws.readyState === 1) ws.send(s); }
@@ -689,17 +690,19 @@ function stripEl(id, title, sub, grp, cls) {
   else { s.append(el("div", { class: "sec" }, "EQ")); kn(a, P + "high", "High", -15, 15, 0.5, dbf, 0, "sm"); kn(a, P + "mid", "Mid", -15, 15, 0.5, dbf, 0, "sm"); kn(a, P + "low", "Low", -15, 15, 0.5, dbf, 0, "sm"); }
   kn(a, P + "pan", "Pan", -1, 1, 0.02, panf, 0, "sm"); s.append(a);
   s.append(el("div", { class: "sec" }, "Dynamics"));
-  a = sk(); kn(a, P + "lim", "Limiter", -24, 0, 0.5, limf, 0, "sm"); s.append(a, selK(P + "sc", scPairs, "Sidechain"));
-  a = sk(); kn(a, P + "scAmt", "SC amount", 0, 1, 0.01, PCT, 0.5, "sm"); kn(a, P + "scRel", "SC release", 0.02, 0.6, 0.01, (v) => Math.round(v * 1000) + " ms", 0.12, "sm"); s.append(a);
-  s.append(el("div", { class: "sec" }, "Sends"));
-  a = sk(); for (let f = 0; f < 4; f++) kn(a, P + "s" + f, "Send " + "ABCD"[f], 0, 1, 0.01, PCT, 0, "sm"); s.append(a);
-  // volumen del propio instrumento (el del preset), aparte del fader
+  a = sk(); kn(a, P + "lim", "Limiter", -24, 0, 0.5, limf, 0, "sm");
+  // Volume del instrumento: es el mismo parámetro que el knob de Instruments, junto al limitador para no alargar la tira
   const chI = /^c(\d+)$/.exec(id) ? Number(id.slice(1)) : -1;
-  if (chI === 3) { a = sk(); kn(a, "sub.vol", "Volume", 0, 1, 0.01, PCT, 1, "sm"); s.append(el("div", { class: "sec" }, "Instrument"), a); }
+  if (chI >= 0 && chI <= 2) kn(a, P + "trim", "Trim", -24, 12, 0.5, dbf, 0, "sm");
+  else if (chI === 3) kn(a, "sub.vol", "Volume", 0, 1, 0.01, PCT, 1, "sm");
   else if (chI >= 4 && chI <= 6) {
     const T = chI - 2, e = SPEC.engines[ST[`t${T}.eng`]], vi = e.params.findIndex(q => q.l === "Volume");
-    if (vi >= 0) { a = sk(); specKnob(a, `t${T}.${e.key}.${vi}`, e.params[vi], (x, y) => topMsg(`${title} · ${x}`, y), "sm"); s.append(el("div", { class: "sec" }, "Instrument"), a); }
+    if (vi >= 0) specKnob(a, `t${T}.${e.key}.${vi}`, e.params[vi], (x, y) => topMsg(`${title} · ${x}`, y), "sm");
   }
+  s.append(a, selK(P + "sc", scPairs, "Sidechain"));
+  a = sk(); kn(a, P + "scAmt", "SC amount", 0, 1, 0.01, PCT, 0.5, "sm"); kn(a, P + "scRel", "SC release", 0.02, 1, 0.01, (v) => Math.round(v * 1000) + " ms", 0.25, "sm"); s.append(a);
+  s.append(el("div", { class: "sec" }, "Sends"));
+  a = sk(); for (let f = 0; f < 4; f++) kn(a, P + "s" + f, "Send " + "ABCD"[f], 0, 1, 0.01, PCT, 0, "sm"); s.append(a);
   const fd = vfader(P + "lvl", `Volume of ${title}`);
   s.append(el("div", { class: "frow" }, meterEl(), fd.f), fd.read, el("div", { class: "tms" }, msBtn(P + "mute", "Mute", "m"), msBtn(P + "solo", "Solo", "s"), msBtn(P + "cue", "Cue", "c")));
   return s;

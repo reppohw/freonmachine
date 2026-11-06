@@ -97,8 +97,8 @@ inline const char* const* drumSlots(int uiKit, const char*& extra) {
 }
 const char* kSubKeys[6] = {"ch", "on", "oct", "tone", "glide", "vol"};
 // Parámetros de canal y grupo (mismo orden en las claves y en el audio)
-enum SP { SP_LVL, SP_PAN, SP_MUTE, SP_SOLO, SP_CUE, SP_OUT, SP_DTYPE, SP_DRIVE, SP_DTONE, SP_DMIX, SP_LOW, SP_MID, SP_HIGH, SP_LIM, SP_SC, SP_SCAMT, SP_SCREL, SP_S0, SP_S1, SP_S2, SP_S3, SP_FILT, SP_RES, SP_COUNT };
-const char* kSP[SP_COUNT] = {"lvl", "pan", "mute", "solo", "cue", "out", "dtype", "drive", "dtone", "dmix", "low", "mid", "high", "lim", "sc", "scAmt", "scRel", "s0", "s1", "s2", "s3", "filt", "res"};
+enum SP { SP_LVL, SP_PAN, SP_MUTE, SP_SOLO, SP_CUE, SP_OUT, SP_DTYPE, SP_DRIVE, SP_DTONE, SP_DMIX, SP_LOW, SP_MID, SP_HIGH, SP_LIM, SP_SC, SP_SCAMT, SP_SCREL, SP_S0, SP_S1, SP_S2, SP_S3, SP_FILT, SP_RES, SP_TRIM, SP_COUNT };
+const char* kSP[SP_COUNT] = {"lvl", "pan", "mute", "solo", "cue", "out", "dtype", "drive", "dtone", "dmix", "low", "mid", "high", "lim", "sc", "scAmt", "scRel", "s0", "s1", "s2", "s3", "filt", "res", "trim"};
 enum MP { MP_VOL, MP_LIM, MP_CUELVL, MP_CUEMODE, MP_DTYPE, MP_DRIVE, MP_DTONE, MP_DMIX, MP_FILT, MP_RES, MP_REP, MP_GDIV, MP_GATE, MP_RISER, MP_SPACE, MP_SPSIZE, MP_THROW, MP_TDIV, MP_TFB, MP_TAPE, MP_BPM, MP_CLOCK, MP_RDECAY, MP_RNOISE, MP_TAPESM, MP_RSIZE, MP_FENV, MP_RPITCH, MP_GSHAPE, MP_GPAN, MP_SPDAMP, MP_SPFRZ, MP_TTONE, MP_COMB, MP_CBPITCH, MP_CBFB, MP_CBDAMP, MP_SWEEP, MP_SWRATE, MP_SWDEPTH, MP_SWFB, MP_SWMODE, MP_SUM, MP_COUNT };
 const char* kMP[MP_COUNT] = {"vol", "lim", "cueLvl", "cueMode", "dtype", "drive", "dtone", "dmix", "filt", "res", "rep", "gdiv", "gate", "riser", "space", "spSize", "throw", "throwDiv", "throwFb", "tape", "bpm", "clock", "rDecay", "rNoise", "tapeSm", "rSize", "fEnv", "rPitch", "gShape", "gPan", "spDamp", "spFrz", "tTone", "comb", "cbPitch", "cbFb", "cbDamp", "sweep", "swRate", "swDepth", "swFb", "swMode", "sum"};
 const float kMpDef[MP_COUNT] = {0.85f, -3, 0.8f, 0, 0, 0, 1, 1, 0, 1.4f, 0, 2, 0, 0, 0, 0.7f, 0, 6, 0.55f, 0, 120, 1, 0, 0.5f, 0.5f, 2, 0, 0, 0, 0, 0.53f, 0, 0.7f, 0, 48, 0.8f, 0.3f, 0, 2, 0.7f, 0.4f, 0, 0};
@@ -139,7 +139,8 @@ struct SubVoice {
 
 // ------------------------------------------------------------------ tira de canal / grupo
 struct Strip {
-    float p[SP_COUNT] = {0.8f, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, -1, 0.5f, 0.12f, 0, 0, 0, 0, 0, 1.4f};
+    float p[SP_COUNT] = {0.8f, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, -1, 0.5f, 0.25f, 0, 0, 0, 0, 0, 1.4f, 0};
+    float trimG = 1;   // trim de entrada del canal
     Dist dist; Shelf lo[2], mi[2], hi[2]; bool eqDirty = true; Follower fol; Limiter lim; DJFilter dj;
     float L[BLK], R[BLK], pre[2][BLK], g[BLK];
     float sr = 48000;
@@ -148,11 +149,12 @@ struct Strip {
     void set(int i, float v) {
         p[i] = v;
         if (i == SP_DTYPE) dist.type = distType(v); else if (i == SP_DRIVE) dist.drive = v; else if (i == SP_DTONE) dist.tone = v; else if (i == SP_DMIX) dist.mix = v;
-        else if (i == SP_LOW || i == SP_MID || i == SP_HIGH) eqDirty = true; else if (i == SP_LIM) lim.thrDb = v; else if (i == SP_FILT) dj.f = v; else if (i == SP_RES) dj.res = v;
+        else if (i == SP_LOW || i == SP_MID || i == SP_HIGH) eqDirty = true; else if (i == SP_LIM) lim.thrDb = v; else if (i == SP_FILT) dj.f = v; else if (i == SP_RES) dj.res = v; else if (i == SP_TRIM) trimG = std::pow(10.0f, v / 20.0f);
     }
     // distorsión + EQ (o filtro en los grupos). Lo que sale aquí es la señal que alimenta los sidechains
     bool silent = false;
     void stageA(int n, bool group) {
+        if (trimG != 1.0f) for (int i = 0; i < n; ++i) { L[i] *= trimG; R[i] *= trimG; }
         // canal en silencio: nada que procesar (los filtros no tienen cola audible)
         float pkIn = 0, acc = 0; for (int i = 0; i < n; ++i) { pkIn = std::max(pkIn, std::fabs(L[i]) + std::fabs(R[i])); acc += L[i] + R[i]; }
         if (!std::isfinite(acc)) { std::fill(L, L + n, 0.0f); std::fill(R, R + n, 0.0f); pkIn = 0; }   // un motor averiado no contagia al resto de la mezcla
@@ -908,7 +910,7 @@ struct Control {
         if ((k[0] == 'c' || k[0] == 'g') && k.size() > 2 && std::isdigit(static_cast<unsigned char>(k[1]))) {
             const size_t d = k.find('.'); if (d == std::string::npos) return true;
             static const std::map<std::string, std::pair<float, float>> R = {{"pan", {-1, 1}}, {"out", {0, 2 + NDIR}}, {"dtype", {0, 1}}, {"low", {-15, 15}}, {"mid", {-15, 15}}, {"high", {-15, 15}},
-                {"lim", {-24, 0}}, {"sc", {-1, NCH - 1}}, {"scRel", {0.02f, 0.6f}}, {"filt", {-1, 1}}, {"res", {0.7f, 15}}, {"lvl", {0, 1.5f}}};
+                {"lim", {-24, 0}}, {"sc", {-1, NCH - 1}}, {"trim", {-24, 12}}, {"scRel", {0.02f, 1.0f}}, {"filt", {-1, 1}}, {"res", {0.7f, 15}}, {"lvl", {0, 1.5f}}};
             const auto it = R.find(k.substr(d + 1)); if (it != R.end()) { lo = it->second.first; hi = it->second.second; } else { lo = 0; hi = 1; }
             return true;
         }
@@ -1886,7 +1888,8 @@ struct MidiHub {
             for (size_t k = 0; k < outs.size();) { if (std::find(now.begin(), now.end(), outs[k]->name) != now.end()) { ++k; continue; } outs.erase(outs.begin() + static_cast<long>(k)); changed = true; }
             for (unsigned i = 0; i < n; ++i) {
                 const std::string& nm = now[i];
-                if (notADevice(nm) || isIgnored(nm)) continue;
+                // al MC-24 no se le abre salida: solo tiene potenciómetros, y tras cerrarla deja de mandar hasta reenchufarlo
+                if (notADevice(nm) || isIgnored(nm) || lower(nm).find("mc-24") != std::string::npos) continue;
                 bool have = false; for (auto& o : outs) have |= o->name == nm;
                 if (have) continue;
                 auto o = std::make_unique<Out>(); o->name = nm; o->out = std::make_unique<RtMidiOut>(); o->out->openPort(i);

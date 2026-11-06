@@ -151,14 +151,14 @@ private:
 // ------------------------------------------------------------------ seguidor de envolvente para el sidechain
 struct Follower {
     float e1 = 0;
-    // devuelve la ganancia (1 = sin agachar) para cada muestra en g[]. Coge el golpe en 1 ms y suelta con Release.
-    // Amount es la profundidad real: al 100 % un golpe fuerte baja unos −30 dB; al 50 %, unos −6 dB
+    // Bombeo clásico: el golpe baja el nivel en 1 ms y luego sube en línea recta durante todo Release, sin seguir la cola del
+    // bombo. g[] es la ganancia (1 = sin agachar). Amount es la profundidad: 100 % ≈ −30 dB, 50 % ≈ −6 dB.
     void process(const float* srcL, const float* srcR, float* g, int n, float amt, float rel, float sr) {
-        const float at = 1.0f - std::exp(-1.0f / (0.001f * sr)), dn = std::exp(-1.0f / (std::max(0.01f, rel) * 0.4f * sr));
+        const float at = 1.0f - std::exp(-1.0f / (0.001f * sr)), up = 1.0f / (std::max(0.02f, rel) * sr);
         for (int i = 0; i < n; ++i) {
-            const float x = 0.5f * (std::fabs(srcL[i]) + std::fabs(srcR[i]));
-            if (x > e1) e1 += (x - e1) * at; else e1 = x + (e1 - x) * dn;
-            g[i] = 1.0f - std::clamp(amt * std::min(1.0f, e1 * 5.0f), 0.0f, 0.97f);
+            const float x = std::min(1.0f, 0.5f * (std::fabs(srcL[i]) + std::fabs(srcR[i])) * 5.0f);
+            if (x > e1) e1 += (x - e1) * at; else e1 = std::max(0.0f, e1 - up);
+            g[i] = 1.0f - std::clamp(amt * e1, 0.0f, 0.97f);
         }
     }
 };

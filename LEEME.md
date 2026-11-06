@@ -341,9 +341,11 @@ el archivo queda dañado, se carga la copia.
 Si la interfaz de audio se desconecta en pleno concierto, el programa lo nota en un segundo
 y la vuelve a abrir en cuanto reaparece.
 
-**Volumen de instrumento:** en cada tira de Mixer de Sub y sintes hay un knob Volume aparte del fader: es el del propio instrumento, y en los sintes se guarda con el preset. El del Sub también va por CC 19 en su canal.
+**Volumen de instrumento:** en cada tira de Mixer de Sub y sintes, junto al Limiter, está el knob Volume del propio instrumento: es el mismo que en Instruments, y al mover uno se mueve el otro. En los sintes se guarda con el preset. El del Sub también va por CC 19 en su canal.
 
-**Sidechain:** al 100 % un golpe fuerte baja unos −30 dB; al 50 %, unos −6 dB.
+**Trim de batería:** las tiras Kick, Snare y Drums rest tienen un Trim junto al Limiter, de −24 a +12 dB, para subir o bajar el grupo antes del fader.
+
+**Sidechain:** bombeo clásico. El golpe baja el nivel y SC release es lo que tarda en subir en línea recta, hasta 1 s. Prueba entre 200 y 400 ms, según el tempo. SC amount es la profundidad: al 100 %, unos −30 dB.
 
 **Núcleos:** en la Pi el audio se reparte entre 4 núcleos (batería, cada pista de sinte, sampler, breaks, granular y cada efecto de envío pueden ir por separado). En el Mac va en uno, porque allí no hay tiempo real para los demás. `--nucleos 1` lo pone todo en un núcleo, y suena exactamente igual: es la salida de emergencia si algo fallara en la Pi. Si un núcleo no consigue prioridad de tiempo real, se queda fuera y el programa lo avisa al arrancar («Núcleos para el audio»).
 
