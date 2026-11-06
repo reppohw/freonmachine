@@ -1,0 +1,14 @@
+# programas compilados: se generan con build.sh
+bin/
+*.dSYM/
+*.o
+# estado y copias de cada máquina
+freon-estado*.json*
+groovebox-estado*.json*
+# grabaciones y sonidos propios: pueden ser grandes
+samples/*
+!samples/.keep
+breaks/*
+!breaks/.keep
+# sistema
+.DS_Store

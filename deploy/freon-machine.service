@@ -1,0 +1,20 @@
+[Unit]
+Description=Freon Machine (motor de sonido)
+After=sound.target network.target
+Wants=sound.target
+
+[Service]
+Type=simple
+User=@USER@
+WorkingDirectory=@DIR@
+ExecStart=@DIR@/bin/freon-machine @ARGS@
+Restart=always
+RestartSec=1
+KillSignal=SIGTERM
+TimeoutStopSec=5
+LimitRTPRIO=95
+LimitMEMLOCK=infinity
+Nice=-10
+
+[Install]
+WantedBy=multi-user.target

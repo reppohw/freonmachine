@@ -1,0 +1,3 @@
+Copia aquí bancos del DX7 (.syx): bancos de 32 voces (4104 bytes) o voces sueltas.
+Al arrancar Freon Machine los lee todos, en orden alfabético, y aparecen en el knob Patch del DX7
+detrás de los 8 sonidos de serie. Si añades bancos, reinicia el programa.
