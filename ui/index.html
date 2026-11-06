@@ -467,7 +467,7 @@ function buildInst() {
           if (ui.saving === ti) { sendRaw(`preset save ${ti} ${s}`); ui.saving = -1; ui.lastPre[ti] = `${ei}.${s}`; oled(ti, "Saved", `${e.name} · slot ${s + 1}`); setTimeout(build, 120); return; }
           if (!on) { oled(ti, `Slot ${s + 1} is empty`, "Press Save, then this slot"); return; }
           sendRaw(`preset load ${ti} ${s}`); ui.lastPre[ti] = `${ei}.${s}`; oled(ti, "Preset", nm);
-          pre.querySelectorAll(".cur").forEach(x => x.classList.remove("cur")); b.classList.add("cur"); setTimeout(() => test(ti), 120);
+          pre.querySelectorAll(".cur").forEach(x => x.classList.remove("cur")); b.classList.add("cur");
         });
         if (user) b.setAttribute("aria-pressed", "true");
         pre.append(b);
