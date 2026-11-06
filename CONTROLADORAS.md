@@ -144,3 +144,8 @@ Las demás funciones de la batería:
 - **Modo DAW:** Freon pone cada Launch Control 3 en modo DAW, escribe la pantalla (pantalla fija y una por encoder) y fija colores y modo relativo.
 - **Emparejado:** cada Launch Control se asigna a una pista por su puerto USB, y queda guardado.
 - **Otras controladoras:** las que no sean Launch Control 3 siguen funcionando con el mapa MIDI genérico, como ahora.
+
+## Nakedboards MC-24 (conectado a la Pi)
+
+Manda por el canal 3 (la pista del Juno), con potenciómetros absolutos: fila de arriba CC 8–15, segunda CC 16–23, tercera CC 24–31.
+En los canales de sinte, CC 8–14 son los 7 primeros knobs de la capa y CC 15 el crossfader Dry–Wet. Las filas segunda y tercera son la capa completa (CC 16–31).

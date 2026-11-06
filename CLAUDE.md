@@ -16,6 +16,10 @@ Freon Machine tiene que ser **eficiente y muy estable**. Esto pesa más que cual
 - Código en GitHub, repositorio privado `reppohw/freonmachine`, rama `main`. Sube cada versión probada, con un mensaje claro. No van al repositorio `bin/`, `freon-estado*.json` ni los WAV de `samples/` y `breaks/`.
 - La Pi recibe una copia del código y lo compila allí; su estado no está en GitHub.
 
+## Hardware en uso
+- Interfaz: Focusrite Clarett+ 2Pre. Necesita su alimentación externa: por USB se ilumina pero no suena.
+- El retraso de salida es buffer × bloques (ajuste «Safety blocks» en System).
+
 ## Compilar y probar
 - `./build.sh`: versión normal en `bin/freon-machine`. `./build.sh debug`: versión con ASan y UBSan en `bin/freon-machine-debug`.
 - `./bin/freon-machine --render prueba.wav`: prueba sin tarjeta de sonido. Recorre kits y motores y dice el consumo medio de CPU.

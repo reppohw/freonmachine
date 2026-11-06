@@ -23,6 +23,8 @@
 - [x] Igualados motores y presets de fábrica a −22 dB medidos (`--niveles`); los presets de usuario no se tocan. Los sonidos muy cortos quedan por debajo, porque Volume no pasa de 1.
 - [x] Limitador del máster con 1,5 ms de anticipación. Fuzz con antiderivada: 10–14 dB menos de aliasing.
 - [x] De la auditoría: guardado cada 10 s como máximo con CC continuos, clave dañada no impide arrancar, limpieza completa tras un NaN, rejilla ancha en ráfagas MIDI, Moog sin cálculos repetidos.
+- [x] MC-24: fila de arriba = 7 primeros knobs de la capa y crossfader. Motor y preset pasan de CC 9/10 a CC 3/4 (chocaban con el MC-24); hay que reimportar los instrumentos del Oxi.
+- [ ] MC-24: decidir cómo elegir sinte, porque solo manda por un canal.
 - [ ] Sub colgado: Jorge tiene que confirmar qué pasó exactamente y si vuelve a ocurrir.
 - [ ] Saber qué controladoras usa Jorge, para elegir el modo de knobs por defecto.
 

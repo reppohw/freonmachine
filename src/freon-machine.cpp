@@ -1052,7 +1052,7 @@ struct Control {
         for (auto& i : cbLive_) {
             if (i.k != k) continue;
             const float x = st["cb.amt"];
-            i.to = i.amt && x > 0.02f ? i.base + (v - i.base) / x : v;   // con el crossfader a medias, lo guardado es el valor a tope
+            i.to = x > 0.02f ? i.base + (v - i.base) / x : v;   // con el crossfader a medias, lo guardado es el valor a tope
             float lo, hi; rangeOf(k, lo, hi); i.to = std::clamp(i.to, lo, hi);
             cbPublish(P + k, i.to); return;
         }
@@ -1083,7 +1083,7 @@ struct Control {
     void comboApply() {
         cbDirty = false; if (cbCur_ < 0) return;
         const float x = st["cb.amt"];
-        for (const auto& i : cbLive_) { const float v = i.amt ? i.base + (i.to - i.base) * x : i.to; if (st[i.k] != v) set(i.k, v, -1); }
+        for (const auto& i : cbLive_) { const float v = i.base + (i.to - i.base) * x; if (st[i.k] != v) set(i.k, v, -1); }   // todos los knobs siguen al fader
     }
     // mismo gesto que los mutes: pulsar y soltar enseguida = se queda; mantener = solo mientras se mantiene
     void comboPress(int n, bool down) {
@@ -1283,6 +1283,9 @@ struct Control {
         for (int t = 1; t < NT; ++t) {
             const std::string T = "t" + std::to_string(t + 1); const int ch = chOf(T + ".ch"); if (ch < 0) continue;
             const int e = std::clamp(static_cast<int>(st[T + ".eng"]), 0, E_COUNT - 1); const std::string K = T + "." + kEng[e].key + ".";
+            // fila de arriba del MC-24 (CC 8–15): los 7 primeros knobs de la capa y el crossfader Dry–Wet
+            for (int s = 0; s < 7; ++s) { const int i = kLayer[e][s]; if (i >= 0) mapKey(ch, 8 + s, K + std::to_string(i), kEng[e].p[i]); }
+            mapRange(ch, 15, "cb.amt", 0, 1);
             for (int s = 0; s < 16; ++s) { const int i = kLayer[e][s]; if (i >= 0) mapKey(ch, 16 + s, K + std::to_string(i), kEng[e].p[i]); }
             if (e == E_DX) { const auto it = keyAddr.find(K + "0"); if (it != keyAddr.end()) ccMap[it->second].max = static_cast<float>(std::max(0, dx7::libCount() - 1)); }   // Patch: lo que hay en la biblioteca
             const auto p2 = page2(e); for (size_t s = 0; s < p2.size() && s < 24; ++s) mapKey(ch, 40 + static_cast<int>(s), K + std::to_string(p2[s]), kEng[e].p[p2[s]]);
@@ -1394,13 +1397,13 @@ struct Control {
         const int cc = m.d1, val = m.d2;
         if (isEcho(addrCC(ch, cc), val)) return;
         if (cc == 110 && (ch == mixCh() || isSynthCh(ch))) { shift[ch] = val >= 64; return; }   // shift
-        // CC 9 y 10 con el número tal cual: motor y preset de una pista, kit de la batería. Es lo que usan los instrumentos del Oxi.
+        // CC 3 y 4 con el número tal cual: motor y preset de una pista, kit de la batería. Es lo que usan los instrumentos del Oxi.
         // Solo actúan si el número cambia: una línea de modulación los repite sin parar y no debe cortar notas ni pisar knobs.
-        if ((cc == 9 || cc == 10) && (isSynthCh(ch) || ch == chOf("t1.ch"))) {
-            if (ch == chOf("t1.ch")) { if (cc == 9 && val < 5 && static_cast<int>(st["d.kit"]) != val) set("d.kit", static_cast<float>(val), kMidiSrc); return; }
+        if ((cc == 3 || cc == 4) && (isSynthCh(ch) || ch == chOf("t1.ch"))) {
+            if (ch == chOf("t1.ch")) { if (cc == 3 && val < 5 && static_cast<int>(st["d.kit"]) != val) set("d.kit", static_cast<float>(val), kMidiSrc); return; }
             for (int t = 1; t < NT; ++t) if (chOf("t" + std::to_string(t + 1) + ".ch") == ch) {
                 const std::string E = "t" + std::to_string(t + 1) + ".eng";
-                if (cc == 9) { if (val < E_COUNT && static_cast<int>(st[E]) != val) { set(E, static_cast<float>(val), kMidiSrc); lastPre_[ch] = -1; } }
+                if (cc == 3) { if (val < E_COUNT && static_cast<int>(st[E]) != val) { set(E, static_cast<float>(val), kMidiSrc); lastPre_[ch] = -1; } }
                 else if (val < 8 && lastPre_[ch] != val) { lastPre_[ch] = val; presetLoad(t, val, -1); }
             }
             return;
@@ -1616,11 +1619,11 @@ int oxiExport(const std::string& dir) {
     int files = 0;
     // sinte genérico: sirve para cualquier motor, porque la capa de 16 knobs tiene el mismo orden en todos
     { static const char* L[16] = {"Cutoff", "Resonance", "Filter env", "Macro A", "Macro B", "Macro C", "Macro D", "Volume", "Filter attack", "Filter decay", "Filter sustain", "Filter release", "Amp attack", "Amp decay", "Amp sustain", "Amp release"};
-      std::vector<std::string> u; std::vector<OxiP> ps; ps.push_back({"Engine", "ENGN", 9, 0, E_COUNT - 1, 0, false}); ps.push_back({"Preset", "PRST", 10, 0, 7, 0, false}); u = {"ENGN", "PRST"};
+      std::vector<std::string> u; std::vector<OxiP> ps; ps.push_back({"Engine", "ENGN", 3, 0, E_COUNT - 1, 0, false}); ps.push_back({"Preset", "PRST", 4, 0, 7, 0, false}); u = {"ENGN", "PRST"};
       for (int k = 0; k < 16; ++k) ps.push_back({L[k], oxiAbbr(L[k], u), 16 + k, 0, 127, 64, false});
       oxiWrite(dir, "Freon Synth", "FSYN", ps); ++files; }
     for (int e = 0; e < E_COUNT; ++e) {
-        std::vector<std::string> u = {"ENGN", "PRST"}; std::vector<OxiP> ps; ps.push_back({"Engine", "ENGN", 9, 0, E_COUNT - 1, e, false}); ps.push_back({"Preset", "PRST", 10, 0, 7, 0, false});
+        std::vector<std::string> u = {"ENGN", "PRST"}; std::vector<OxiP> ps; ps.push_back({"Engine", "ENGN", 3, 0, E_COUNT - 1, e, false}); ps.push_back({"Preset", "PRST", 4, 0, 7, 0, false});
         const auto add = [&](int cc, int i) { const PSpec& p = kEng[e].p[i]; const std::string n = oxiAscii(p.label); ps.push_back({n, oxiAbbr(n, u), cc, 0, 127, def127(p), p.min < 0 && p.max > 0}); };
         for (int s = 0; s < 16; ++s) { const int i = kLayer[e][s]; if (i >= 0) add(16 + s, i); }
         const auto p2 = page2(e); for (size_t s = 0; s < p2.size() && s < 24; ++s) add(40 + static_cast<int>(s), p2[s]);
@@ -1634,7 +1637,7 @@ int oxiExport(const std::string& dir) {
         static const std::map<std::string, std::pair<std::string, std::string>> A = {{"level", {"Level", "LVL"}}, {"tune", {"Pitch", "PIT"}}, {"decay", {"Decay", "DEC"}}, {"tone", {"Tone", "TON"}}, {"snap", {"Snap", "SNP"}}, {"sweep", {"Sweep", "SWP"}}, {"filt", {"Filter", "FLT"}}, {"reso", {"Reso", "RES"}}, {"vel", {"Velocity", "VEL"}}, {"color", {"FM", "FMA"}}, {"shape", {"Ratio", "RAT"}}, {"contour", {"FM decay", "FMD"}}, {"pan", {"Pan", "PAN"}}};
         if (fm && k == "snap") return {"Noise", "NOI"}; return A.at(k); };
     for (const auto& kit : kKits) {
-        std::vector<OxiP> ps; ps.push_back({"Kit", "KIT", 9, 0, 4, kit.uiKit, false}); const char* extra = nullptr; const char* const* sl = drumSlots(kit.uiKit, extra); const bool fm = kit.uiKit == 2;
+        std::vector<OxiP> ps; ps.push_back({"Kit", "KIT", 3, 0, 4, kit.uiKit, false}); const char* extra = nullptr; const char* const* sl = drumSlots(kit.uiKit, extra); const bool fm = kit.uiKit == 2;
         for (int c = 0; c < 8; ++c) {
             const auto add = [&](const std::string& k, int cc) { const auto l = lbl(k, fm); std::string a = std::string(1, kPre[c]) + l.second; const bool ctr = k == "tune" || k == "filt" || k == "pan"; const int d = k == "level" || k == "vel" ? 102 : k == "reso" ? 25 : 64; ps.push_back({oxiAscii(std::string(kSnd[c]) + " " + l.first), a, cc, 0, 127, d, ctr}); };
             for (int k = 0; k < 8; ++k) add(sl[k], 16 + k * 8 + c);
@@ -2022,7 +2025,7 @@ int main(int argc, char** argv) {
         inp.firstChannel = 0; inp.deviceId = id >= 0 ? static_cast<unsigned>(id) : out.deviceId;
         const auto iinfo = audio->getDeviceInfo(inp.deviceId); inName = iinfo.name;
         inp.nChannels = hasArg(argc, argv, "--sin-entradas") || wantIn == "none" || (id < 0 && (!wantIn.empty() || info.inputChannels == 0)) ? 0 : std::min(4u, iinfo.inputChannels);
-        opts = {}; opts.flags = RTAUDIO_SCHEDULE_REALTIME; opts.priority = 80;   // sin MINIMIZE_LATENCY: en el Mac elegía buffers de 15 muestras y crujía
+        opts = {}; opts.flags = RTAUDIO_SCHEDULE_REALTIME; opts.priority = 80; opts.numberOfBuffers = static_cast<unsigned>(std::clamp(cfgI("bloques", "--bloques", 3), 2, 4));   // sin MINIMIZE_LATENCY: en el Mac elegía buffers de 15 muestras y crujía
         bool ok = false;
         if (inp.nChannels > 0) { au->inCh = static_cast<int>(inp.nChannels); ok = audio->openStream(&out, &inp, RTAUDIO_FLOAT32, rate, &frames, cb, au.get(), &opts) == RTAUDIO_NO_ERROR; }
         if (!ok) { au->inCh = 0; if (audio->isStreamOpen()) audio->closeStream(); ok = audio->openStream(&out, nullptr, RTAUDIO_FLOAT32, rate, &frames, cb, au.get(), &opts) == RTAUDIO_NO_ERROR; }
@@ -2051,15 +2054,15 @@ int main(int argc, char** argv) {
         try { RtMidiIn m; for (unsigned i = 0; i < m.getPortCount(); ++i) { const std::string n = m.getPortName(i); if (!MidiHub::notADevice(n)) { mid += (fm ? "" : ",") + jstr(MidiHub::portKey(n).c_str()); fm = false; } } } catch (...) {}
         for (const auto& n : hub.ignored) { if (!fm || mid.back() != '[') mid += ","; mid += jstr(n.c_str()); fm = false; off += (off.back() == '[' ? "" : ",") + jstr(n.c_str()); }
         return o + "]," + in + "]," + mid + "]," + off + "],\"audio\":" + jstr(cfgS("audio", "--audio").c_str()) + ",\"entrada\":" + jstr(cfgS("entrada", "--entrada").c_str()) +
-               ",\"buffer\":" + std::to_string(frames) + ",\"rate\":" + std::to_string(rate) + ",\"nucleos\":" + std::to_string(gNuc) + ",\"hw\":" + std::to_string(std::min(4, hw)) + ",\"salidas\":" + std::to_string(cfgI("salidas", "--salidas", 16)) +
+               ",\"buffer\":" + std::to_string(frames) + ",\"bloques\":" + std::to_string(std::clamp(cfgI("bloques", "--bloques", 3), 2, 4)) + ",\"rate\":" + std::to_string(rate) + ",\"nucleos\":" + std::to_string(gNuc) + ",\"hw\":" + std::to_string(std::min(4, hw)) + ",\"salidas\":" + std::to_string(cfgI("salidas", "--salidas", 16)) +
                ",\"cur\":" + jstr(outName.c_str()) + ",\"curIn\":" + jstr(au->inCh > 0 ? inName.c_str() : "") + ",\"note\":" + jstr(audioNote.c_str()) + ",\"rolled\":" + (rolledBack ? "true" : "false") + ",\"power\":" + (ctl.powerOffEnabled ? "true" : "false") + "}";
     };
     ctl.sysApply = [&](const std::string& line) {   // «clave=valor» separados por tabuladores
-        static const std::vector<std::string> keys = {"audio", "entrada", "buffer", "rate", "nucleos", "salidas", "midioff"};
+        static const std::vector<std::string> keys = {"audio", "entrada", "buffer", "bloques", "rate", "nucleos", "salidas", "midioff"};
         SysCfg next = cfg; std::stringstream ss(line); std::string kv;
         while (std::getline(ss, kv, '\t')) { const size_t e = kv.find('='); if (e == std::string::npos) continue; size_t b = kv.find_first_not_of(' '); const std::string k = kv.substr(b, e - b); std::string v = kv.substr(e + 1); v.erase(std::remove(v.begin(), v.end(), '\n'), v.end()); if (std::find(keys.begin(), keys.end(), k) != keys.end() && v.size() < 400) next[k] = v; }
         const auto num = [&](const char* k, std::initializer_list<int> ok) { const auto it = next.find(k); if (it == next.end() || it->second.empty()) return; const int v = std::atoi(it->second.c_str()); if (std::find(ok.begin(), ok.end(), v) == ok.end()) next.erase(k); };
-        num("buffer", {64, 128, 256, 512, 1024, 2048}); num("rate", {44100, 48000}); num("nucleos", {1, 2, 3, 4}); num("salidas", {2, 4, 6, 8, 16});
+        num("buffer", {64, 128, 256, 512, 1024, 2048}); num("rate", {44100, 48000}); num("nucleos", {1, 2, 3, 4}); num("bloques", {2, 3, 4}); num("salidas", {2, 4, 6, 8, 16});
         { std::error_code ec; if (std::filesystem::exists(sysFile)) std::filesystem::copy_file(sysFile, sysPrev, std::filesystem::copy_options::overwrite_existing, ec); else std::filesystem::remove(sysPrev, ec); }
         if (!sysSave(sysFile, next)) { std::printf("Aviso: no se pudieron guardar los ajustes de sistema.\n"); return; }
         { std::ofstream f(sysPend); f << "1"; }

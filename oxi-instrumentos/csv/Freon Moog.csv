@@ -1,6 +1,6 @@
 manufacturer,device,section,parameter_name,parameter_description,cc_msb,cc_lsb,cc_min_value,cc_max_value,cc_default_value,nrpn_msb,nrpn_lsb,nrpn_min_value,nrpn_max_value,nrpn_default_value,orientation,notes,usage
-Freon Machine,Freon Moog,,Engine,,9,,0,7,2,,,,,,0-based,,
-Freon Machine,Freon Moog,,Preset,,10,,0,7,0,,,,,,0-based,,
+Freon Machine,Freon Moog,,Engine,,3,,0,7,2,,,,,,0-based,,
+Freon Machine,Freon Moog,,Preset,,4,,0,7,0,,,,,,0-based,,
 Freon Machine,Freon Moog,,Cutoff,,16,,0,127,52,,,,,,0-based,,
 Freon Machine,Freon Moog,,Resonance,,17,,0,127,57,,,,,,0-based,,
 Freon Machine,Freon Moog,,Contour,,18,,0,127,70,,,,,,0-based,,

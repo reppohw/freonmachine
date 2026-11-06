@@ -855,6 +855,7 @@ function buildSys() {
   const devPairs = (list, none) => [["", "Default"], ...(none ? [["none", "No inputs"]] : []), ...list.map(n => [n, n])];
   const a = sel("Audio output", SYS.audio, devPairs(SYS.outs)), i = sel("Audio inputs", SYS.entrada, devPairs(SYS.ins, true));
   const b = sel("Buffer", SYS.buffer, [64, 128, 256, 512, 1024, 2048].map(n => [n, `${n} · ${(1000 * n / SYS.rate).toFixed(1)} ms`]));
+  const q = sel("Safety blocks", SYS.bloques, [[2, "2 · lowest delay"], [3, "3 · balanced"], [4, "4 · safest"]]);
   const r = sel("Sample rate", SYS.rate, [[44100, "44.1 kHz"], [48000, "48 kHz"]]);
   const c = sel("CPU cores", SYS.nucleos, Array.from({ length: SYS.hw }, (_, k) => [k + 1, String(k + 1)]));
   const o = sel("Outputs", SYS.salidas, [[16, "All"], [8, "8"], [6, "6"], [4, "4"], [2, "2"]]);
@@ -862,13 +863,13 @@ function buildSys() {
   [...new Set(SYS.midi)].forEach(n => { const k = keyBtn(n, "", () => { off.has(n) ? off.delete(n) : off.add(n); d(); }); const d = () => k.setAttribute("aria-pressed", String(!off.has(n))); d(); mid.append(k); });
   if (!SYS.midi.length) mid.append(el("span", { class: "hint" }, "none connected"));
   const apply = confirmKey("Apply and restart Freon", "Sound stops a few seconds. Sure?", () => {
-    sendRaw("sysapply " + [["audio", a.value], ["entrada", i.value], ["buffer", b.value], ["rate", r.value], ["nucleos", c.value], ["salidas", o.value], ["midioff", [...off].join("|")]].map(([k, v]) => `${k}=${v}`).join("\t"));
+    sendRaw("sysapply " + [["audio", a.value], ["entrada", i.value], ["buffer", b.value], ["bloques", q.value], ["rate", r.value], ["nucleos", c.value], ["salidas", o.value], ["midioff", [...off].join("|")]].map(([k, v]) => `${k}=${v}`).join("\t"));
     topMsg("System", "restarting Freon…");
   });
   const acts = el("div", { class: "scrow" }, apply, keyBtn("Refresh list", "", () => sendRaw("sys")), confirmKey("Restart Freon", "Sure?", () => sendRaw("sysact restart")));
   if (SYS.power) acts.append(confirmKey("Power off", "Sure? Needs power cycle", () => sendRaw("sysact poweroff"), "danger"));
   const warn = SYS.rolled ? "The last change did not work, so the previous settings were restored." : SYS.note === "default" ? "The chosen audio interface was not found: using the default one." : SYS.note === "none" ? "No audio interface: there is no sound until you choose one." : "";
-  box.append(mid, acts, el("p", { class: "hint" }, `Now: ${SYS.cur || "no audio"}${SYS.curIn ? " · in: " + SYS.curIn : ""}`), el("p", { class: "hint", id: "sysStat" }, "…"));
+  box.append(mid, acts, el("p", { class: "hint" }, `Now: ${SYS.cur || "no audio"}${SYS.curIn ? " · in: " + SYS.curIn : ""} · output delay about ${(1000 * SYS.buffer * SYS.bloques / SYS.rate).toFixed(0)} ms`), el("p", { class: "hint", id: "sysStat" }, "…"));
   if (warn) { box.append(el("p", { class: "hint", style: "color:var(--led)" }, warn)); topMsg("System", warn); }
 }
 function sysStatus(p) {

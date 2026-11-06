@@ -8,11 +8,11 @@ SINTES (cada secuenciador del Oxi en el canal MIDI de su pista: T2 = 2, T3 = 3, 
   Freon Juno, DX7, Moog, 303, Game Boy, Wavetable, Supersaw, Modal
                 un instrumento por motor, con los nombres de sus parámetros y la segunda página
 
-  Engine (CC 9):  0 Juno · 1 DX7 · 2 Moog · 3 303 · 4 Game Boy · 5 Wavetable · 6 Supersaw · 7 Modal
-  Preset (CC 10): 0 a 7 = presets 1 a 8
+  Engine (CC 3):  0 Juno · 1 DX7 · 2 Moog · 3 303 · 4 Game Boy · 5 Wavetable · 6 Supersaw · 7 Modal
+  Preset (CC 4): 0 a 7 = presets 1 a 8
 
 BATERÍA (canal 10)
-  Freon Drums       808 y 909     Kit (CC 9): 0 808 · 1 909 · 2 FM · 3 Chip · 4 Experimental
+  Freon Drums       808 y 909     Kit (CC 3): 0 808 · 1 909 · 2 FM · 3 Chip · 4 Experimental
   Freon Drums FM    kit FM
   Freon Drums Chip  Chip y Experimental
 

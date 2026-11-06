@@ -8786,6 +8786,15 @@ RtAudioErrorType RtApiAlsa :: startStream()
     }
   }
 
+  // Freon Machine: con entrada y salida a la vez, la salida arrancaba vacía y se quedaba para siempre por detrás de la
+  // interfaz (con stop_threshold infinito no hay xrun: solo silencio). Se rellena con dos bloques de silencio antes de empezar.
+  if ( stream_.mode == DUPLEX && stream_.deviceInterleaved[0] ) {
+    const size_t frameBytes = stream_.nDeviceChannels[0] * formatBytes( stream_.deviceFormat[0] );
+    const snd_pcm_uframes_t frames = stream_.bufferSize * 2;
+    char *zeros = (char *) calloc( frames, frameBytes );
+    if ( zeros ) { snd_pcm_writei( handle[0], zeros, frames ); free( zeros ); }
+  }
+
   stream_.state = STREAM_RUNNING;
 
  unlock:

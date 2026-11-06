@@ -137,7 +137,7 @@ Instruments, Live, Mixer y Settings, con **todos** los parámetros a la vista.
   delay y repeat. Ajusta los efectos como quieras, pulsa Save y elige un hueco: entran los que tengan
   cantidad, con todos sus knobs, y el botón muestra cuáles son. Pulsar la deja puesta; mantener solo
   suena mientras mantienes.
-  - **Crossfader Dry–Wet (CC 95):** lleva la combinación activa de seco a efecto.
+  - **Crossfader Dry–Wet (CC 95 en el mezclador, knob 8 arriba en el MC-24):** lleva la combinación activa de seco a efecto, moviendo todos sus knobs desde donde estaban hasta lo guardado.
   - **Editarla:** con una activa, lo que muevas en sus efectos se guarda en ella al momento; si subes
     otro efecto se añade, y si bajas uno a cero sale. Save sobre un hueco ocupado lo sustituye.
   - Al apagarla, todo vuelve a como estaba, y los efectos que no están en ella siguen libres. All off
@@ -209,7 +209,8 @@ al encender un solo se apagan los demás.
 - CC 102–109: los botones del motor (pulsar = encender/apagar).
 - CC 110: shift.
 - Program Change 0–7 elige motor y 10–17 carga los presets 1–8. Con shift pulsado, los guarda.
-- CC 9: motor (0–7). CC 10: preset (0–7). Con el número tal cual, para el Oxi. En el canal de la batería, CC 9 es el kit (0–4). Solo actúan si el número cambia.
+- CC 3: motor (0–7). CC 4: preset (0–7). Con el número tal cual, para el Oxi. En el canal de la batería, CC 3 es el kit (0–4). Solo actúan si el número cambia.
+- CC 8–14: los 7 primeros knobs de la capa (Cutoff, Reso, Env, A, B, C, D). CC 15: crossfader Dry–Wet. Es la fila de arriba del MC-24.
 
 **Instrumentos para el Oxi:** en `oxi-instrumentos/` hay 13 instrumentos para importar con la OXI App (ver su LEEME.txt). Con el Oxi, los knobs siempre van en absoluto, sea cual sea el modo elegido.
 
@@ -350,6 +351,7 @@ y la vuelve a abrir en cuanto reaparece.
 
 En la pestaña **Settings**, tarjeta **System**, eliges salida y entradas de audio, buffer, frecuencia, núcleos, salidas y qué puertos MIDI se usan. Con **Apply and restart Freon** se guarda y Freon se reinicia sola en unos segundos.
 
+- **Latencia:** el retraso de salida es buffer × Safety blocks. Bájalo poco a poco y mira el contador de cortes (dropouts).
 - Si lo elegido no funciona al arrancar, vuelve sola a lo anterior y lo avisa.
 - Si la interfaz no está (por ejemplo, desconectada), usa la de por defecto; y si no hay ninguna, arranca sin audio, para que siempre puedas arreglarlo desde la web.
 - Ahí mismo ves temperatura, CPU, pico y cortes, y tienes Restart Freon y Power off.
