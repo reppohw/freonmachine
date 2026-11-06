@@ -1899,6 +1899,14 @@ std::string exeDir(const char* argv0) {
     const auto slash = p.rfind('/'); return slash == std::string::npos ? "." : p.substr(0, slash);
 }
 // --audio y --entrada aceptan un número o parte del nombre ("Scarlett", "MacBook")
+// Algunos nombres de aparato no vienen en UTF-8 («Micrófono» en el Mac). Un byte inválido hace que el navegador cierre la conexión.
+std::string utf8Clean(const std::string& s) {
+    std::string o; for (size_t i = 0; i < s.size();) { const unsigned char c = static_cast<unsigned char>(s[i]);
+        size_t n = c < 0x80 ? 1 : (c >> 5) == 6 ? 2 : (c >> 4) == 14 ? 3 : (c >> 3) == 30 ? 4 : 0; bool ok = n > 0 && i + n <= s.size();
+        for (size_t k = 1; ok && k < n; ++k) ok = (static_cast<unsigned char>(s[i + k]) & 0xC0) == 0x80;
+        if (ok) { o.append(s, i, n); i += n; } else { o += static_cast<char>(0xC0 | c >> 6); o += static_cast<char>(0x80 | (c & 0x3F)); ++i; } }   // se lee como Latin-1
+    return o;
+}
 // --- ajustes de sistema: se eligen en la pantalla, no en la terminal. Un archivo de texto clave=valor junto al programa.
 using SysCfg = std::map<std::string, std::string>;
 SysCfg sysLoad(const std::string& path) {
@@ -1919,7 +1927,7 @@ int findDevice(RtAudio& a, const std::string& want, bool input) {
         for (unsigned d : a.getDeviceIds()) if (d == id) return static_cast<int>(d);
         return -2;
     }
-    for (unsigned d : a.getDeviceIds()) { const auto inf = a.getDeviceInfo(d); if ((input ? inf.inputChannels : inf.outputChannels) && lower(inf.name).find(lower(want)) != std::string::npos) return static_cast<int>(d); }
+    for (unsigned d : a.getDeviceIds()) { const auto inf = a.getDeviceInfo(d); if ((input ? inf.inputChannels : inf.outputChannels) && lower(utf8Clean(inf.name)).find(lower(want)) != std::string::npos) return static_cast<int>(d); }
     return -2;
 }
 
@@ -2050,12 +2058,12 @@ int main(int argc, char** argv) {
     ctl.sysStatus = [&]() { return std::to_string(cpuTempC()) + " " + piThrottled() + " " + std::to_string(au->xruns.load()) + " " + jnum(au->cpu.load()) + " " + jnum(au->cpuPeak.exchange(0.0f)); };
     ctl.sysInfo = [&]() {
         std::string o = "{\"outs\":["; std::string in = "\"ins\":[", mid = "\"midi\":[", off = "\"midioff\":["; bool fo = true, fi = true, fm = true;
-        try { RtAudio a; for (unsigned id : a.getDeviceIds()) { const auto inf = a.getDeviceInfo(id); if (inf.outputChannels) { o += (fo ? "" : ",") + jstr(inf.name.c_str()); fo = false; } if (inf.inputChannels) { in += (fi ? "" : ",") + jstr(inf.name.c_str()); fi = false; } } } catch (...) {}
-        try { RtMidiIn m; for (unsigned i = 0; i < m.getPortCount(); ++i) { const std::string n = m.getPortName(i); if (!MidiHub::notADevice(n)) { mid += (fm ? "" : ",") + jstr(MidiHub::portKey(n).c_str()); fm = false; } } } catch (...) {}
+        try { RtAudio a; for (unsigned id : a.getDeviceIds()) { const auto inf = a.getDeviceInfo(id); if (inf.outputChannels) { o += (fo ? "" : ",") + jstr(utf8Clean(inf.name).c_str()); fo = false; } if (inf.inputChannels) { in += (fi ? "" : ",") + jstr(utf8Clean(inf.name).c_str()); fi = false; } } } catch (...) {}
+        try { RtMidiIn m; for (unsigned i = 0; i < m.getPortCount(); ++i) { const std::string n = m.getPortName(i); if (!MidiHub::notADevice(n)) { mid += (fm ? "" : ",") + jstr(utf8Clean(MidiHub::portKey(n)).c_str()); fm = false; } } } catch (...) {}
         for (const auto& n : hub.ignored) { if (!fm || mid.back() != '[') mid += ","; mid += jstr(n.c_str()); fm = false; off += (off.back() == '[' ? "" : ",") + jstr(n.c_str()); }
         return o + "]," + in + "]," + mid + "]," + off + "],\"audio\":" + jstr(cfgS("audio", "--audio").c_str()) + ",\"entrada\":" + jstr(cfgS("entrada", "--entrada").c_str()) +
                ",\"buffer\":" + std::to_string(frames) + ",\"bloques\":" + std::to_string(std::clamp(cfgI("bloques", "--bloques", 3), 2, 4)) + ",\"rate\":" + std::to_string(rate) + ",\"nucleos\":" + std::to_string(gNuc) + ",\"hw\":" + std::to_string(std::min(4, hw)) + ",\"salidas\":" + std::to_string(cfgI("salidas", "--salidas", 16)) +
-               ",\"cur\":" + jstr(outName.c_str()) + ",\"curIn\":" + jstr(au->inCh > 0 ? inName.c_str() : "") + ",\"note\":" + jstr(audioNote.c_str()) + ",\"rolled\":" + (rolledBack ? "true" : "false") + ",\"power\":" + (ctl.powerOffEnabled ? "true" : "false") + "}";
+               ",\"cur\":" + jstr(utf8Clean(outName).c_str()) + ",\"curIn\":" + jstr(au->inCh > 0 ? utf8Clean(inName).c_str() : "") + ",\"note\":" + jstr(audioNote.c_str()) + ",\"rolled\":" + (rolledBack ? "true" : "false") + ",\"power\":" + (ctl.powerOffEnabled ? "true" : "false") + "}";
     };
     ctl.sysApply = [&](const std::string& line) {   // «clave=valor» separados por tabuladores
         static const std::vector<std::string> keys = {"audio", "entrada", "buffer", "bloques", "rate", "nucleos", "salidas", "midioff"};

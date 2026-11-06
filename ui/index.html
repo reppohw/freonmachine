@@ -174,6 +174,9 @@ h2 span { font-size: 11px; letter-spacing: 0.08em; color: var(--dim); text-trans
 @media (max-width: 900px) { .mfx { grid-template-columns: 1fr; } }
 .mfx .blk { justify-items: center; text-align: center; }
 .mfx .scenes { grid-column: 1 / -1; justify-items: stretch; }
+#sysBox select, .row .field select { max-width: 100%; }
+#sysBox .field { min-width: 0; max-width: 100%; flex: 1 1 150px; }
+#sysBox .scrow { flex: 1 1 100%; }
 .mfx .scrow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .mfx .blk .knob { width: 74px; } .mfx .blk .knob svg { width: 52px; height: 52px; }
 .mfx .blk.live { border-color: #5a2a20; box-shadow: inset 0 0 0 1px rgba(255,77,46,.25); }
