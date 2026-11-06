@@ -147,5 +147,10 @@ Las demás funciones de la batería:
 
 ## Nakedboards MC-24 (conectado a la Pi)
 
-Manda por el canal 3 (la pista del Juno), con potenciómetros absolutos: fila de arriba CC 8–15, segunda CC 16–23, tercera CC 24–31.
-En los canales de sinte, CC 8–14 son los 7 primeros knobs de la capa y CC 15 el crossfader Dry–Wet. Las filas segunda y tercera son la capa completa (CC 16–31).
+Manda por el canal 3, potenciómetros absolutos: fila 1 CC 8–15, fila 2 CC 16–23, fila 3 CC 24–31. No hace falta programarlo: Freon reconoce su puerto y traduce cada fila.
+
+- Fila 1 → T2, fila 2 → T3, fila 3 → T4, siguiendo el canal que tenga cada pista.
+- Cada fila: Cutoff, Reso, Env, A, B, C, D y Volume.
+- Último knob de la fila 3: crossfader Dry–Wet, en lugar del Volume de T4.
+
+Escribirle la configuración por MIDI desde la Pi no funcionó: lo dejó colgado hasta reenchufarlo y no guardó nada.

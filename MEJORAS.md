@@ -24,7 +24,7 @@
 - [x] Limitador del máster con 1,5 ms de anticipación. Fuzz con antiderivada: 10–14 dB menos de aliasing.
 - [x] De la auditoría: guardado cada 10 s como máximo con CC continuos, clave dañada no impide arrancar, limpieza completa tras un NaN, rejilla ancha en ráfagas MIDI, Moog sin cálculos repetidos.
 - [x] MC-24: fila de arriba = 7 primeros knobs de la capa y crossfader. Motor y preset pasan de CC 9/10 a CC 3/4 (chocaban con el MC-24); hay que reimportar los instrumentos del Oxi.
-- [ ] MC-24: decidir cómo elegir sinte, porque solo manda por un canal.
+- [x] MC-24: cada fila controla un sinte (T2, T3, T4); Freon traduce por el nombre del puerto.
 - [x] Web: cargar un preset ya no lanza una nota de prueba.
 - [x] CPU en la Pi 3 (Oxi tocando): Juno 18 puntos, Summing 5, sidechain 2, kit FM 2, entradas 2, envíos 1–2. Juno apagado sin voces y 4 voces en la Pi 3; Summing a 0 y entradas 1-2 en mute.
 - [x] Un LFO del Oxi manda ~150 CC/s: la web recibe solo el último valor cada 40 ms y el estado se guarda como mucho cada minuto.

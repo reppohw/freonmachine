@@ -1392,11 +1392,17 @@ struct Control {
     bool isEcho(int addr, int v) { const auto it = outAt_.find(addr); return it != outAt_.end() && it->second.first == v && std::chrono::steady_clock::now() - it->second.second < std::chrono::milliseconds(120); }
     // Mensajes de las controladoras (CC, cambios de programa y notas del canal del mezclador)
     void onCtl(const CtlMidi& m) {
-        const int ty = m.s & 0xF0, ch = m.s & 0x0F;
+        const int ty = m.s & 0xF0; int ch = m.s & 0x0F;
         if (ty == 0xC0) { onProgram(ch, m.d1); return; }
         if (ty == 0x90 || ty == 0x80) { onMixNote(ch, m.d1, ty == 0x90 ? m.d2 : 0); return; }
         if (ty != 0xB0) return;
-        const int cc = m.d1, val = m.d2;
+        int cc = m.d1; const int val = m.d2;
+        // MC-24: cada fila controla un sinte, sea cual sea el canal de esa pista. Filas 1 a 3 = T2 a T4: los 7 primeros knobs
+        // de la capa y Volume; el último knob de la fila 3 es el crossfader Dry–Wet
+        if (cc >= 8 && cc <= 31 && portHas(m.port, "mc-24")) {
+            const int r = (cc - 8) / 8, s = (cc - 8) % 8; ch = chOf("t" + std::to_string(r + 2) + ".ch"); if (ch < 0) return;
+            cc = s < 7 ? 8 + s : r < 2 ? 23 : 15;
+        }
         if (isEcho(addrCC(ch, cc), val)) return;
         if (cc == 110 && (ch == mixCh() || isSynthCh(ch))) { shift[ch] = val >= 64; return; }   // shift
         // CC 3 y 4 con el número tal cual: motor y preset de una pista, kit de la batería. Es lo que usan los instrumentos del Oxi.
@@ -1419,7 +1425,7 @@ struct Control {
         if (t.type == 1) { button(a, t.key, val >= 64); return; }
         const float cur = st[t.key], cn = norm(t, cur);
         // el Oxi es un secuenciador: manda valores exactos y a saltos, así que con él siempre es absoluto
-        const int mode = isOxiPort(m.port) ? 0 : static_cast<int>(st["midi.knob"]);
+        const int mode = portHas(m.port, "oxi") ? 0 : static_cast<int>(st["midi.knob"]);
         const bool stepped = t.step >= 1.0f && (t.max - t.min) / t.step <= 1024;
         float nv;
         if (mode >= 2) {   // encoders sin fin: relativo
@@ -1446,7 +1452,7 @@ struct Control {
         if (mode >= 2) { const int v = fbValue(t.key, a); if (v >= 0) pendFb[a] = v; }   // anillos de LED al día
     }
     int lastPre_[16];
-    static bool isOxiPort(int port) { std::lock_guard<std::mutex> lk(gMidiNamesMx); return port >= 0 && port < static_cast<int>(gMidiNames.size()) && lower(gMidiNames[static_cast<size_t>(port)]).find("oxi") != std::string::npos; }
+    static bool portHas(int port, const char* what) { std::lock_guard<std::mutex> lk(gMidiNamesMx); return port >= 0 && port < static_cast<int>(gMidiNames.size()) && lower(gMidiNames[static_cast<size_t>(port)]).find(what) != std::string::npos; }
     bool isSynthCh(int ch) const { for (int t = 1; t < NT; ++t) if (chOf("t" + std::to_string(t + 1) + ".ch") == ch) return true; return false; }
     void onProgram(int ch, int pc) {
         if (ch == chOf("t1.ch")) { if (pc < 5) set("d.kit", static_cast<float>(pc), kMidiSrc); return; }
