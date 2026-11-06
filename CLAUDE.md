@@ -12,6 +12,10 @@ Freon Machine tiene que ser **eficiente y muy estable**. Esto pesa más que cual
 - Le gusta lo simple: cada cosa hace una función. No añadas funciones que no ha pedido.
 - Lo pendiente y lo decidido están en `MEJORAS.md`. El reparto de controladoras está en `CONTROLADORAS.md` y la documentación de uso en `LEEME.md`. Mantenlos al día.
 
+## Copias
+- Código en GitHub, repositorio privado `reppohw/freonmahine`, rama `main`. Sube cada versión probada, con un mensaje claro. No van al repositorio `bin/`, `freon-estado*.json` ni los WAV de `samples/` y `breaks/`.
+- La Pi recibe una copia del código y lo compila allí; su estado no está en GitHub.
+
 ## Compilar y probar
 - `./build.sh`: versión normal en `bin/freon-machine`. `./build.sh debug`: versión con ASan y UBSan en `bin/freon-machine-debug`.
 - `./bin/freon-machine --render prueba.wav`: prueba sin tarjeta de sonido. Recorre kits y motores y dice el consumo medio de CPU.
