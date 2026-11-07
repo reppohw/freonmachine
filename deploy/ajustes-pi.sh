@@ -1,6 +1,7 @@
 #!/bin/sh
 # Ajustes de la Raspberry para el directo. Se ejecuta una vez, desde la carpeta del proyecto:
-#   ./deploy/ajustes-pi.sh "clave-de-la-wifi-de-freon"
+#   ./deploy/ajustes-pi.sh            (te pregunta la clave)
+#   ./deploy/ajustes-pi.sh "clave"    (o se la das directamente)
 # La clave es la de la wifi propia que crea la Pi cuando no encuentra tu wifi (8 caracteres o más).
 #
 # 1. Arranque más rápido: Freon no espera a la red (para sonar no la necesita); fuera cloud-init y la espera de red.
@@ -13,7 +14,8 @@ set -e
 cd "$(dirname "$0")/.."
 CLAVE="${1:-}"
 USER_NAME="$(id -un)"
-if [ ${#CLAVE} -lt 8 ]; then echo "Pon una clave de 8 caracteres o más para la wifi de Freon: ./deploy/ajustes-pi.sh \"clave\""; exit 1; fi
+while [ ${#CLAVE} -lt 8 ]; do printf "Clave para la wifi de Freon (8 caracteres o más): "; read -r CLAVE; done
+echo "Ahora te pedirá la contraseña de la Pi (la de entrar como $USER_NAME)."
 
 echo "== Freon arranca sin esperar a la red"
 sudo sed -i -e "s/^After=.*/After=sound.target/" /etc/systemd/system/freon-machine.service

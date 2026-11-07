@@ -173,13 +173,26 @@ struct Follower {
 // Une la mezcla: detector estéreo enlazado, rodilla suave de 6 dB, ganancia de recuperación automática parcial y mezcla en
 // paralelo. La ganancia se calcula cada 8 muestras y se interpola: poco gasto en la Pi.
 struct BusComp {
-    float amount = 0, ratio = 1, attack = 10, release = 0.3f, mix = 1, lastGrDb = 0;   // ratio: 0 = 2:1, 1 = 4:1, 2 = 10:1
-    void prepare(float s) { sr = s; }
+    // ratio: 0 = 2:1, 1 = 4:1, 2 = 10:1. air: realce suave de agudos tras comprimir (0..+6 dB desde 10 kHz). makeup: ganancia extra en dB
+    float amount = 0, ratio = 1, attack = 10, release = 0.3f, mix = 1, air = 0, makeup = 0, lastGrDb = 0;
+    void prepare(float s) { sr = s; airSet = -1; }
     void process(float* L, float* R, int n) {
-        if (amount < 0.005f) { lastGrDb = 0; gDb = 0; gLin = 1; env = 0; return; }
+        if (amount >= 0.005f) compress(L, R, n); else { lastGrDb = 0; gDb = 0; gLin = 1; env = 0; }
+        if (air >= 0.005f) {
+            if (air != airSet) { airSet = air; for (auto& h : hs) { const float z1 = h.z1, z2 = h.z2; h.set(1, 10000.0f, air * 6.0f, 0.7f, sr); h.z1 = z1; h.z2 = z2; } }
+            for (int i = 0; i < n; ++i) { L[i] = hs[0].process(L[i]); R[i] = hs[1].process(R[i]); }
+        } else if (airSet >= 0) { airSet = -1; for (auto& h : hs) h.z1 = h.z2 = 0; }
+        const float mk = std::pow(10.0f, makeup / 20.0f);
+        if (std::fabs(mk - mkLin) > 1e-6f || mk != 1.0f) {
+            const float d = (mk - mkLin) / static_cast<float>(std::max(1, n)); float a = mkLin;
+            for (int i = 0; i < n; ++i) { a += d; L[i] *= a; R[i] *= a; } mkLin = mk;
+        }
+    }
+private:
+    void compress(float* L, float* R, int n) {
         static const float kR[3] = {2, 4, 10};
         const float r = kR[std::clamp(static_cast<int>(ratio + 0.5f), 0, 2)], thr = -amount * 24.0f, knee = 6.0f, slope = 1.0f - 1.0f / r;
-        const float makeup = -thr * slope * 0.4f, ca = 1.0f - std::exp(-8.0f / (std::max(0.1f, attack) * 0.001f * sr)), cr = 1.0f - std::exp(-8.0f / (std::max(0.05f, release) * sr));
+        const float autoMk = -thr * slope * 0.4f, ca = 1.0f - std::exp(-8.0f / (std::max(0.1f, attack) * 0.001f * sr)), cr = 1.0f - std::exp(-8.0f / (std::max(0.05f, release) * sr));
         const float kE = 1.0f - std::exp(-1.0f / (0.005f * sr)); float minG = 0;
         for (int o = 0; o < n; o += 8) {
             const int k = std::min(8, n - o);
@@ -187,13 +200,13 @@ struct BusComp {
             const float lv = 10.0f * std::log10(env + 1e-12f), over = lv - thr;
             const float t = over <= -knee * 0.5f ? 0.0f : over >= knee * 0.5f ? -over * slope : -slope * (over + knee * 0.5f) * (over + knee * 0.5f) / (2.0f * knee);
             gDb += (t - gDb) * (t < gDb ? ca : cr); minG = std::min(minG, gDb);
-            const float target = std::pow(10.0f, (gDb + makeup) / 20.0f), step = (target - gLin) / static_cast<float>(k);
+            const float target = std::pow(10.0f, (gDb + autoMk) / 20.0f), step = (target - gLin) / static_cast<float>(k);
             for (int i = o; i < o + k; ++i) { gLin += step; L[i] += (L[i] * gLin - L[i]) * mix; R[i] += (R[i] * gLin - R[i]) * mix; }
         }
         lastGrDb = minG;
     }
-private:
-    float sr = 48000, env = 0, gDb = 0, gLin = 1;
+    float sr = 48000, env = 0, gDb = 0, gLin = 1, airSet = -1, mkLin = 1;
+    Shelf hs[2];
 };
 
 // ------------------------------------------------------------------ filtro DJ (LP a la izquierda, HP a la derecha)

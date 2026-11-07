@@ -99,9 +99,9 @@ const char* kSubKeys[8] = {"ch", "on", "oct", "tone", "glide", "vol", "mode", "s
 // Parámetros de canal y grupo (mismo orden en las claves y en el audio)
 enum SP { SP_LVL, SP_PAN, SP_MUTE, SP_SOLO, SP_CUE, SP_OUT, SP_DTYPE, SP_DRIVE, SP_DTONE, SP_DMIX, SP_LOW, SP_MID, SP_HIGH, SP_LIM, SP_SC, SP_SCAMT, SP_SCREL, SP_S0, SP_S1, SP_S2, SP_S3, SP_FILT, SP_RES, SP_TRIM, SP_COUNT };
 const char* kSP[SP_COUNT] = {"lvl", "pan", "mute", "solo", "cue", "out", "dtype", "drive", "dtone", "dmix", "low", "mid", "high", "lim", "sc", "scAmt", "scRel", "s0", "s1", "s2", "s3", "filt", "res", "trim"};
-enum MP { MP_VOL, MP_LIM, MP_CUELVL, MP_CUEMODE, MP_DTYPE, MP_DRIVE, MP_DTONE, MP_DMIX, MP_FILT, MP_RES, MP_REP, MP_GDIV, MP_GATE, MP_RISER, MP_SPACE, MP_SPSIZE, MP_THROW, MP_TDIV, MP_TFB, MP_TAPE, MP_BPM, MP_CLOCK, MP_RDECAY, MP_RNOISE, MP_TAPESM, MP_RSIZE, MP_FENV, MP_RPITCH, MP_GSHAPE, MP_GPAN, MP_SPDAMP, MP_SPFRZ, MP_TTONE, MP_COMB, MP_CBPITCH, MP_CBFB, MP_CBDAMP, MP_SWEEP, MP_SWRATE, MP_SWDEPTH, MP_SWFB, MP_SWMODE, MP_SUM, MP_BCOMP, MP_BCRAT, MP_BCATK, MP_BCREL, MP_BCMIX, MP_COUNT };   // MP_SUM ya no se usa
-const char* kMP[MP_COUNT] = {"vol", "lim", "cueLvl", "cueMode", "dtype", "drive", "dtone", "dmix", "filt", "res", "rep", "gdiv", "gate", "riser", "space", "spSize", "throw", "throwDiv", "throwFb", "tape", "bpm", "clock", "rDecay", "rNoise", "tapeSm", "rSize", "fEnv", "rPitch", "gShape", "gPan", "spDamp", "spFrz", "tTone", "comb", "cbPitch", "cbFb", "cbDamp", "sweep", "swRate", "swDepth", "swFb", "swMode", "sum", "bcomp", "bcRatio", "bcAtk", "bcRel", "bcMix"};
-const float kMpDef[MP_COUNT] = {0.85f, -1.5f, 0.8f, 0, 0, 0, 1, 1, 0, 1.4f, 0, 2, 0, 0, 0, 0.7f, 0, 6, 0.55f, 0, 120, 1, 0, 0.5f, 0.5f, 2, 0, 0, 0, 0, 0.53f, 0, 0.7f, 0, 48, 0.8f, 0.3f, 0, 2, 0.7f, 0.4f, 0, 0, 0, 1, 10, 0.3f, 1};
+enum MP { MP_VOL, MP_LIM, MP_CUELVL, MP_CUEMODE, MP_DTYPE, MP_DRIVE, MP_DTONE, MP_DMIX, MP_FILT, MP_RES, MP_REP, MP_GDIV, MP_GATE, MP_RISER, MP_SPACE, MP_SPSIZE, MP_THROW, MP_TDIV, MP_TFB, MP_TAPE, MP_BPM, MP_CLOCK, MP_RDECAY, MP_RNOISE, MP_TAPESM, MP_RSIZE, MP_FENV, MP_RPITCH, MP_GSHAPE, MP_GPAN, MP_SPDAMP, MP_SPFRZ, MP_TTONE, MP_COMB, MP_CBPITCH, MP_CBFB, MP_CBDAMP, MP_SWEEP, MP_SWRATE, MP_SWDEPTH, MP_SWFB, MP_SWMODE, MP_SUM, MP_BCOMP, MP_BCRAT, MP_BCATK, MP_BCREL, MP_BCMIX, MP_BCAIR, MP_BCMKP, MP_COUNT };   // MP_SUM ya no se usa
+const char* kMP[MP_COUNT] = {"vol", "lim", "cueLvl", "cueMode", "dtype", "drive", "dtone", "dmix", "filt", "res", "rep", "gdiv", "gate", "riser", "space", "spSize", "throw", "throwDiv", "throwFb", "tape", "bpm", "clock", "rDecay", "rNoise", "tapeSm", "rSize", "fEnv", "rPitch", "gShape", "gPan", "spDamp", "spFrz", "tTone", "comb", "cbPitch", "cbFb", "cbDamp", "sweep", "swRate", "swDepth", "swFb", "swMode", "sum", "bcomp", "bcRatio", "bcAtk", "bcRel", "bcMix", "bcAir", "bcMkp"};
+const float kMpDef[MP_COUNT] = {0.85f, -1.5f, 0.8f, 0, 0, 0, 1, 1, 0, 1.4f, 0, 2, 0, 0, 0, 0.7f, 0, 6, 0.55f, 0, 120, 1, 0, 0.5f, 0.5f, 2, 0, 0, 0, 0, 0.53f, 0, 0.7f, 0, 48, 0.8f, 0.3f, 0, 2, 0.7f, 0.4f, 0, 0, 0, 1, 10, 0.3f, 1, 0, 0};
 // Distorsión: Hard, Fuzz y Bitcrusher
 const int kDistMap[2] = {D_FUZZ, D_BITS};
 inline int distType(float v) { return kDistMap[std::clamp(static_cast<int>(v), 0, 1)]; }
@@ -216,6 +216,8 @@ struct Audio {
     std::atomic<float> bpmPub{120}; std::atomic<bool> clkPub{false}, runPub{false};   // copias seguras para el hilo de control
     std::atomic<int> act[NT]; std::atomic<int> dact[8]; std::atomic<int> sact[kPads];
     int outCh = 2, inCh = 0;
+    // rutas de la interfaz (de Ajustes): par de la salida principal, par del cue (-2 automático, -1 ninguno) y canal de la interfaz de cada entrada (-1 ninguno)
+    int mainPair = 0, cuePair = -2, inMap[4] = {0, 1, 2, 3};
     // directo
     Sampler samp; Breaks brk; Granular gran; VoiceFx voz;
     int lch[LM_COUNT] = {5, 6, 7, 8};
@@ -300,7 +302,7 @@ struct Audio {
             case MP_THROW: mfx.thr = v; break; case MP_TDIV: mfx.throwDiv = v; break; case MP_TFB: mfx.throwFb = v; break; case MP_TAPE: mfx.tape = v; break; case MP_RDECAY: mfx.repDecay = v; break; case MP_RNOISE: mfx.riserNoise = v; break; case MP_TAPESM: mfx.tapeInertia = v; break; case MP_RSIZE: mfx.repSize = v; break;
             case MP_RPITCH: mfx.repPitch = v; break; case MP_GSHAPE: mfx.gShape = v; break; case MP_GPAN: mfx.gPan = v; break; case MP_SPDAMP: mfx.spDamp = v; break; case MP_SPFRZ: mfx.spFreeze = v >= 0.5f; break; case MP_TTONE: mfx.thTone = v; break;
             case MP_COMB: mfx.comb = v; break; case MP_CBPITCH: mfx.cbPitch = v; break; case MP_CBFB: mfx.cbFb = v; break; case MP_CBDAMP: mfx.cbDamp = v; break;
-            case MP_BCOMP: bcomp.amount = v; break; case MP_BCRAT: bcomp.ratio = v; break; case MP_BCATK: bcomp.attack = v; break; case MP_BCREL: bcomp.release = v; break; case MP_BCMIX: bcomp.mix = v; break;
+            case MP_BCOMP: bcomp.amount = v; break; case MP_BCRAT: bcomp.ratio = v; break; case MP_BCATK: bcomp.attack = v; break; case MP_BCREL: bcomp.release = v; break; case MP_BCMIX: bcomp.mix = v; break; case MP_BCAIR: bcomp.air = v; break; case MP_BCMKP: bcomp.makeup = v; break;
             case MP_SWEEP: mfx.sweep = v; break; case MP_SWRATE: mfx.swRate = v; break; case MP_SWDEPTH: mfx.swDepth = v; break; case MP_SWFB: mfx.swFb = v; break; case MP_SWMODE: mfx.swMode = v; break;
             default: break;
         }
@@ -421,7 +423,7 @@ struct Audio {
             for (int i = 0; i < k; ++i) { s.L[i] += lanes[l][i] * gl; s.R[i] += lanes[l][i] * gr; }
         }
         sub.render(mono, k, subTone, subGlide, subVol); std::copy(mono, mono + k, st[CH_SUB].L); std::copy(mono, mono + k, st[CH_SUB].R);
-        for (int q = 0; q < 4; ++q) { if (in && q < ic) for (int i = 0; i < k; ++i) inRaw[q][i] = in[i * ic + q]; else std::fill(inRaw[q], inRaw[q] + k, 0.0f); }
+        for (int q = 0; q < 4; ++q) { const int c = inMap[q]; if (in && c >= 0 && c < ic) for (int i = 0; i < k; ++i) inRaw[q][i] = in[i * ic + c]; else std::fill(inRaw[q], inRaw[q] + k, 0.0f); }
         for (int q = 0; q < std::min(ic, 4); ++q) { Strip& s = st[CH_IN + q]; std::copy(inRaw[q], inRaw[q] + k, s.L); std::copy(inRaw[q], inRaw[q] + k, s.R); }
         {   // la voz va después: lee las pistas
             const float* ins[4] = {inRaw[0], inRaw[1], inRaw[2], inRaw[3]};
@@ -531,16 +533,21 @@ struct Audio {
         bool pairUsed[NDIR + 1] = {};
         for (auto& s : st) { const int o = static_cast<int>(s.p[SP_OUT]); if (o >= 3) pairUsed[std::min(NDIR, o - 2)] = true; }
         for (auto& g : grp) { const int o = static_cast<int>(g.p[SP_OUT]); if (o >= 3) pairUsed[std::min(NDIR, o - 2)] = true; }
-        const bool cue34 = oc >= 4 && !pairUsed[1];
+        // salida principal y cue: los pares que se eligen en Ajustes; una salida directa ocupada gana al cue
+        const int np = std::max(1, oc / 2), mpair = std::clamp(mainPair, 0, np - 1);
+        int cpair = cuePair == -2 ? (mpair == 0 ? 1 : -1) : cuePair;
+        if (cpair >= np || cpair == mpair || (cpair >= 1 && cpair <= NDIR && pairUsed[cpair])) cpair = -1;
         for (int i = 0; i < k; ++i) {
             const float a = softClip(cueL[i] * cl), b = softClip(cueR[i] * cl); cpk = std::max(cpk, std::max(std::fabs(a), std::fabs(b)));
             float* o = out + static_cast<size_t>(i) * oc;
-            for (int q = 2; q < oc; ++q) o[q] = 0;
-            if (cue34) { o[0] = L[i]; o[1] = R[i]; o[2] = a; o[3] = b; }
-            else if (anyCue && mode == 0) { o[0] = 0.5f * (L[i] + R[i]); o[1] = 0.5f * (a + b); }
-            else if (anyCue && mode == 2) { o[0] = a; o[1] = b; }
-            else { o[0] = L[i]; if (oc > 1) o[1] = R[i]; }
-            for (int pr = 1; pr <= NDIR && 2 * pr + 1 < oc; ++pr) if (pairUsed[pr]) { o[2 * pr] = softClip(busL[2 + pr][i]); o[2 * pr + 1] = softClip(busR[2 + pr][i]); }
+            for (int q = 0; q < oc; ++q) o[q] = 0;
+            if (oc < 2) { o[0] = L[i]; continue; }
+            float* m = o + 2 * mpair;
+            if (cpair >= 0) { m[0] = L[i]; m[1] = R[i]; o[2 * cpair] = a; o[2 * cpair + 1] = b; }
+            else if (anyCue && mode == 0) { m[0] = 0.5f * (L[i] + R[i]); m[1] = 0.5f * (a + b); }
+            else if (anyCue && mode == 2) { m[0] = a; m[1] = b; }
+            else { m[0] = L[i]; m[1] = R[i]; }
+            for (int pr = 1; pr <= NDIR && 2 * pr + 1 < oc; ++pr) if (pairUsed[pr] && pr != mpair && pr != cpair) { o[2 * pr] = softClip(busL[2 + pr][i]); o[2 * pr + 1] = softClip(busR[2 + pr][i]); }
         }
         pk[NCH + NGRP + 1] = cpk;
         // granular: graba su fuente (sin el propio granular)
@@ -920,7 +927,7 @@ struct Control {
         }
         if (k.rfind("m.", 0) == 0) {
             static const std::map<std::string, std::pair<float, float>> R = {{"vol", {0, 1.5f}}, {"lim", {-12, 0}}, {"cueLvl", {0, 1.2f}}, {"cueMode", {0, 2}}, {"dtype", {0, 1}}, {"filt", {-1, 1}}, {"res", {0.7f, 15}},
-                {"gdiv", {0, 3}}, {"throwDiv", {0, 9}}, {"bpm", {40, 220}}, {"rSize", {0, 5}}, {"rPitch", {-1, 1}}, {"bcRatio", {0, 2}}, {"bcAtk", {0.1f, 30}}, {"bcRel", {0.05f, 1.2f}}, {"cbPitch", {24, 96}}, {"swRate", {0, 5}}};
+                {"gdiv", {0, 3}}, {"throwDiv", {0, 9}}, {"bpm", {40, 220}}, {"rSize", {0, 5}}, {"rPitch", {-1, 1}}, {"bcRatio", {0, 2}}, {"bcAtk", {0.1f, 30}}, {"bcRel", {0.05f, 1.2f}}, {"bcMkp", {-6, 12}}, {"cbPitch", {24, 96}}, {"swRate", {0, 5}}};
             const auto it = R.find(k.substr(2)); if (it != R.end()) { lo = it->second.first; hi = it->second.second; } else { lo = 0; hi = 1; }
             return true;
         }
@@ -2071,12 +2078,17 @@ int main(int argc, char** argv) {
         if (lower(info.name).find("bcm2835") != std::string::npos) out.nChannels = 2;
         out.nChannels = std::min(out.nChannels, static_cast<unsigned>(std::max(2, cfgI("salidas", "--salidas", 16))));
         au->outCh = static_cast<int>(out.nChannels);
+        {   // rutas: «principal» y «cue» son la primera salida del par (1, 3, 5…); «ent1»…«ent4» el canal de la interfaz (0 = ninguno)
+            const int pp = cfgI("principal", "--principal", 1); au->mainPair = std::clamp((pp - 1) / 2, 0, std::max(0, au->outCh / 2 - 1));
+            const std::string cq = cfgS("cue", "--cue"); au->cuePair = cq.empty() || cq == "auto" ? -2 : cq == "no" ? -1 : (std::max(1, std::atoi(cq.c_str())) - 1) / 2;
+            for (int q = 0; q < 4; ++q) { const std::string e = "ent" + std::to_string(q + 1); const std::string v = cfgS(e.c_str(), ("--" + e).c_str()); au->inMap[q] = std::clamp(v.empty() ? q + 1 : std::atoi(v.c_str()), 0, 16) - 1; }
+        }
         // entradas: la misma interfaz si tiene; un micro distinto de la salida solo si se pide con --entrada (dos relojes)
         int id = findDevice(*audio, wantIn == "none" ? std::string() : wantIn, true);
         if (id == -2) { if (!quiet) std::printf("No encuentro la entrada '%s'; sigo sin entradas.\n", wantIn.c_str()); id = -1; }
         inp.firstChannel = 0; inp.deviceId = id >= 0 ? static_cast<unsigned>(id) : out.deviceId;
         const auto iinfo = audio->getDeviceInfo(inp.deviceId); inName = iinfo.name;
-        inp.nChannels = hasArg(argc, argv, "--sin-entradas") || wantIn == "none" || (id < 0 && (!wantIn.empty() || info.inputChannels == 0)) ? 0 : std::min(4u, iinfo.inputChannels);
+        inp.nChannels = hasArg(argc, argv, "--sin-entradas") || wantIn == "none" || (id < 0 && (!wantIn.empty() || info.inputChannels == 0)) ? 0 : std::min(16u, iinfo.inputChannels);
         opts = {}; opts.flags = RTAUDIO_SCHEDULE_REALTIME; opts.priority = 80; opts.numberOfBuffers = static_cast<unsigned>(std::clamp(cfgI("bloques", "--bloques", 3), 2, 4));   // sin MINIMIZE_LATENCY: en el Mac elegía buffers de 15 muestras y crujía
         bool ok = false;
         if (inp.nChannels > 0) { au->inCh = static_cast<int>(inp.nChannels); ok = audio->openStream(&out, &inp, RTAUDIO_FLOAT32, rate, &frames, cb, au.get(), &opts) == RTAUDIO_NO_ERROR; }
@@ -2089,7 +2101,7 @@ int main(int argc, char** argv) {
         }
         if (!ok) { if (!quiet) std::printf("No se pudo abrir el audio: %s\n", audio->getErrorText().c_str()); return false; }
         if (audio->startStream() != RTAUDIO_NO_ERROR) { if (!quiet) std::printf("No se pudo arrancar el audio: %s\n", audio->getErrorText().c_str()); return false; }
-        std::printf("Audio: %s  (salidas %d-%d%s, %u Hz, buffer %u = %.1f ms)\n", outName.c_str(), firstOut, firstOut + 1,
+        std::printf("Audio: %s  (salidas %d-%d%s, %u Hz, buffer %u = %.1f ms)\n", outName.c_str(), firstOut + 2 * au->mainPair, firstOut + 2 * au->mainPair + 1,
                     au->outCh >= 4 ? (" y " + std::to_string(au->outCh - 2) + " más para pre-escucha y salidas directas").c_str() : "", rate, frames, 1000.0 * frames / rate);
         if (au->inCh > 0) std::printf("Entradas: %d de %s\n", au->inCh, inName.c_str()); else if (!quiet) std::printf("Entradas: ninguna (elige una con --entrada N o --entrada nombre; mira --list)\n");
         return true;
@@ -2107,14 +2119,17 @@ int main(int argc, char** argv) {
         for (const auto& n : hub.ignored) { if (!fm || mid.back() != '[') mid += ","; mid += jstr(n.c_str()); fm = false; off += (off.back() == '[' ? "" : ",") + jstr(n.c_str()); }
         return o + "]," + in + "]," + mid + "]," + off + "],\"audio\":" + jstr(cfgS("audio", "--audio").c_str()) + ",\"entrada\":" + jstr(cfgS("entrada", "--entrada").c_str()) +
                ",\"buffer\":" + std::to_string(frames) + ",\"minbuf\":" + std::to_string(minBuffer()) + ",\"bloques\":" + std::to_string(std::clamp(cfgI("bloques", "--bloques", 3), 2, 4)) + ",\"rate\":" + std::to_string(rate) + ",\"nucleos\":" + std::to_string(gNuc) + ",\"hw\":" + std::to_string(std::min(4, hw)) + ",\"salidas\":" + std::to_string(cfgI("salidas", "--salidas", 16)) +
+               ",\"nout\":" + std::to_string(au->outCh) + ",\"nin\":" + std::to_string(au->inCh) + ",\"principal\":" + std::to_string(2 * au->mainPair + 1) + ",\"cue\":" + jstr(au->cuePair == -2 ? "auto" : au->cuePair == -1 ? "no" : std::to_string(2 * au->cuePair + 1).c_str()) +
+               ",\"ents\":[" + std::to_string(au->inMap[0] + 1) + "," + std::to_string(au->inMap[1] + 1) + "," + std::to_string(au->inMap[2] + 1) + "," + std::to_string(au->inMap[3] + 1) + "]" +
                ",\"cur\":" + jstr(utf8Clean(outName).c_str()) + ",\"curIn\":" + jstr(au->inCh > 0 ? utf8Clean(inName).c_str() : "") + ",\"note\":" + jstr(audioNote.c_str()) + ",\"rolled\":" + (rolledBack ? "true" : "false") + ",\"power\":" + (ctl.powerOffEnabled ? "true" : "false") + "}";
     };
     ctl.sysApply = [&](const std::string& line) {   // «clave=valor» separados por tabuladores
-        static const std::vector<std::string> keys = {"audio", "entrada", "buffer", "bloques", "rate", "nucleos", "salidas", "midioff"};
+        static const std::vector<std::string> keys = {"audio", "entrada", "buffer", "bloques", "rate", "nucleos", "salidas", "midioff", "principal", "cue", "ent1", "ent2", "ent3", "ent4"};
         SysCfg next = cfg; std::stringstream ss(line); std::string kv;
         while (std::getline(ss, kv, '\t')) { const size_t e = kv.find('='); if (e == std::string::npos) continue; size_t b = kv.find_first_not_of(' '); const std::string k = kv.substr(b, e - b); std::string v = kv.substr(e + 1); v.erase(std::remove(v.begin(), v.end(), '\n'), v.end()); if (std::find(keys.begin(), keys.end(), k) != keys.end() && v.size() < 400) next[k] = v; }
         const auto num = [&](const char* k, std::initializer_list<int> ok) { const auto it = next.find(k); if (it == next.end() || it->second.empty()) return; const int v = std::atoi(it->second.c_str()); if (std::find(ok.begin(), ok.end(), v) == ok.end()) next.erase(k); };
-        num("buffer", {64, 128, 256, 512, 1024, 2048}); if (next.count("buffer") && std::atoi(next["buffer"].c_str()) < minBuffer()) next["buffer"] = std::to_string(minBuffer()); num("rate", {44100, 48000}); num("nucleos", {1, 2, 3, 4}); num("bloques", {2, 3, 4}); num("salidas", {2, 4, 6, 8, 16});
+        num("buffer", {64, 128, 256, 512, 1024, 2048}); if (next.count("buffer") && std::atoi(next["buffer"].c_str()) < minBuffer()) next["buffer"] = std::to_string(minBuffer()); num("rate", {44100, 48000}); num("nucleos", {1, 2, 3, 4}); num("bloques", {2, 3, 4}); num("salidas", {2, 4, 6, 8, 16}); num("principal", {1, 3, 5, 7, 9, 11, 13, 15}); for (const char* e : {"ent1", "ent2", "ent3", "ent4"}) num(e, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16});
+        if (next.count("cue") && next["cue"] != "auto" && next["cue"] != "no") num("cue", {1, 3, 5, 7, 9, 11, 13, 15});
         { std::error_code ec; if (std::filesystem::exists(sysFile)) std::filesystem::copy_file(sysFile, sysPrev, std::filesystem::copy_options::overwrite_existing, ec); else std::filesystem::remove(sysPrev, ec); }
         if (!sysSave(sysFile, next)) { std::printf("Aviso: no se pudieron guardar los ajustes de sistema.\n"); return; }
         { std::ofstream f(sysPend); f << "1"; }

@@ -789,6 +789,7 @@ function buildMaster() {
   // compresor de bus: une la mezcla
   const bk = el("div", { class: "knobs" }); kn(bk, "m.bcomp", "Amount", 0, 1, 0.01, PCT, 0, "sm"); kn(bk, "m.bcAtk", "Attack", 0.1, 30, 0.1, (v) => v.toFixed(1) + " ms", 10, "sm");
   kn(bk, "m.bcRel", "Release", 0.05, 1.2, 0.01, (v) => Math.round(v * 1000) + " ms", 0.3, "sm"); kn(bk, "m.bcMix", "Mix", 0, 1, 0.01, PCT, 1, "sm");
+  kn(bk, "m.bcAir", "Air", 0, 1, 0.01, (v) => "+" + (v * 6).toFixed(1) + " dB", 0, "sm"); kn(bk, "m.bcMkp", "Makeup", -6, 12, 0.1, (v) => (v > 0 ? "+" : "") + v.toFixed(1) + " dB", 0, "sm");
   mixUI.bcRead = el("span", { class: "hint" }, "No reduction");
   const bus = el("div", { class: "blk" }, el("span", { class: "label" }, "Bus compressor"), selK("m.bcRatio", [[0, "2:1"], [1, "4:1"], [2, "10:1"]], "Ratio"), bk, mixUI.bcRead);
   // 8 combinaciones: guardar y disparar
@@ -876,11 +877,15 @@ function buildSys() {
   const r = sel("Sample rate", SYS.rate, [[44100, "44.1 kHz"], [48000, "48 kHz"]]);
   const c = sel("CPU cores", SYS.nucleos, Array.from({ length: SYS.hw }, (_, k) => [k + 1, String(k + 1)]));
   const o = sel("Outputs", SYS.salidas, [[16, "All"], [8, "8"], [6, "6"], [4, "4"], [2, "2"]]);
+  // routing: which outputs of the interface are the main mix and the cue, and which interface input feeds each Freon input
+  const nout = Math.max(2, SYS.nout || 2), nin = Math.max(2, SYS.nin || 2), prs = Array.from({ length: nout >> 1 }, (_, k) => [2 * k + 1, `${2 * k + 1}-${2 * k + 2}`]);
+  const mo = sel("Main output", SYS.principal || 1, prs), co = sel("Cue output", SYS.cue || "auto", [["auto", "Auto (3-4 if free)"], ["no", "None (on the main output)"], ...prs]);
+  const ens = [0, 1, 2, 3].map(q => sel(`Freon input ${q + 1}`, (SYS.ents || [1, 2, 3, 4])[q], [[0, "None"], ...Array.from({ length: nin }, (_, k) => [k + 1, "Interface in " + (k + 1)])]));
   const off = new Set(SYS.midioff), mid = el("div", { class: "scrow" }, el("span", { class: "label" }, "MIDI ports"));
   [...new Set(SYS.midi)].forEach(n => { const k = keyBtn(n, "", () => { off.has(n) ? off.delete(n) : off.add(n); d(); }); const d = () => k.setAttribute("aria-pressed", String(!off.has(n))); d(); mid.append(k); });
   if (!SYS.midi.length) mid.append(el("span", { class: "hint" }, "none connected"));
   const apply = confirmKey("Apply and restart Freon", "Sound stops a few seconds. Sure?", () => {
-    sendRaw("sysapply " + [["audio", a.value], ["entrada", i.value], ["buffer", b.value], ["bloques", q.value], ["rate", r.value], ["nucleos", c.value], ["salidas", o.value], ["midioff", [...off].join("|")]].map(([k, v]) => `${k}=${v}`).join("\t"));
+    sendRaw("sysapply " + [["audio", a.value], ["entrada", i.value], ["buffer", b.value], ["bloques", q.value], ["rate", r.value], ["nucleos", c.value], ["salidas", o.value], ["principal", mo.value], ["cue", co.value], ...ens.map((e, q) => ["ent" + (q + 1), e.value]), ["midioff", [...off].join("|")]].map(([k, v]) => `${k}=${v}`).join("\t"));
     topMsg("System", "restarting Freon…");
   });
   const acts = el("div", { class: "scrow" }, apply, keyBtn("Refresh list", "", () => sendRaw("sys")), confirmKey("Restart Freon", "Sure?", () => sendRaw("sysact restart")));
