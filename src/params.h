@@ -287,6 +287,12 @@ struct MeloEngines {
                 case 6: p.drive = v; break; case 7: p.volume = v; break; case 8: p.tune = v; break; case 9: p.slide = v; break; case 10: p.accDecay = v; break; case 11: p.ampDecay = v; break;
                 case 12: p.softAtk = v; break; case 13: p.sub = v; break; case 14: p.dtone = v; break; case 15: p.vel = v; break; }
             break; }
+        case E_GB: { auto& p = gbs.p;
+            switch (i) { case 0: p.chan = iv; break; case 1: p.duty = iv; break; case 2: p.wtab = iv; break; case 3: p.vol = iv; break; case 4: p.envStep = iv; break; case 5: p.sweepT = iv; break;
+                case 6: p.sweepN = iv; break; case 7: p.pan = iv; break; case 8: p.vibRate = v; break; case 9: p.vibDepth = v; break; case 10: p.arp = iv; break; case 11: p.arpSpd = iv; break;
+                case 12: p.fine = v; break; case 13: p.glide = v; break; case 14: p.dmg = v; break; case 15: p.lvl = v; break;
+                case 32: p.envUp = b; break; case 33: p.n7 = b; break; case 34: p.swUp = b; break; case 35: p.carp = b; break; case 36: p.octD = b; break; case 37: p.octU = b; break; case 38: p.vibD = b; break; }
+            break; }
         case E_WT: { auto& p = wt.p;
             switch (i) { case 0: p.table = iv; break; case 1: p.pos = v; break; case 2: p.envPos = v; break; case 3: p.lfoPos = v; break; case 4: p.lfoRate = v; break; case 5: p.unison = iv; break;
                 case 6: p.detune = v; break; case 7: p.sub = v; break; case 8: p.cutoff = v; break; case 9: p.res = v; break; case 10: p.envFilt = v; break; case 11: p.kbd = v; break;
