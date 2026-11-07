@@ -217,7 +217,8 @@ struct Audio {
     std::atomic<int> act[NT]; std::atomic<int> dact[8]; std::atomic<int> sact[kPads];
     int outCh = 2, inCh = 0;
     // rutas de la interfaz (de Ajustes): par de la salida principal, par del cue (-2 automático, -1 ninguno) y canal de la interfaz de cada entrada (-1 ninguno)
-    int mainPair = 0, cuePair = -2, inMap[4] = {0, 1, 2, 3};
+    // se cambian en marcha desde Ajustes (sin reiniciar): el audio las lee una vez por bloque
+    std::atomic<int> mainPair{0}, cuePair{-2}, inMap[4] = {{0}, {1}, {2}, {3}};
     // directo
     Sampler samp; Breaks brk; Granular gran; VoiceFx voz;
     int lch[LM_COUNT] = {5, 6, 7, 8};
@@ -423,7 +424,7 @@ struct Audio {
             for (int i = 0; i < k; ++i) { s.L[i] += lanes[l][i] * gl; s.R[i] += lanes[l][i] * gr; }
         }
         sub.render(mono, k, subTone, subGlide, subVol); std::copy(mono, mono + k, st[CH_SUB].L); std::copy(mono, mono + k, st[CH_SUB].R);
-        for (int q = 0; q < 4; ++q) { const int c = inMap[q]; if (in && c >= 0 && c < ic) for (int i = 0; i < k; ++i) inRaw[q][i] = in[i * ic + c]; else std::fill(inRaw[q], inRaw[q] + k, 0.0f); }
+        for (int q = 0; q < 4; ++q) { const int c = inMap[q].load(std::memory_order_relaxed); if (in && c >= 0 && c < ic) for (int i = 0; i < k; ++i) inRaw[q][i] = in[i * ic + c]; else std::fill(inRaw[q], inRaw[q] + k, 0.0f); }
         for (int q = 0; q < std::min(ic, 4); ++q) { Strip& s = st[CH_IN + q]; std::copy(inRaw[q], inRaw[q] + k, s.L); std::copy(inRaw[q], inRaw[q] + k, s.R); }
         {   // la voz va después: lee las pistas
             const float* ins[4] = {inRaw[0], inRaw[1], inRaw[2], inRaw[3]};
@@ -534,8 +535,8 @@ struct Audio {
         for (auto& s : st) { const int o = static_cast<int>(s.p[SP_OUT]); if (o >= 3) pairUsed[std::min(NDIR, o - 2)] = true; }
         for (auto& g : grp) { const int o = static_cast<int>(g.p[SP_OUT]); if (o >= 3) pairUsed[std::min(NDIR, o - 2)] = true; }
         // salida principal y cue: los pares que se eligen en Ajustes; una salida directa ocupada gana al cue
-        const int np = std::max(1, oc / 2), mpair = std::clamp(mainPair, 0, np - 1);
-        int cpair = cuePair == -2 ? (mpair == 0 ? 1 : -1) : cuePair;
+        const int np = std::max(1, oc / 2), mpair = std::clamp(mainPair.load(std::memory_order_relaxed), 0, np - 1), cq = cuePair.load(std::memory_order_relaxed);
+        int cpair = cq == -2 ? (mpair == 0 ? 1 : -1) : cq;
         if (cpair >= np || cpair == mpair || (cpair >= 1 && cpair <= NDIR && pairUsed[cpair])) cpair = -1;
         for (int i = 0; i < k; ++i) {
             const float a = softClip(cueL[i] * cl), b = softClip(cueR[i] * cl); cpk = std::max(cpk, std::max(std::fabs(a), std::fabs(b)));
@@ -789,7 +790,7 @@ struct Control {
     std::chrono::steady_clock::time_point dirtyAt{}; bool dirty = false;
     std::map<std::string, float> webPend_; std::chrono::steady_clock::time_point lastWeb{};
     unsigned lastXr = 0; bool wasDirty = false; std::chrono::steady_clock::time_point dirtySince{};
-    std::function<std::string()> sysInfo, sysStatus; std::function<void(const std::string&)> sysApply, sysAction;
+    std::function<std::string()> sysInfo, sysStatus; std::function<void(const std::string&)> sysApply, sysAction, sysRoute;
     std::function<void()> tick; std::chrono::steady_clock::time_point lastTick{};
     unsigned midiSeen_ = ~0u; std::string midiPorts_ = "-";
 
@@ -1240,6 +1241,7 @@ struct Control {
             } }
         else if (op == "sys") { if (sysInfo) srv.send(client, "sys " + sysInfo()); }
         else if (op == "sysst") { if (sysStatus) srv.send(client, "sysst " + sysStatus()); }
+        else if (op == "sysroute") { std::string rest; std::getline(is, rest); if (sysRoute) sysRoute(rest); }
         else if (op == "sysapply") { std::string rest; std::getline(is, rest); if (sysApply) sysApply(rest); }
         else if (op == "sysact") { std::string w; if (is >> w && sysAction) sysAction(w); }
         else if (op == "combo") { std::string w; int n; if (is >> w >> n) { if (w == "save") comboSave(n); else if (w == "down") comboPress(n, true); else if (w == "up") comboPress(n, false); else if (w == "off") comboOff(); } }
@@ -2060,6 +2062,12 @@ int main(int argc, char** argv) {
         if (status) a->xruns.fetch_add(1, std::memory_order_relaxed);
         a->process(static_cast<float*>(o), a->outCh, static_cast<const float*>(i), i ? a->inCh : 0, static_cast<int>(n)); return 0;
     };
+    // rutas: «principal» y «cue» son la primera salida del par (1, 3, 5…); «ent1»…«ent4» el canal de la interfaz (0 = ninguno)
+    auto setRoutes = [&]() {
+        const int pp = cfgI("principal", "--principal", 1); au->mainPair = std::max(0, (pp - 1) / 2);
+        const std::string cq = cfgS("cue", "--cue"); au->cuePair = cq.empty() || cq == "auto" ? -2 : cq == "no" ? -1 : (std::max(1, std::atoi(cq.c_str())) - 1) / 2;
+        for (int q = 0; q < 4; ++q) { const std::string e = "ent" + std::to_string(q + 1); const std::string v = cfgS(e.c_str(), ("--" + e).c_str()); au->inMap[q] = std::clamp(v.empty() ? q + 1 : std::atoi(v.c_str()), 0, 16) - 1; }
+    };
     // abre (o reabre) el audio con lo elegido; con 'quiet' no repite los mensajes
     auto openAudio = [&](bool quiet) -> bool {
         if (audio && audio->isStreamOpen()) { if (audio->isStreamRunning()) audio->stopStream(); audio->closeStream(); }
@@ -2078,11 +2086,7 @@ int main(int argc, char** argv) {
         if (lower(info.name).find("bcm2835") != std::string::npos) out.nChannels = 2;
         out.nChannels = std::min(out.nChannels, static_cast<unsigned>(std::max(2, cfgI("salidas", "--salidas", 16))));
         au->outCh = static_cast<int>(out.nChannels);
-        {   // rutas: «principal» y «cue» son la primera salida del par (1, 3, 5…); «ent1»…«ent4» el canal de la interfaz (0 = ninguno)
-            const int pp = cfgI("principal", "--principal", 1); au->mainPair = std::clamp((pp - 1) / 2, 0, std::max(0, au->outCh / 2 - 1));
-            const std::string cq = cfgS("cue", "--cue"); au->cuePair = cq.empty() || cq == "auto" ? -2 : cq == "no" ? -1 : (std::max(1, std::atoi(cq.c_str())) - 1) / 2;
-            for (int q = 0; q < 4; ++q) { const std::string e = "ent" + std::to_string(q + 1); const std::string v = cfgS(e.c_str(), ("--" + e).c_str()); au->inMap[q] = std::clamp(v.empty() ? q + 1 : std::atoi(v.c_str()), 0, 16) - 1; }
-        }
+        setRoutes();
         // entradas: la misma interfaz si tiene; un micro distinto de la salida solo si se pide con --entrada (dos relojes)
         int id = findDevice(*audio, wantIn == "none" ? std::string() : wantIn, true);
         if (id == -2) { if (!quiet) std::printf("No encuentro la entrada '%s'; sigo sin entradas.\n", wantIn.c_str()); id = -1; }
@@ -2101,7 +2105,7 @@ int main(int argc, char** argv) {
         }
         if (!ok) { if (!quiet) std::printf("No se pudo abrir el audio: %s\n", audio->getErrorText().c_str()); return false; }
         if (audio->startStream() != RTAUDIO_NO_ERROR) { if (!quiet) std::printf("No se pudo arrancar el audio: %s\n", audio->getErrorText().c_str()); return false; }
-        std::printf("Audio: %s  (salidas %d-%d%s, %u Hz, buffer %u = %.1f ms)\n", outName.c_str(), firstOut + 2 * au->mainPair, firstOut + 2 * au->mainPair + 1,
+        std::printf("Audio: %s  (salidas %d-%d%s, %u Hz, buffer %u = %.1f ms)\n", outName.c_str(), firstOut + 2 * au->mainPair.load(), firstOut + 2 * au->mainPair.load() + 1,
                     au->outCh >= 4 ? (" y " + std::to_string(au->outCh - 2) + " más para pre-escucha y salidas directas").c_str() : "", rate, frames, 1000.0 * frames / rate);
         if (au->inCh > 0) std::printf("Entradas: %d de %s\n", au->inCh, inName.c_str()); else if (!quiet) std::printf("Entradas: ninguna (elige una con --entrada N o --entrada nombre; mira --list)\n");
         return true;
@@ -2119,7 +2123,7 @@ int main(int argc, char** argv) {
         for (const auto& n : hub.ignored) { if (!fm || mid.back() != '[') mid += ","; mid += jstr(n.c_str()); fm = false; off += (off.back() == '[' ? "" : ",") + jstr(n.c_str()); }
         return o + "]," + in + "]," + mid + "]," + off + "],\"audio\":" + jstr(cfgS("audio", "--audio").c_str()) + ",\"entrada\":" + jstr(cfgS("entrada", "--entrada").c_str()) +
                ",\"buffer\":" + std::to_string(frames) + ",\"minbuf\":" + std::to_string(minBuffer()) + ",\"bloques\":" + std::to_string(std::clamp(cfgI("bloques", "--bloques", 3), 2, 4)) + ",\"rate\":" + std::to_string(rate) + ",\"nucleos\":" + std::to_string(gNuc) + ",\"hw\":" + std::to_string(std::min(4, hw)) + ",\"salidas\":" + std::to_string(cfgI("salidas", "--salidas", 16)) +
-               ",\"nout\":" + std::to_string(au->outCh) + ",\"nin\":" + std::to_string(au->inCh) + ",\"principal\":" + std::to_string(2 * au->mainPair + 1) + ",\"cue\":" + jstr(au->cuePair == -2 ? "auto" : au->cuePair == -1 ? "no" : std::to_string(2 * au->cuePair + 1).c_str()) +
+               ",\"nout\":" + std::to_string(au->outCh) + ",\"nin\":" + std::to_string(au->inCh) + ",\"principal\":" + std::to_string(2 * std::min(au->mainPair.load(), std::max(0, au->outCh / 2 - 1)) + 1) + ",\"cue\":" + jstr(au->cuePair == -2 ? "auto" : au->cuePair == -1 ? "no" : std::to_string(2 * au->cuePair + 1).c_str()) +
                ",\"ents\":[" + std::to_string(au->inMap[0] + 1) + "," + std::to_string(au->inMap[1] + 1) + "," + std::to_string(au->inMap[2] + 1) + "," + std::to_string(au->inMap[3] + 1) + "]" +
                ",\"cur\":" + jstr(utf8Clean(outName).c_str()) + ",\"curIn\":" + jstr(au->inCh > 0 ? utf8Clean(inName).c_str() : "") + ",\"note\":" + jstr(audioNote.c_str()) + ",\"rolled\":" + (rolledBack ? "true" : "false") + ",\"power\":" + (ctl.powerOffEnabled ? "true" : "false") + "}";
     };
@@ -2134,6 +2138,20 @@ int main(int argc, char** argv) {
         if (!sysSave(sysFile, next)) { std::printf("Aviso: no se pudieron guardar los ajustes de sistema.\n"); return; }
         { std::ofstream f(sysPend); f << "1"; }
         restart = true; gQuit = true;
+    };
+    ctl.sysRoute = [&](const std::string& line) {   // salidas y entradas: al momento, sin reiniciar; se guardan para el próximo arranque
+        std::stringstream ss(line); std::string kv; bool any = false;
+        static const std::vector<std::string> odd = {"1", "3", "5", "7", "9", "11", "13", "15"};
+        while (std::getline(ss, kv, '\t')) {
+            const size_t e = kv.find('='); if (e == std::string::npos) continue; size_t b = kv.find_first_not_of(' '); const std::string k = kv.substr(b, e - b), v = kv.substr(e + 1);
+            const int n = std::atoi(v.c_str());
+            const bool ok = (k == "principal" && std::find(odd.begin(), odd.end(), v) != odd.end()) || (k == "cue" && (v == "auto" || v == "no" || std::find(odd.begin(), odd.end(), v) != odd.end())) ||
+                            ((k == "ent1" || k == "ent2" || k == "ent3" || k == "ent4") && v == std::to_string(n) && n >= 0 && n <= 16);
+            if (ok) { cfg[k] = v; any = true; }
+        }
+        if (!any) return;
+        setRoutes();
+        if (!sysSave(sysFile, cfg)) std::printf("Aviso: no se pudieron guardar los ajustes de sistema.\n");
     };
     ctl.sysAction = [&](const std::string& w) {
         if (w == "restart") { restart = true; gQuit = true; }

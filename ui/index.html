@@ -879,13 +879,17 @@ function buildSys() {
   const o = sel("Outputs", SYS.salidas, [[16, "All"], [8, "8"], [6, "6"], [4, "4"], [2, "2"]]);
   // routing: which outputs of the interface are the main mix and the cue, and which interface input feeds each Freon input
   const nout = Math.max(2, SYS.nout || 2), nin = Math.max(2, SYS.nin || 2), prs = Array.from({ length: nout >> 1 }, (_, k) => [2 * k + 1, `${2 * k + 1}-${2 * k + 2}`]);
+  box.append(el("p", { class: "hint" }, "Outputs and inputs below change at once, no restart:"));
   const mo = sel("Main output", SYS.principal || 1, prs), co = sel("Cue output", SYS.cue || "auto", [["auto", "Auto (3-4 if free)"], ["no", "None (on the main output)"], ...prs]);
   const ens = [0, 1, 2, 3].map(q => sel(`Freon input ${q + 1}`, (SYS.ents || [1, 2, 3, 4])[q], [[0, "None"], ...Array.from({ length: nin }, (_, k) => [k + 1, "Interface in " + (k + 1)])]));
+  // these change at once, without restarting Freon
+  const live = (k, s) => s.addEventListener("change", () => { sendRaw(`sysroute ${k}=${s.value}`); topMsg("System", "routing changed"); });
+  live("principal", mo); live("cue", co); ens.forEach((e, q) => live("ent" + (q + 1), e));
   const off = new Set(SYS.midioff), mid = el("div", { class: "scrow" }, el("span", { class: "label" }, "MIDI ports"));
   [...new Set(SYS.midi)].forEach(n => { const k = keyBtn(n, "", () => { off.has(n) ? off.delete(n) : off.add(n); d(); }); const d = () => k.setAttribute("aria-pressed", String(!off.has(n))); d(); mid.append(k); });
   if (!SYS.midi.length) mid.append(el("span", { class: "hint" }, "none connected"));
   const apply = confirmKey("Apply and restart Freon", "Sound stops a few seconds. Sure?", () => {
-    sendRaw("sysapply " + [["audio", a.value], ["entrada", i.value], ["buffer", b.value], ["bloques", q.value], ["rate", r.value], ["nucleos", c.value], ["salidas", o.value], ["principal", mo.value], ["cue", co.value], ...ens.map((e, q) => ["ent" + (q + 1), e.value]), ["midioff", [...off].join("|")]].map(([k, v]) => `${k}=${v}`).join("\t"));
+    sendRaw("sysapply " + [["audio", a.value], ["entrada", i.value], ["buffer", b.value], ["bloques", q.value], ["rate", r.value], ["nucleos", c.value], ["salidas", o.value], ["midioff", [...off].join("|")]].map(([k, v]) => `${k}=${v}`).join("\t"));
     topMsg("System", "restarting Freon…");
   });
   const acts = el("div", { class: "scrow" }, apply, keyBtn("Refresh list", "", () => sendRaw("sys")), confirmKey("Restart Freon", "Sure?", () => sendRaw("sysact restart")));
