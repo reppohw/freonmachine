@@ -37,6 +37,11 @@
 - [x] Punto de partida: la mezcla de Jorge (7-11-2026): faders a 0 dB, nivel base de motores y Sub bajado, caja −3,7 dB, resto −7,5 dB, limitador −1,5, Summing a 0. Kit Chip −6 dB. Lo guardado conserva su sonido, salvo Game Boy (no tiene Volume, baja 6 dB) y el kit Chip.
 - [x] Volume de partida por pista a oído: T2 DX 60, Wavetable 81, Supersaw 85; T3 Wavetable 80; T4 DX 63. Juno y Modal quedan bajos en mono, a propósito.
 - [ ] Modal: Jorge probablemente lo quite; falta su valor en T2.
+- [x] Sidechain por golpe: baja y sube en línea recta aunque el bombo siga sonando.
+- [x] Sub: modo que sigue la nota grave de una pista, o su canal.
+- [x] Mixer: faders y vúmetros a la misma altura, nombre debajo de cada fader.
+- [ ] Configurar mejor las combinaciones de efectos de máster (pedido 7-11-2026).
+- [ ] Arranque de la Pi más rápido (hoy unos 40 s) y wifi propia con ajustes sin terminal.
 - [ ] Sub colgado: Jorge tiene que confirmar qué pasó exactamente y si vuelve a ocurrir.
 - [ ] Saber qué controladoras usa Jorge, para elegir el modo de knobs por defecto.
 
@@ -73,8 +78,9 @@
 - [ ] Preset 5 de fábrica del Slim Phatty (pendiente de que Jorge pase los valores o una grabación).
 
 ## Ideas de Jorge para más adelante
+- [x] Compresor de bus en el máster (7-11-2026). Siguen: graves limpios y EQ de máster.
 - [ ] Sonido final más cercano a un máster (decidido por Jorge el 7-11-2026). Muy importantes: compresor de bus en el máster, graves limpios (corte bajo 40 Hz, mono bajo 120 Hz, corte de graves en envíos) y EQ de máster sutil. Después: reverb que cede con el bombo, limitador con 1–2 dB de reducción y medidor LUFS. Sin saturación de cinta en el máster.
-- [ ] Summing: Jorge no lo aprecia ni al 100 % y gasta unos 5 puntos en la Pi. Candidato a quitar.
+- [x] Summing quitado (7-11-2026).
 - [x] Pantalla «System» en Settings: audio, buffer, frecuencia, núcleos, salidas, MIDI, apagar y reiniciar, con vuelta atrás (6-11-2026). Faltan red y latencia de cada interfaz.
 - [x] Web: el scroll con dos dedos mueve la página; los knobs solo cambian arrastrando, o con ⌥ + scroll (5-11-2026).
 - [x] Mixer: knob Volume del instrumento en Sub y sintes, aparte del fader. Game Boy no tiene Volume.

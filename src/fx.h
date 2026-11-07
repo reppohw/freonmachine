@@ -150,17 +150,50 @@ private:
 
 // ------------------------------------------------------------------ seguidor de envolvente para el sidechain
 struct Follower {
-    float e1 = 0;
-    // Bombeo clásico: el golpe baja el nivel en 1 ms y luego sube en línea recta durante todo Release, sin seguir la cola del
-    // bombo. g[] es la ganancia (1 = sin agachar). Amount es la profundidad: 100 % ≈ −30 dB, 50 % ≈ −6 dB.
+    float fast = 0, slow = 0, e1 = 0; int since = 1 << 30; bool rising = false;
+    // Bombeo: solo cuenta el golpe. Un golpe es un salto brusco de nivel (envolvente rápida muy por encima de la lenta),
+    // aunque el anterior siga sonando. Entonces el nivel baja en 1 ms y sube en línea recta durante Release.
+    // g[] es la ganancia (1 = sin agachar). Amount es la profundidad: 100 % ≈ −30 dB, 50 % ≈ −6 dB.
     void process(const float* srcL, const float* srcR, float* g, int n, float amt, float rel, float sr) {
         const float at = 1.0f - std::exp(-1.0f / (0.001f * sr)), up = 1.0f / (std::max(0.02f, rel) * sr);
+        // energía en dos ventanas: corta (5 ms) y larga (80 ms). Un golpe hace que la corta salte por encima de la larga.
+        const float kF = 1.0f - std::exp(-1.0f / (0.005f * sr)), kS = 1.0f - std::exp(-1.0f / (0.08f * sr));
+        const int gap = static_cast<int>(0.06f * sr);
         for (int i = 0; i < n; ++i) {
-            const float x = std::min(1.0f, 0.5f * (std::fabs(srcL[i]) + std::fabs(srcR[i])) * 5.0f);
-            if (x > e1) e1 += (x - e1) * at; else e1 = std::max(0.0f, e1 - up);
+            const float x = 0.5f * (srcL[i] + srcR[i]);
+            fast += (x * x - fast) * kF; slow += (x * x - slow) * kS;
+            if (++since > gap && fast > 1e-6f && fast > 2.0f * slow) { rising = true; since = 0; }
+            if (rising) { e1 += (1.0f - e1) * at; if (e1 > 0.995f) { e1 = 1; rising = false; } } else e1 = std::max(0.0f, e1 - up);
             g[i] = 1.0f - std::clamp(amt * e1, 0.0f, 0.97f);
         }
     }
+};
+
+// ------------------------------------------------------------------ compresor de bus del máster (al estilo de las mesas)
+// Une la mezcla: detector estéreo enlazado, rodilla suave de 6 dB, ganancia de recuperación automática parcial y mezcla en
+// paralelo. La ganancia se calcula cada 8 muestras y se interpola: poco gasto en la Pi.
+struct BusComp {
+    float amount = 0, ratio = 1, attack = 10, release = 0.3f, mix = 1, lastGrDb = 0;   // ratio: 0 = 2:1, 1 = 4:1, 2 = 10:1
+    void prepare(float s) { sr = s; }
+    void process(float* L, float* R, int n) {
+        if (amount < 0.005f) { lastGrDb = 0; gDb = 0; gLin = 1; env = 0; return; }
+        static const float kR[3] = {2, 4, 10};
+        const float r = kR[std::clamp(static_cast<int>(ratio + 0.5f), 0, 2)], thr = -amount * 24.0f, knee = 6.0f, slope = 1.0f - 1.0f / r;
+        const float makeup = -thr * slope * 0.4f, ca = 1.0f - std::exp(-8.0f / (std::max(0.1f, attack) * 0.001f * sr)), cr = 1.0f - std::exp(-8.0f / (std::max(0.05f, release) * sr));
+        const float kE = 1.0f - std::exp(-1.0f / (0.005f * sr)); float minG = 0;
+        for (int o = 0; o < n; o += 8) {
+            const int k = std::min(8, n - o);
+            for (int i = o; i < o + k; ++i) { const float x = std::max(std::fabs(L[i]), std::fabs(R[i])); env += (x * x - env) * kE; }
+            const float lv = 10.0f * std::log10(env + 1e-12f), over = lv - thr;
+            const float t = over <= -knee * 0.5f ? 0.0f : over >= knee * 0.5f ? -over * slope : -slope * (over + knee * 0.5f) * (over + knee * 0.5f) / (2.0f * knee);
+            gDb += (t - gDb) * (t < gDb ? ca : cr); minG = std::min(minG, gDb);
+            const float target = std::pow(10.0f, (gDb + makeup) / 20.0f), step = (target - gLin) / static_cast<float>(k);
+            for (int i = o; i < o + k; ++i) { gLin += step; L[i] += (L[i] * gLin - L[i]) * mix; R[i] += (R[i] * gLin - R[i]) * mix; }
+        }
+        lastGrDb = minG;
+    }
+private:
+    float sr = 48000, env = 0, gDb = 0, gLin = 1;
 };
 
 // ------------------------------------------------------------------ filtro DJ (LP a la izquierda, HP a la derecha)

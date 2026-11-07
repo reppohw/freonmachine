@@ -95,13 +95,13 @@ inline const char* const* drumSlots(int uiKit, const char*& extra) {
     if (uiKit == 2) { extra = "contour"; return kCy; }
     extra = nullptr; return kRc;
 }
-const char* kSubKeys[6] = {"ch", "on", "oct", "tone", "glide", "vol"};
+const char* kSubKeys[8] = {"ch", "on", "oct", "tone", "glide", "vol", "mode", "src"};
 // Parámetros de canal y grupo (mismo orden en las claves y en el audio)
 enum SP { SP_LVL, SP_PAN, SP_MUTE, SP_SOLO, SP_CUE, SP_OUT, SP_DTYPE, SP_DRIVE, SP_DTONE, SP_DMIX, SP_LOW, SP_MID, SP_HIGH, SP_LIM, SP_SC, SP_SCAMT, SP_SCREL, SP_S0, SP_S1, SP_S2, SP_S3, SP_FILT, SP_RES, SP_TRIM, SP_COUNT };
 const char* kSP[SP_COUNT] = {"lvl", "pan", "mute", "solo", "cue", "out", "dtype", "drive", "dtone", "dmix", "low", "mid", "high", "lim", "sc", "scAmt", "scRel", "s0", "s1", "s2", "s3", "filt", "res", "trim"};
-enum MP { MP_VOL, MP_LIM, MP_CUELVL, MP_CUEMODE, MP_DTYPE, MP_DRIVE, MP_DTONE, MP_DMIX, MP_FILT, MP_RES, MP_REP, MP_GDIV, MP_GATE, MP_RISER, MP_SPACE, MP_SPSIZE, MP_THROW, MP_TDIV, MP_TFB, MP_TAPE, MP_BPM, MP_CLOCK, MP_RDECAY, MP_RNOISE, MP_TAPESM, MP_RSIZE, MP_FENV, MP_RPITCH, MP_GSHAPE, MP_GPAN, MP_SPDAMP, MP_SPFRZ, MP_TTONE, MP_COMB, MP_CBPITCH, MP_CBFB, MP_CBDAMP, MP_SWEEP, MP_SWRATE, MP_SWDEPTH, MP_SWFB, MP_SWMODE, MP_SUM, MP_COUNT };
-const char* kMP[MP_COUNT] = {"vol", "lim", "cueLvl", "cueMode", "dtype", "drive", "dtone", "dmix", "filt", "res", "rep", "gdiv", "gate", "riser", "space", "spSize", "throw", "throwDiv", "throwFb", "tape", "bpm", "clock", "rDecay", "rNoise", "tapeSm", "rSize", "fEnv", "rPitch", "gShape", "gPan", "spDamp", "spFrz", "tTone", "comb", "cbPitch", "cbFb", "cbDamp", "sweep", "swRate", "swDepth", "swFb", "swMode", "sum"};
-const float kMpDef[MP_COUNT] = {0.85f, -1.5f, 0.8f, 0, 0, 0, 1, 1, 0, 1.4f, 0, 2, 0, 0, 0, 0.7f, 0, 6, 0.55f, 0, 120, 1, 0, 0.5f, 0.5f, 2, 0, 0, 0, 0, 0.53f, 0, 0.7f, 0, 48, 0.8f, 0.3f, 0, 2, 0.7f, 0.4f, 0, 0};
+enum MP { MP_VOL, MP_LIM, MP_CUELVL, MP_CUEMODE, MP_DTYPE, MP_DRIVE, MP_DTONE, MP_DMIX, MP_FILT, MP_RES, MP_REP, MP_GDIV, MP_GATE, MP_RISER, MP_SPACE, MP_SPSIZE, MP_THROW, MP_TDIV, MP_TFB, MP_TAPE, MP_BPM, MP_CLOCK, MP_RDECAY, MP_RNOISE, MP_TAPESM, MP_RSIZE, MP_FENV, MP_RPITCH, MP_GSHAPE, MP_GPAN, MP_SPDAMP, MP_SPFRZ, MP_TTONE, MP_COMB, MP_CBPITCH, MP_CBFB, MP_CBDAMP, MP_SWEEP, MP_SWRATE, MP_SWDEPTH, MP_SWFB, MP_SWMODE, MP_SUM, MP_BCOMP, MP_BCRAT, MP_BCATK, MP_BCREL, MP_BCMIX, MP_COUNT };   // MP_SUM ya no se usa
+const char* kMP[MP_COUNT] = {"vol", "lim", "cueLvl", "cueMode", "dtype", "drive", "dtone", "dmix", "filt", "res", "rep", "gdiv", "gate", "riser", "space", "spSize", "throw", "throwDiv", "throwFb", "tape", "bpm", "clock", "rDecay", "rNoise", "tapeSm", "rSize", "fEnv", "rPitch", "gShape", "gPan", "spDamp", "spFrz", "tTone", "comb", "cbPitch", "cbFb", "cbDamp", "sweep", "swRate", "swDepth", "swFb", "swMode", "sum", "bcomp", "bcRatio", "bcAtk", "bcRel", "bcMix"};
+const float kMpDef[MP_COUNT] = {0.85f, -1.5f, 0.8f, 0, 0, 0, 1, 1, 0, 1.4f, 0, 2, 0, 0, 0, 0.7f, 0, 6, 0.55f, 0, 120, 1, 0, 0.5f, 0.5f, 2, 0, 0, 0, 0, 0.53f, 0, 0.7f, 0, 48, 0.8f, 0.3f, 0, 2, 0.7f, 0.4f, 0, 0, 0, 1, 10, 0.3f, 1};
 // Distorsión: Hard, Fuzz y Bitcrusher
 const int kDistMap[2] = {D_FUZZ, D_BITS};
 inline int distType(float v) { return kDistMap[std::clamp(static_cast<int>(v), 0, 1)]; }
@@ -176,11 +176,11 @@ struct Audio {
     DrumMachine drums;
     MeloEngines mel[NT];          // pistas 2-4 (índices 1..3); la 0 es la batería
     int ch[NT] = {10, 2, 3, 4};
-    SubVoice sub; NoteSet subHeld; int subCh = 9; bool subOn = true; float subOct = -2, subTone = 0.2f, subGlide = 0.03f, subVol = 1;
+    SubVoice sub; NoteSet subHeld; int subCh = 9; bool subOn = true; float subOct = -2, subTone = 0.2f, subGlide = 0.03f, subVol = 1; int subMode = 1, subSrc = 1;   // modo 1: sigue la nota más grave de la pista subSrc (como antes); 0: su propio canal
     NoteSet held[NT];
     Strip st[NCH], grp[NGRP];
     SendFx fx[NSEND]; float fxTail[NSEND] = {};
-    MasterFx mfx; Dist mdist; DJFilter mdj; LookLimiter mlim;
+    MasterFx mfx; Dist mdist; DJFilter mdj; LookLimiter mlim; BusComp bcomp; std::atomic<float> bcGrDb{0};
     float mp[MP_COUNT]; float sumG = 0, fEnvS = 0;
     // reparto entre núcleos: cada tarea escribe solo en lo suyo
     Parallel par; float monoT[NT][BLK]; float fxOutL[NSEND][BLK], fxOutR[NSEND][BLK]; bool fxRun[NSEND] = {}; std::atomic<bool> fxBad[NSEND];
@@ -231,7 +231,7 @@ struct Audio {
         for (auto& s : st) s.prepare(sr);
         for (auto& g : grp) g.prepare(sr);
         for (auto& f : fx) f.prepare(sr);
-        mfx.prepare(sr); mdist.prepare(sr); mdj.sr = sr; mlim.prepare(sr);
+        mfx.prepare(sr); mdist.prepare(sr); mdj.sr = sr; mlim.prepare(sr); bcomp.prepare(sr);
         for (auto& p : peak) p = 0;
         for (auto& a : act) a = 0;
         for (auto& b : fxBad) b = false;
@@ -281,11 +281,13 @@ struct Audio {
         if (t == 0) { const int l = drums.noteOn(n, v); if (l >= 0 && !drums.lane[static_cast<size_t>(l)].mute) dact[l] = 1; return; }
         held[t].add(n);
         mel[t].noteOn(n, v);
+        if (subMode == 1 && t == subSrc) { subHeld.add(n); subUpdate(); }
     }
     void noteOff(int t, int n) {
         if (t <= 0 || t >= NT) return;
         held[t].remove(n);
         mel[t].noteOff(n);
+        if (subMode == 1 && t == subSrc) { subHeld.remove(n); subUpdate(); }
     }
     void master(int i, float v) {
         mp[i] = v;
@@ -298,6 +300,7 @@ struct Audio {
             case MP_THROW: mfx.thr = v; break; case MP_TDIV: mfx.throwDiv = v; break; case MP_TFB: mfx.throwFb = v; break; case MP_TAPE: mfx.tape = v; break; case MP_RDECAY: mfx.repDecay = v; break; case MP_RNOISE: mfx.riserNoise = v; break; case MP_TAPESM: mfx.tapeInertia = v; break; case MP_RSIZE: mfx.repSize = v; break;
             case MP_RPITCH: mfx.repPitch = v; break; case MP_GSHAPE: mfx.gShape = v; break; case MP_GPAN: mfx.gPan = v; break; case MP_SPDAMP: mfx.spDamp = v; break; case MP_SPFRZ: mfx.spFreeze = v >= 0.5f; break; case MP_TTONE: mfx.thTone = v; break;
             case MP_COMB: mfx.comb = v; break; case MP_CBPITCH: mfx.cbPitch = v; break; case MP_CBFB: mfx.cbFb = v; break; case MP_CBDAMP: mfx.cbDamp = v; break;
+            case MP_BCOMP: bcomp.amount = v; break; case MP_BCRAT: bcomp.ratio = v; break; case MP_BCATK: bcomp.attack = v; break; case MP_BCREL: bcomp.release = v; break; case MP_BCMIX: bcomp.mix = v; break;
             case MP_SWEEP: mfx.sweep = v; break; case MP_SWRATE: mfx.swRate = v; break; case MP_SWDEPTH: mfx.swDepth = v; break; case MP_SWFB: mfx.swFb = v; break; case MP_SWMODE: mfx.swMode = v; break;
             default: break;
         }
@@ -319,7 +322,7 @@ struct Audio {
                                case 15: L.out = std::clamp(static_cast<int>(c.v), 0, 2); break; }
                 break; }
             case K_SUB: switch (c.b) { case 0: subCh = static_cast<int>(c.v); subHeld.clear(); subUpdate(); break; case 1: subOn = c.v >= 0.5f; subUpdate(); break; case 2: subOct = c.v; subUpdate(); break;
-                                       case 3: subTone = c.v; break; case 4: subGlide = c.v; break; case 5: subVol = c.v; break; } break;
+                                       case 3: subTone = c.v; break; case 4: subGlide = c.v; break; case 5: subVol = c.v; break; case 6: subMode = c.v >= 0.5f ? 1 : 0; subHeld.clear(); subUpdate(); break; case 7: subSrc = std::clamp(static_cast<int>(c.v), 1, NT - 1); subHeld.clear(); subUpdate(); break; } break;
             case K_NOTE: {
                 const int n = std::clamp<int>(c.b, 0, 127), v = std::clamp<int>(c.c, 0, 127);
                 if (c.a >= 10 && c.a < 10 + LM_COUNT) liveNote(c.a - 10, n, v);
@@ -351,7 +354,7 @@ struct Audio {
             else if ((m.d1 == 120 || m.d1 == 123) && lm == LM_SAMP) samp.allOff();
         }
         // Sub: módulo aparte con su canal (el Oxi le manda la nota grave del secuenciador de acordes)
-        if (subCh == chn) {
+        if (subMode == 0 && subCh == chn) {
             if (type == 0x90 && m.d2 > 0) { subHeld.add(m.d1); subUpdate(); }
             else if (type == 0x80 || type == 0x90) { subHeld.remove(m.d1); subUpdate(); }
             else if (m.d1 == 120 || m.d1 == 123) { subHeld.clear(); subUpdate(); }
@@ -431,7 +434,6 @@ struct Audio {
         for (int g = 0; g < NGRP; ++g) { grSolo[g] = grp[g].p[SP_SOLO] >= 0.5f; anySolo |= grSolo[g]; }
         auto gOf = [&](int i) { const int o = static_cast<int>(st[i].p[SP_OUT]); return o == 1 ? 0 : o == 2 ? 1 : -1; };
         // --- etapa A de todos (los sidechains leen de aquí)
-        sumG += (mp[MP_SUM] * 0.9f - sumG) * 0.05f; const float sg = sumG; const bool summing = sg > 0.002f;
         for (auto& s : st) s.stageA(k, false);
         for (int b = 0; b < NBUS; ++b) { std::fill(busL[b], busL[b] + k, 0.0f); std::fill(busR[b], busR[b] + k, 0.0f); }
         for (int f = 0; f < NSEND; ++f) { std::fill(sendL[f], sendL[f] + k, 0.0f); std::fill(sendR[f], sendR[f] + k, 0.0f); }
@@ -458,8 +460,8 @@ struct Audio {
             float p = 0;
             if (idx < NCH && idx != CH_GRAN) { const float fl = s.p[SP_LVL]; for (int i = 0; i < k; ++i) { mixL[i] += s.L[i] * fl; mixR[i] += s.R[i] * fl; } }   // fuente «Mezcla» del granular (sin solos ni mutes)
             // nivel (fader, mute y solo): rampa a lo largo del bloque
-            { const float d = (lv - s.lvP) * rk; float a = s.lvP; const bool toBus = summing && bus <= 2;
-              for (int i = 0; i < k; ++i) { a += d; s.L[i] *= a; s.R[i] *= a; p = std::max(p, std::max(std::fabs(s.L[i]), std::fabs(s.R[i]))); busL[bus][i] += toBus ? sumIn(s.L[i], sg) : s.L[i]; busR[bus][i] += toBus ? sumIn(s.R[i], sg) : s.R[i]; }
+            { const float d = (lv - s.lvP) * rk; float a = s.lvP;
+              for (int i = 0; i < k; ++i) { a += d; s.L[i] *= a; s.R[i] *= a; p = std::max(p, std::max(std::fabs(s.L[i]), std::fabs(s.R[i]))); busL[bus][i] += s.L[i]; busR[bus][i] += s.R[i]; }
               s.lvP = lv; }
             pk[idx] = p;
             for (int f = 0; f < NSEND; ++f) {
@@ -478,7 +480,6 @@ struct Audio {
         for (int g = 0; g < NGRP; ++g) {
             Strip& s = grp[g];
             std::copy(busL[1 + g], busL[1 + g] + k, s.L); std::copy(busR[1 + g], busR[1 + g] + k, s.R);
-            if (summing) for (int i = 0; i < k; ++i) { s.L[i] = sumOut(s.L[i], sg); s.R[i] = sumOut(s.R[i], sg); }
             s.stageA(k, true);
             bool chInSolo = false; for (int i = 0; i < NCH; ++i) chInSolo |= chSolo[i] && gOf(i) == g;
             const bool audible = s.p[SP_MUTE] < 0.5f && (!anySolo || grSolo[g] || chInSolo);
@@ -501,12 +502,11 @@ struct Audio {
             if (!fxRun[f]) continue;
             if (fxBad[f].exchange(false, std::memory_order_relaxed)) fx[f].startClear();
             const float* a = fxOutL[f]; const float* b = fxOutR[f]; float o = 0;
-            for (int i = 0; i < k; ++i) { o = std::max(o, std::fabs(a[i]) + std::fabs(b[i])); busL[0][i] += summing ? sumIn(a[i], sg) : a[i]; busR[0][i] += summing ? sumIn(b[i], sg) : b[i]; }
+            for (int i = 0; i < k; ++i) { o = std::max(o, std::fabs(a[i]) + std::fabs(b[i])); busL[0][i] += a[i]; busR[0][i] += b[i]; }
             if (o > 2e-5f && fxIdle[f] < 40.0f) fxTail[f] = std::max(fxTail[f], 4.5f);
         }
         // --- máster
         float* L = busL[0]; float* R = busR[0];
-        if (summing) for (int i = 0; i < k; ++i) { L[i] = sumOut(L[i], sg); R[i] = sumOut(R[i], sg); }
         mdist.process(L, R, k);
         // filtro con envolvente: los golpes lo abren hacia el centro
         { const float base = mp[MP_FILT], ef = mp[MP_FENV]; mdj.f = base;
@@ -516,6 +516,7 @@ struct Audio {
         mfx.process(L, R, k, bpm, pos);
         { float acc = 0; for (int i = 0; i < k; ++i) acc += L[i] + R[i];
           if (!std::isfinite(acc)) { std::fill(L, L + k, 0.0f); std::fill(R, R + k, 0.0f); mfx.reset(); mdist.reset(); mdj.reset(); } }   // avería: un bloque en silencio, nunca ruido
+        bcomp.process(L, R, k); bcGrDb.store(bcomp.lastGrDb, std::memory_order_relaxed);   // compresor de bus: une la mezcla antes del volumen y el limitador
         { const float vol = mp[MP_VOL], d = (vol - volP) * rk; float a = volP;
           for (int i = 0; i < k; ++i) { a += d; L[i] *= a; R[i] *= a; } volP = vol; }
         mlim.process(L, R, k);
@@ -832,7 +833,7 @@ struct Control {
             st[L + "tone"] = 0.5f; st[L + "color"] = kCycColor[l]; st[L + "shape"] = kCycShape[l]; st[L + "contour"] = kCycContour[l];
             st[L + "mute"] = 0; st[L + "note"] = static_cast<float>(N[l]); st[L + "out"] = static_cast<float>(kLaneOut[l]);
         }
-        st["sub.ch"] = 9; st["sub.on"] = 1; st["sub.oct"] = -2; st["sub.tone"] = 0.2f; st["sub.glide"] = 0.03f; st["sub.vol"] = 1;
+        st["sub.ch"] = 9; st["sub.on"] = 1; st["sub.oct"] = -2; st["sub.tone"] = 0.2f; st["sub.glide"] = 0.03f; st["sub.vol"] = 1; st["sub.mode"] = 1; st["sub.src"] = 1;
         // canales
         for (int i = 0; i < NCH; ++i) { Strip s; for (int p = 0; p < SP_COUNT; ++p) st["c" + std::to_string(i) + "." + kSP[p]] = s.p[p]; }
         // punto de partida limpio (lo pidió Jorge): envíos bajados, sin grupos, todo al máster, sin distorsión, EQ ni sidechain
@@ -919,7 +920,7 @@ struct Control {
         }
         if (k.rfind("m.", 0) == 0) {
             static const std::map<std::string, std::pair<float, float>> R = {{"vol", {0, 1.5f}}, {"lim", {-12, 0}}, {"cueLvl", {0, 1.2f}}, {"cueMode", {0, 2}}, {"dtype", {0, 1}}, {"filt", {-1, 1}}, {"res", {0.7f, 15}},
-                {"gdiv", {0, 3}}, {"throwDiv", {0, 9}}, {"bpm", {40, 220}}, {"rSize", {0, 5}}, {"rPitch", {-1, 1}}, {"cbPitch", {24, 96}}, {"swRate", {0, 5}}};
+                {"gdiv", {0, 3}}, {"throwDiv", {0, 9}}, {"bpm", {40, 220}}, {"rSize", {0, 5}}, {"rPitch", {-1, 1}}, {"bcRatio", {0, 2}}, {"bcAtk", {0.1f, 30}}, {"bcRel", {0.05f, 1.2f}}, {"cbPitch", {24, 96}}, {"swRate", {0, 5}}};
             const auto it = R.find(k.substr(2)); if (it != R.end()) { lo = it->second.first; hi = it->second.second; } else { lo = 0; hi = 1; }
             return true;
         }
@@ -1163,7 +1164,7 @@ struct Control {
             c.k = K_LANE; c.a = static_cast<int16_t>(k[3] - '0'); const std::string f = k.substr(5);
             const int i = find(f, kLaneKeys, kNLane); if (i < 0) return false; c.b = static_cast<int16_t>(i); return true;
         }
-        if (k.rfind("sub.", 0) == 0) { const int i = find(k.substr(4), kSubKeys, 6); if (i < 0) return false; c.k = K_SUB; c.b = static_cast<int16_t>(i); return true; }
+        if (k.rfind("sub.", 0) == 0) { const int i = find(k.substr(4), kSubKeys, 8); if (i < 0) return false; c.k = K_SUB; c.b = static_cast<int16_t>(i); return true; }
         if (k.rfind("m.", 0) == 0) { const int i = find(k.substr(2), kMP, MP_COUNT); if (i < 0) return false; c.k = K_MST; c.b = static_cast<int16_t>(i); return true; }
         if (k.rfind("fx", 0) == 0) {
             c.k = K_FX; c.a = static_cast<int16_t>(k[2] - '0'); const std::string f = k.substr(4);
@@ -1550,7 +1551,7 @@ struct Control {
                     o += " act"; for (auto& a : au.act) o += " " + std::to_string(a.exchange(0));
                     o += " dact"; for (auto& a : au.dact) o += " " + std::to_string(a.exchange(0));
                     o += " sact"; for (auto& a : au.sact) o += " " + std::to_string(a.exchange(0));
-                    o += " bpm " + jnum(std::round(au.bpmPub.load() * 10) / 10) + " clk " + std::to_string(au.clkPub.load() ? 1 : 0) + " gr " + jnum(au.grDb.load()) + " cpu " + jnum(std::round(au.cpu.load() * 10) / 10);
+                    o += " bpm " + jnum(std::round(au.bpmPub.load() * 10) / 10) + " clk " + std::to_string(au.clkPub.load() ? 1 : 0) + " gr " + jnum(au.grDb.load()) + " bcgr " + jnum(au.bcGrDb.load()) + " cpu " + jnum(std::round(au.cpu.load() * 10) / 10);
                     srv.broadcast(o);
                     // directo: corte del break, cabeza y granos del granular, compresión de la voz, grabación
                     std::string l = "live " + std::to_string(au.brk.lastSlice.load()) + " " + jnum(au.gran.headFrac.load()) + " " + jnum(au.voz.grDb.load()) + " " +
@@ -1744,7 +1745,7 @@ int stressTest(int seconds) {
     for (int t = 1; t < NT; ++t) ctl.set("t" + std::to_string(t + 1) + ".eng", E_JUNO, -1);
     const int types[NSEND] = {FX_HALL, FX_PLATE, FX_DARK, FX_TAPE};
     for (int f = 0; f < NSEND; ++f) { ctl.set("fx" + std::to_string(f) + ".type", static_cast<float>(types[f]), -1); for (int c = 0; c < 7; ++c) ctl.set("c" + std::to_string(c) + ".s" + std::to_string(f), 0.3f, -1); }
-    ctl.set("m.sum", 0.6f, -1); ctl.set("brk.on", 1, -1); ctl.set("gran.on", 1, -1);
+    ctl.set("m.bcomp", 0.5f, -1); ctl.set("brk.on", 1, -1); ctl.set("gran.on", 1, -1);
     std::vector<std::string> keys; for (auto& [k, v] : ctl.st) if (Control::isFxKey(k)) keys.push_back(k);
     std::vector<float> ib(BUF * 2); uint32_t rng = 12345; const auto rnd = [&]() { rng ^= rng << 13; rng ^= rng >> 17; rng ^= rng << 5; return rng; };
     const auto note = [&](int t, int n, int v) { au->cmds.push({K_NOTE, static_cast<int16_t>(t), static_cast<int16_t>(n), static_cast<int16_t>(v), 0}); };

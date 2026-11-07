@@ -134,10 +134,13 @@ select, input[type="number"] { background: var(--oled-bg); color: var(--oled); b
 /* --- mezcla --- */
 .mixwrap { overflow-x: auto; padding-bottom: 6px; }
 .mixrow { display: flex; gap: 4px; align-items: stretch; width: max-content; }
-.unit { background: var(--body); border: 1px solid var(--line); border-radius: 6px; padding: 8px; display: grid; gap: 6px; align-content: start; }
+.unit { background: var(--body); border: 1px solid var(--line); border-radius: 6px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.unit > .units { flex: 1; }
 .unit > .label { padding-left: 2px; }
 .units { display: flex; gap: 4px; }
-.strip { width: 112px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 6px 5px; display: grid; gap: 5px; justify-items: stretch; align-content: start; }
+.strip { width: 112px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 6px 5px; display: flex; flex-direction: column; gap: 5px; }
+.strip .frow { margin-top: auto; }
+.strip .sfoot { text-align: center; font-family: var(--f-label); font-weight: 600; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .strip .sname { display: grid; text-align: center; }
 .strip .sname b { font-family: var(--f-label); font-weight: 600; font-size: 12.5px; letter-spacing: 0.06em; text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .strip .sname span { font-size: 9.5px; color: var(--dim); }
@@ -393,7 +396,7 @@ function scoped(name, fn) {
 }
 function onRemote(k) {
   (draws.get(k) || []).forEach(f => f());
-  if (/^t\d\.eng$|^d\.kit$|^sub\.src$|^fx\d\.type$|^pre\.\w+\.\d\.user$/.test(k)) build();
+  if (/^t\d\.eng$|^d\.kit$|^sub\.src$|^sub\.mode$|^fx\d\.type$|^pre\.\w+\.\d\.user$/.test(k)) build();
   else if (k === "samp.sel" || /^samp\.p\d+\.file$|^brk\.name$/.test(k)) buildLive();
   else if (/^ms\.\d\.on$/.test(k)) buildSnaps();
 }
@@ -493,8 +496,9 @@ function buildInst() {
   const sc = el("section", { class: "card" }), sk = el("div", { class: "knobs" });
   [["oct", { l: "Octave", min: -3, max: 0, step: 1, def: -2, fmt: "i", names: "oct" }, 16], ["tone", { l: "Tone", min: 0, max: 1, step: 0.01, def: 0.2, fmt: "p" }, 17], ["glide", { l: "Glide", min: 0.005, max: 0.3, step: 0, def: 0.03, fmt: "s", log: true }, 18], ["vol", { l: "Volume", min: 0, max: 1, step: 0.01, def: 1, fmt: "p" }, 19]]
     .forEach(([f, q, c]) => { const w = el("div", { class: "kslot" }); specKnob(w, "sub." + f, q, (a, b) => topMsg("Sub · " + a, b), "sm"); w.append(el("i", {}, `CC ${c}`)); sk.append(w); });
-  sc.append(el("div", { class: "chead" }, el("div", { class: "cname" }, el("b", {}, "Sub"), el("span", {}, `MIDI channel ${ST["sub.ch"] || "off"} · plays the notes it gets on its channel (on the Oxi: the chord sequencer’s lowest note)`)),
-    toggleKey("sub.on", "Sub on · CC 110", (v) => topMsg("Sub", v ? "on" : "off"))), sk);
+  sc.append(el("div", { class: "chead" }, el("div", { class: "cname" }, el("b", {}, "Sub"), el("span", {}, ST["sub.mode"] >= 0.5 ? `plays the lowest note held on T${(ST["sub.src"] || 1) + 1}` : `MIDI channel ${ST["sub.ch"] || "off"} · plays the notes it gets on its channel`)),
+    toggleKey("sub.on", "Sub on · CC 110", (v) => topMsg("Sub", v ? "on" : "off"))), sk,
+    el("div", { class: "row" }, selK("sub.mode", [[1, "Follows the lowest note of a track"], [0, "Plays its own MIDI channel"]], "Sub mode"), ST["sub.mode"] >= 0.5 ? selK("sub.src", [[1, "T2"], [2, "T3"], [3, "T4"]], "Track to follow") : ""));
   box.append(sc);
 }
 function test(ti) {
@@ -704,7 +708,7 @@ function stripEl(id, title, sub, grp, cls) {
   s.append(el("div", { class: "sec" }, "Sends"));
   a = sk(); for (let f = 0; f < 4; f++) kn(a, P + "s" + f, "Send " + "ABCD"[f], 0, 1, 0.01, PCT, 0, "sm"); s.append(a);
   const fd = vfader(P + "lvl", `Volume of ${title}`);
-  s.append(el("div", { class: "frow" }, meterEl(), fd.f), fd.read, el("div", { class: "tms" }, msBtn(P + "mute", "Mute", "m"), msBtn(P + "solo", "Solo", "s"), msBtn(P + "cue", "Cue", "c")));
+  s.append(el("div", { class: "frow" }, meterEl(), fd.f), fd.read, el("div", { class: "tms" }, msBtn(P + "mute", "Mute", "m"), msBtn(P + "solo", "Solo", "s"), msBtn(P + "cue", "Cue", "c")), el("div", { class: "sfoot", title }, grp ? "Group " + title : title));
   return s;
 }
 function buildSnaps() {
@@ -737,7 +741,8 @@ function buildMix() {
   kn(a, "m.lim", "Limiter", -12, 0, 0.5, (v) => v.toFixed(1) + " dB", -3, "sm"); kn(a, "m.cueLvl", "Cue level", 0, 1.2, 0.01, PCT, 0.8, "sm");
   const fd = vfader("m.vol", "Master volume"); mixUI.grRead = el("span", { class: "limread" });
   const cueSel = SPEC.outs >= 4 ? el("span", { class: "hint" }, "Cue: outputs 3-4") : selK("m.cueMode", [[0, "Cue: L master / R cue"], [2, "Cue: replaces output"]], "Where the cue plays");
-  u3.append(el("div", { class: "strip master" }, el("div", { class: "sname" }, el("span", {}, "Output"), el("b", {}, "Master")), a, mixUI.grRead, cueSel, el("div", { class: "frow" }, meterEl(), fd.f), fd.read));
+  u3.append(el("div", { class: "strip master" }, el("div", { class: "sname" }, el("span", {}, "Output"), el("b", {}, "Master")), a, mixUI.grRead, cueSel, el("div", { class: "frow" }, meterEl(), fd.f), fd.read,
+    el("div", { class: "tms", style: "visibility:hidden", "aria-hidden": "true" }, el("button", { class: "ms m", tabindex: "-1" }, "M")), el("div", { class: "sfoot" }, "Master")));   // hueco de M/S/C: el fader queda a la altura de los demás
   buildSnaps(); buildFx(); buildMaster(); buildTempo();
 }
 function buildFx() {
@@ -781,8 +786,11 @@ function buildMaster() {
   const dx = el("div", { class: "knobs" }); kn(dx, "m.drive", "Drive", 0, 1, 0.01, PCT, 0, "sm"); kn(dx, "m.dtone", "Tone", 0, 1, 0.01, PCT, 1, "sm"); kn(dx, "m.dmix", "Mix", 0, 1, 0.01, PCT, 1, "sm");
   const dist = el("div", { class: "blk" }, el("span", { class: "label" }, "Distortion"), selK("m.dtype", DIST.map((n, i) => [i, n]), "Master distortion type"), dx,
     keyBtn("Zero", "zero", () => { send("m.drive", 0); (draws.get("m.drive") || []).forEach(f => f()); }));
-  const sumK = el("div", { class: "knobs" }); kn(sumK, "m.sum", "Summing", 0, 1, 0.01, PCT, 0, "sm");
-  dist.append(sumK);
+  // compresor de bus: une la mezcla
+  const bk = el("div", { class: "knobs" }); kn(bk, "m.bcomp", "Amount", 0, 1, 0.01, PCT, 0, "sm"); kn(bk, "m.bcAtk", "Attack", 0.1, 30, 0.1, (v) => v.toFixed(1) + " ms", 10, "sm");
+  kn(bk, "m.bcRel", "Release", 0.05, 1.2, 0.01, (v) => Math.round(v * 1000) + " ms", 0.3, "sm"); kn(bk, "m.bcMix", "Mix", 0, 1, 0.01, PCT, 1, "sm");
+  mixUI.bcRead = el("span", { class: "hint" }, "No reduction");
+  const bus = el("div", { class: "blk" }, el("span", { class: "label" }, "Bus compressor"), selK("m.bcRatio", [[0, "2:1"], [1, "4:1"], [2, "10:1"]], "Ratio"), bk, mixUI.bcRead);
   // 8 combinaciones: guardar y disparar
   const FXN = { "m.filt": "Filter", "m.rep": "Repeat", "m.gate": "Gater", "m.riser": "Riser", "m.space": "Space", "m.throw": "Throw", "m.tape": "Tape", "m.comb": "Comb", "m.sweep": "Sweep", "m.drive": "Dist" };
   const cbName = (n) => Object.keys(FXN).filter(k => Math.abs(ST[`cb.${n}.${k}`] || 0) > 0.005).map(k => FXN[k]).join(" + ");
@@ -805,7 +813,7 @@ function buildMaster() {
   xf.addEventListener("input", () => send("cb.amt", Number(xf.value))); regDraw("cb.amt", () => { xf.value = ST["cb.amt"]; });
   const combos = el("div", { class: "blk scenes" }, el("span", { class: "label" }, "Combos: tap to latch, hold for momentary. While one is on, what you change is stored in it"), cbRow,
     el("div", { class: "scrow" }, cbSv, el("span", { class: "label" }, "Dry"), xf, el("span", { class: "label" }, "Wet")));
-  box.append(el("div", { class: "blk" }, el("span", { class: "label" }, "Effect"), sel), main, dist, combos);
+  box.append(el("div", { class: "blk" }, el("span", { class: "label" }, "Effect"), sel), main, dist, bus, combos);
 }
 function buildTempo() {
   const box = $("#tempoBox"); box.textContent = "";
@@ -820,7 +828,8 @@ function meters(parts) {
   const act = rest.slice(0, di >= 0 ? di : bi).map(Number), dact = di >= 0 ? rest.slice(di + 1, si).map(Number) : [], sact = si >= 0 ? rest.slice(si + 1, bi).map(Number) : [];
   dact.forEach((a, l) => { if (a && P[0] && P[0].lanes) flash(P[0].lanes[l], "on", 130); });
   sact.forEach((a, i) => { if (a && LV.pads) flash(LV.pads[i], "hit", 130); });
-  const bpm = Number(rest[bi + 1]), clk = rest[bi + 3] === "1", gr = Number(rest[bi + 5]), ci = rest.indexOf("cpu"), cpu = ci >= 0 ? Number(rest[ci + 1]) : 0;
+  const bpm = Number(rest[bi + 1]), clk = rest[bi + 3] === "1", gr = Number(rest[bi + 5]), ci = rest.indexOf("cpu"), cpu = ci >= 0 ? Number(rest[ci + 1]) : 0, bci = rest.indexOf("bcgr"), bcgr = bci >= 0 ? Number(rest[bci + 1]) : 0;
+  if (mixUI.bcRead) mixUI.bcRead.textContent = bcgr < -0.05 ? `Compressing ${Math.abs(bcgr).toFixed(1)} dB` : "No reduction";
   const cp = $("#topCpu"); if (cp) { cp.textContent = `CPU ${cpu.toFixed(0)}%`; cp.style.color = cpu > 70 ? "var(--led)" : cpu > 45 ? "var(--amber)" : ""; }
   lv.forEach((v, i) => {
     meterState[i] = Math.max(v, (meterState[i] || 0) * 0.7);

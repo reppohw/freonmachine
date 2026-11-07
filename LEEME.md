@@ -345,7 +345,11 @@ y la vuelve a abrir en cuanto reaparece.
 
 **Trim de batería:** las tiras Kick, Snare y Drums rest tienen un Trim junto al Limiter, de −24 a +12 dB, para subir o bajar el grupo antes del fader.
 
-**Sidechain:** bombeo clásico. El golpe baja el nivel y SC release es lo que tarda en subir en línea recta, hasta 1 s. Prueba entre 200 y 400 ms, según el tempo. SC amount es la profundidad: al 100 %, unos −30 dB.
+**Sidechain:** bombeo. Solo cuenta el golpe del canal fuente (un salto brusco de nivel, aunque el anterior siga sonando): el sonido baja en 1 ms y sube en línea recta durante SC release, hasta 1 s. Para pads, prueba entre 200 y 400 ms según el tempo. SC amount es la profundidad: al 100 %, unos −30 dB.
+
+**Compresor de bus (efectos de máster):** une la mezcla. Amount baja el umbral (hasta −24 dB), Ratio 2:1, 4:1 o 10:1, Attack, Release y Mix (en paralelo). Recupera nivel solo y muestra cuánto comprime. Para pegar sin que se note: 4:1, Attack 10–30 ms, 1–3 dB de reducción.
+
+**Sub:** sigue la nota más grave de una pista (T2 por defecto) o toca lo que le llega por su propio canal MIDI; se elige en su tarjeta.
 
 **Núcleos:** en la Pi el audio se reparte entre 4 núcleos (batería, cada pista de sinte, sampler, breaks, granular y cada efecto de envío pueden ir por separado). En el Mac va en uno, porque allí no hay tiempo real para los demás. `--nucleos 1` lo pone todo en un núcleo, y suena exactamente igual: es la salida de emergencia si algo fallara en la Pi. Si un núcleo no consigue prioridad de tiempo real, se queda fuera y el programa lo avisa al arrancar («Núcleos para el audio»).
 
