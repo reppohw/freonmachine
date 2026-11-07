@@ -349,7 +349,7 @@ y la vuelve a abrir en cuanto reaparece.
 
 **Núcleos:** en la Pi el audio se reparte entre 4 núcleos (batería, cada pista de sinte, sampler, breaks, granular y cada efecto de envío pueden ir por separado). En el Mac va en uno, porque allí no hay tiempo real para los demás. `--nucleos 1` lo pone todo en un núcleo, y suena exactamente igual: es la salida de emergencia si algo fallara en la Pi. Si un núcleo no consigue prioridad de tiempo real, se queda fuera y el programa lo avisa al arrancar («Núcleos para el audio»).
 
-**Niveles:** `./bin/freon-machine --niveles` mide la sonoridad de todos los motores y presets (ponderación K, ventana de 400 ms). El objetivo es −22 dB en sintes. La batería se mide por golpe: bombo −13, caja −15, clap −17, rim −20, tom −15, HH cerrado −21, HH abierto −18 y perc −20 dB.
+**Niveles:** `./bin/freon-machine --niveles` mide la sonoridad de todos los motores y presets (ponderación K, ventana de 400 ms). Los sintes quedan por debajo de la batería: es la mezcla de partida, con los faders a 0 dB y el equilibrio en el Volume de cada instrumento. La batería se mide por golpe: bombo −13, caja −15, clap −17, rim −20, tom −15, HH cerrado −21, HH abierto −18 y perc −20 dB.
 
 **Prueba de estrés:** `./bin/freon-machine --estres 30 --nucleos 4` toca el peor caso (18 voces de Juno, batería, 4 efectos de envío y todos los efectos moviéndose al azar) y dice cuánto gasta. «Pico de cálculo» es lo que cuesta de verdad; «pico de reloj» incluye las veces que el sistema le quita el procesador. En un Mac sin tiempo real el de reloj sale alto y no significa nada; en la Pi, con el servicio parado (`sudo systemctl stop freon-machine`) y si la prueba dice «Tiempo real: sí», tiene que quedar por debajo del 100 %.
 

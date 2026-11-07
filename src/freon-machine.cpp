@@ -101,7 +101,7 @@ enum SP { SP_LVL, SP_PAN, SP_MUTE, SP_SOLO, SP_CUE, SP_OUT, SP_DTYPE, SP_DRIVE, 
 const char* kSP[SP_COUNT] = {"lvl", "pan", "mute", "solo", "cue", "out", "dtype", "drive", "dtone", "dmix", "low", "mid", "high", "lim", "sc", "scAmt", "scRel", "s0", "s1", "s2", "s3", "filt", "res", "trim"};
 enum MP { MP_VOL, MP_LIM, MP_CUELVL, MP_CUEMODE, MP_DTYPE, MP_DRIVE, MP_DTONE, MP_DMIX, MP_FILT, MP_RES, MP_REP, MP_GDIV, MP_GATE, MP_RISER, MP_SPACE, MP_SPSIZE, MP_THROW, MP_TDIV, MP_TFB, MP_TAPE, MP_BPM, MP_CLOCK, MP_RDECAY, MP_RNOISE, MP_TAPESM, MP_RSIZE, MP_FENV, MP_RPITCH, MP_GSHAPE, MP_GPAN, MP_SPDAMP, MP_SPFRZ, MP_TTONE, MP_COMB, MP_CBPITCH, MP_CBFB, MP_CBDAMP, MP_SWEEP, MP_SWRATE, MP_SWDEPTH, MP_SWFB, MP_SWMODE, MP_SUM, MP_COUNT };
 const char* kMP[MP_COUNT] = {"vol", "lim", "cueLvl", "cueMode", "dtype", "drive", "dtone", "dmix", "filt", "res", "rep", "gdiv", "gate", "riser", "space", "spSize", "throw", "throwDiv", "throwFb", "tape", "bpm", "clock", "rDecay", "rNoise", "tapeSm", "rSize", "fEnv", "rPitch", "gShape", "gPan", "spDamp", "spFrz", "tTone", "comb", "cbPitch", "cbFb", "cbDamp", "sweep", "swRate", "swDepth", "swFb", "swMode", "sum"};
-const float kMpDef[MP_COUNT] = {0.85f, -3, 0.8f, 0, 0, 0, 1, 1, 0, 1.4f, 0, 2, 0, 0, 0, 0.7f, 0, 6, 0.55f, 0, 120, 1, 0, 0.5f, 0.5f, 2, 0, 0, 0, 0, 0.53f, 0, 0.7f, 0, 48, 0.8f, 0.3f, 0, 2, 0.7f, 0.4f, 0, 0};
+const float kMpDef[MP_COUNT] = {0.85f, -1.5f, 0.8f, 0, 0, 0, 1, 1, 0, 1.4f, 0, 2, 0, 0, 0, 0.7f, 0, 6, 0.55f, 0, 120, 1, 0, 0.5f, 0.5f, 2, 0, 0, 0, 0, 0.53f, 0, 0.7f, 0, 48, 0.8f, 0.3f, 0, 2, 0.7f, 0.4f, 0, 0};
 // Distorsión: Hard, Fuzz y Bitcrusher
 const int kDistMap[2] = {D_FUZZ, D_BITS};
 inline int distType(float v) { return kDistMap[std::clamp(static_cast<int>(v), 0, 1)]; }
@@ -132,14 +132,14 @@ struct SubVoice {
             ph += mtof(semi) / sr; if (ph >= 1) ph -= 1;
             const float x = std::tanh(fsin(ph) * dg) * norm;
             lp += (x - lp) * lpc;
-            o[i] = lp * amp * 0.5f * vol;
+            o[i] = lp * amp * 0.158f * vol;
         }
     }
 };
 
 // ------------------------------------------------------------------ tira de canal / grupo
 struct Strip {
-    float p[SP_COUNT] = {0.8f, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, -1, 0.5f, 0.25f, 0, 0, 0, 0, 0, 1.4f, 0};
+    float p[SP_COUNT] = {1.0f, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, -1, 0.5f, 0.25f, 0, 0, 0, 0, 0, 1.4f, 0};
     float trimG = 1;   // trim de entrada del canal
     Dist dist; Shelf lo[2], mi[2], hi[2]; bool eqDirty = true; Follower fol; Limiter lim; DJFilter dj;
     float L[BLK], R[BLK], pre[2][BLK], g[BLK];
@@ -836,9 +836,10 @@ struct Control {
         // canales
         for (int i = 0; i < NCH; ++i) { Strip s; for (int p = 0; p < SP_COUNT; ++p) st["c" + std::to_string(i) + "." + kSP[p]] = s.p[p]; }
         // punto de partida limpio (lo pidió Jorge): envíos bajados, sin grupos, todo al máster, sin distorsión, EQ ni sidechain
-        st["c0.lvl"] = 0.85f; st["c1.lvl"] = 0.8f; st["c2.lvl"] = 0.75f; st["c3.lvl"] = 0.75f;
+        // faders a 0 dB: el equilibrio va en el Volume de cada instrumento (mezcla de Jorge, 7-11-2026)
+        st["d.l1.level"] = 0.52f; st["c2.trim"] = -7.5f;
         for (int q = 0; q < 4; ++q) st["c" + std::to_string(CH_IN + q) + ".mute"] = 1;   // entradas en silencio hasta que las abras: evita acoples
-        for (int g = 0; g < NGRP; ++g) { Strip s; for (int p = 0; p < SP_COUNT; ++p) st["g" + std::to_string(g) + "." + kSP[p]] = s.p[p]; st["g" + std::to_string(g) + ".lvl"] = 0.9f; }
+        for (int g = 0; g < NGRP; ++g) { Strip s; for (int p = 0; p < SP_COUNT; ++p) st["g" + std::to_string(g) + "." + kSP[p]] = s.p[p]; st["g" + std::to_string(g) + ".lvl"] = 1.0f; }
         const int fxDef[NSEND] = {FX_HALL, FX_TAPE, FX_DARK, FX_PING};
         for (int f = 0; f < NSEND; ++f) {
             const std::string F = "fx" + std::to_string(f) + ".";
@@ -847,7 +848,7 @@ struct Control {
         }
         for (int i = 0; i < MP_COUNT; ++i) st[std::string("m.") + kMP[i]] = kMpDef[i];
     }
-    static constexpr float kStateVer = 13;
+    static constexpr float kStateVer = 14;
     static std::string presetKey(int e, int s) { return std::string("pre.") + kEng[e].key + "." + std::to_string(s) + "."; }
     static std::vector<int> engIdx(int e) { std::vector<int> v; for (int i = 0; i < kEng[e].np; ++i) v.push_back(i); for (int i = 0; i < kEng[e].nb; ++i) v.push_back(kBtn0 + i); return v; }
     static bool isEngParam(const std::string& k) {
@@ -971,7 +972,15 @@ struct Control {
             float x = v; try { if (!valid(k, x)) continue; } catch (const std::exception&) { continue; }
             if (st.count(k) || k.rfind("ms.", 0) == 0 || k.rfind("cb.", 0) == 0) st[k] = x;
         }
-        if (ver > 0 && ver < 13) for (int e = 0; e < E_COUNT; ++e) for (int sl = 0; sl < 8; ++sl) {   // presets de fábrica igualados de nivel; los tuyos no se tocan
+        if (ver > 0 && ver < 14) {   // bajó el nivel base de motores y Sub: el Volume guardado sube lo mismo y lo tuyo suena igual
+            for (int e = 0; e < E_COUNT; ++e) {
+                const int vi = kEngVol[e]; if (vi < 0) continue; const float m = std::pow(10.0f, -kEngShift14[e] / 40.0f), hi = kEng[e].p[vi].max;
+                for (int t = 2; t <= NT; ++t) { auto it = st.find("t" + std::to_string(t) + "." + kEng[e].key + "." + std::to_string(vi)); if (it != st.end()) it->second = std::min(it->second * m, hi); }
+                for (int sl = 0; sl < 8; ++sl) { const std::string P = presetKey(e, sl); if (st[P + "user"] >= 0.5f) { auto it = st.find(P + std::to_string(vi)); if (it != st.end()) it->second = std::min(it->second * m, hi); } }
+            }
+            st["sub.vol"] = std::min(st["sub.vol"] / 0.316f, 1.0f);
+        }
+        if (ver > 0 && ver < 14) for (int e = 0; e < E_COUNT; ++e) for (int sl = 0; sl < 8; ++sl) {   // presets de fábrica igualados de nivel; los tuyos no se tocan
             const std::string P = presetKey(e, sl); if (st[P + "user"] >= 0.5f) continue;
             for (int i : engIdx(e)) { const auto d = defs.find(P + std::to_string(i)); if (d != defs.end()) st[P + std::to_string(i)] = d->second; }
         }

@@ -108,6 +108,10 @@ inline const EngSpec kEng[E_COUNT] = {
 };
 
 // Sonidos de fábrica: cambios sobre los valores por defecto. Huecos sin nombre = vacíos.
+// índice del parámetro Volume de cada motor (Game Boy no tiene)
+inline const int kEngVol[E_COUNT] = {21, 7, 28, 7, -1, 21, 20, 11};
+// Cuánto bajó el nivel base de cada motor (dB) al pasar a la mezcla de Jorge como punto de partida (7-11-2026)
+inline const float kEngShift14[E_COUNT] = {-12.9f, 1.7f, -6.2f, -6.0f, -6.0f, -6.0f, -6.0f, -6.0f};
 inline const std::vector<Preset>& factoryPresets(int e) {
     static const std::vector<Preset> P[E_COUNT] = {
         {   // Juno (deslizadores 0..1 como en el Juno-6)
@@ -161,7 +165,7 @@ inline const std::vector<Preset>& factoryPresets(int e) {
     };
     // Igualación medida con --niveles (objetivo −22 dB, ponderación K): el Volume de cada preset sube o baja lo que le falta.
     // Volume actúa al cuadrado. No pasa de 1, así que los sonidos muy cortos pueden quedar algo por debajo.
-    static const int kVolIdx[E_COUNT] = {21, 7, 28, 7, -1, 21, 20, 11};
+    const auto& kVolIdx = kEngVol;
     static const float kPreDb[E_COUNT][8] = {{-10.3f, 0.7f, -0.7f, 8, 8, -9.2f}, {-1.4f, 9, -2.1f, -2.4f, 7.1f, 3, -5.3f, 1.3f}, {1.8f, 0, -0.8f, 1.1f, -3.7f}, {}, {},
                                              {1.5f, -2.2f, 0, 4.5f, -2.6f}, {1.4f, 1.1f, -2.5f, -1.4f}, {8.6f, -2, -1.9f, 2.3f, 0}};
     static const std::vector<std::vector<Preset>> T = [] {
@@ -224,7 +228,7 @@ struct MeloEngines {
         allOff(); prev_ = cur; prevG_ = 1.0f; prevN_ = static_cast<int>(sr_ * 4.0f); cur = e;
     }
     // ajuste de nivel por motor (medido): todos suenan parecido al cambiar de uno a otro con los mismos ajustes
-    static float trim(int e) { static const float kDb[E_COUNT] = {11.0f, -2.3f, -5.5f, -2.1f, 2.2f, 1.8f, -0.6f, -7.6f}; return std::exp2(kDb[std::clamp(e, 0, E_COUNT - 1)] / 6.0206f); }
+    static float trim(int e) { static const float kDb[E_COUNT] = {-1.9f, -0.6f, -11.7f, -8.1f, -3.8f, -4.2f, -6.6f, -13.6f}; return std::exp2(kDb[std::clamp(e, 0, E_COUNT - 1)] / 6.0206f); }
     void render(float* L, float* R, float* mono, int n) {
         renderEng(cur, L, R, mono, n);
         { const float g = trim(cur); for (int i = 0; i < n; ++i) { L[i] *= g; R[i] *= g; } }

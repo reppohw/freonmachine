@@ -395,7 +395,7 @@ struct CycVoice {
 inline const int kLaneOut[8] = {0, 1, 1, 2, 2, 2, 2, 2};
 // Igualación medida con --niveles: dB por kit y sonido (bombo, caja, clap, rim, tom, HH cerrado, HH abierto, perc)
 inline float kitTrim(int kit, int l) {
-    static const float D[5][8] = {{1.9f, -2.4f, 0.0f, 6.2f, -2.3f, -0.6f, -3.1f, -0.5f}, {1.6f, -1.0f, -1.9f, -3.6f, 0.7f, 1.1f, 0.8f, 1.5f}, {-3.2f, -0.1f, -2.6f, -10.2f, -6.3f, -3.9f, -4.1f, -13.0f}, {-3.3f, -4.8f, -2.5f, 2.6f, -5.0f, -3.0f, -4.9f, -8.5f}, {3.8f, 11.2f, 5.1f, 3.7f, -1.9f, -1.3f, 6.0f, 3.7f}};
+    static const float D[5][8] = {{1.9f, -2.4f, 0.0f, 6.2f, -2.3f, -0.6f, -3.1f, -0.5f}, {1.6f, -1.0f, -1.9f, -3.6f, 0.7f, 1.1f, 0.8f, 1.5f}, {-3.2f, -0.1f, -2.6f, -10.2f, -6.3f, -3.9f, -4.1f, -13.0f}, {-9.3f, -10.8f, -8.5f, -3.4f, -11.0f, -9.0f, -10.9f, -14.5f}, {3.8f, 11.2f, 5.1f, 3.7f, -1.9f, -1.3f, 6.0f, 3.7f}};
     const int k = kit == KIT_P808 ? 0 : kit == KIT_P909 ? 1 : kit == KIT_CYC ? 2 : kit == KIT_GB ? 3 : kit == KIT_EXP ? 4 : -1;
     return k < 0 ? 1.0f : std::pow(10.0f, D[k][std::clamp(l, 0, 7)] / 20.0f);
 }
