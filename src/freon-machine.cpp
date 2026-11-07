@@ -838,6 +838,8 @@ struct Control {
         // punto de partida limpio (lo pidió Jorge): envíos bajados, sin grupos, todo al máster, sin distorsión, EQ ni sidechain
         // faders a 0 dB: el equilibrio va en el Volume de cada instrumento (mezcla de Jorge, 7-11-2026)
         st["d.l1.level"] = 0.52f; st["c2.trim"] = -7.5f;
+        // Volume por pista y motor, ajustado a oído por Jorge (una misma pista pesa distinto según lo que toque)
+        st["t2.dx.7"] = 0.6f; st["t2.wt.21"] = 0.81f; st["t2.saw.20"] = 0.85f; st["t3.wt.21"] = 0.8f; st["t4.dx.7"] = 0.63f;
         for (int q = 0; q < 4; ++q) st["c" + std::to_string(CH_IN + q) + ".mute"] = 1;   // entradas en silencio hasta que las abras: evita acoples
         for (int g = 0; g < NGRP; ++g) { Strip s; for (int p = 0; p < SP_COUNT; ++p) st["g" + std::to_string(g) + "." + kSP[p]] = s.p[p]; st["g" + std::to_string(g) + ".lvl"] = 1.0f; }
         const int fxDef[NSEND] = {FX_HALL, FX_TAPE, FX_DARK, FX_PING};

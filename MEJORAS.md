@@ -35,6 +35,8 @@
 - [x] Prueba del cable USB de la Clarett (7-11-2026, Pi 3, buffer 512): desenchufada unos segundos, el audio se reabrió solo sin colgarse.
 - [x] Prueba del cable USB del Oxi: Freon sigue viva, el audio no se para, y al volver regresan MIDI y reloj. El MC-24 ya no recibe MIDI de Freon, que lo atascaba.
 - [x] Punto de partida: la mezcla de Jorge (7-11-2026): faders a 0 dB, nivel base de motores y Sub bajado, caja −3,7 dB, resto −7,5 dB, limitador −1,5, Summing a 0. Kit Chip −6 dB. Lo guardado conserva su sonido, salvo Game Boy (no tiene Volume, baja 6 dB) y el kit Chip.
+- [x] Volume de partida por pista a oído: T2 DX 60, Wavetable 81, Supersaw 85; T3 Wavetable 80; T4 DX 63. Juno y Modal quedan bajos en mono, a propósito.
+- [ ] Modal: Jorge probablemente lo quite; falta su valor en T2.
 - [ ] Sub colgado: Jorge tiene que confirmar qué pasó exactamente y si vuelve a ocurrir.
 - [ ] Saber qué controladoras usa Jorge, para elegir el modo de knobs por defecto.
 
