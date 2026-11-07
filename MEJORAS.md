@@ -73,6 +73,8 @@
 - [ ] Preset 5 de fábrica del Slim Phatty (pendiente de que Jorge pase los valores o una grabación).
 
 ## Ideas de Jorge para más adelante
+- [ ] Sonido final más cercano a un máster (decidido por Jorge el 7-11-2026). Muy importantes: compresor de bus en el máster, graves limpios (corte bajo 40 Hz, mono bajo 120 Hz, corte de graves en envíos) y EQ de máster sutil. Después: reverb que cede con el bombo, limitador con 1–2 dB de reducción y medidor LUFS. Sin saturación de cinta en el máster.
+- [ ] Summing: Jorge no lo aprecia ni al 100 % y gasta unos 5 puntos en la Pi. Candidato a quitar.
 - [x] Pantalla «System» en Settings: audio, buffer, frecuencia, núcleos, salidas, MIDI, apagar y reiniciar, con vuelta atrás (6-11-2026). Faltan red y latencia de cada interfaz.
 - [x] Web: el scroll con dos dedos mueve la página; los knobs solo cambian arrastrando, o con ⌥ + scroll (5-11-2026).
 - [x] Mixer: knob Volume del instrumento en Sub y sintes, aparte del fader. Game Boy no tiene Volume.
