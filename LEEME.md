@@ -357,6 +357,10 @@ y la vuelve a abrir en cuanto reaparece.
 
 **Prueba de estrés:** `./bin/freon-machine --estres 30 --nucleos 4` toca el peor caso (18 voces de Juno, batería, 4 efectos de envío y todos los efectos moviéndose al azar) y dice cuánto gasta. «Pico de cálculo» es lo que cuesta de verdad; «pico de reloj» incluye las veces que el sistema le quita el procesador. En un Mac sin tiempo real el de reloj sale alto y no significa nada; en la Pi, con el servicio parado (`sudo systemctl stop freon-machine`) y si la prueba dice «Tiempo real: sí», tiene que quedar por debajo del 100 %.
 
+## Arranque rápido y wifi propia (una vez)
+
+En la Pi, desde la carpeta del proyecto: `./deploy/ajustes-pi.sh "tu-clave"`. Freon deja de esperar a la red al arrancar, y si la Pi no encuentra tu wifi crea la suya, «Freon-Machine», con esa clave: te conectas desde el móvil y abres http://10.42.0.1:8080. Si la Pi dejara de verse en la red, conéctala por cable al router.
+
 ## Ajustes de sistema, sin terminal
 
 En la pestaña **Settings**, tarjeta **System**, eliges salida y entradas de audio, buffer, frecuencia, núcleos, salidas y qué puertos MIDI se usan. Con **Apply and restart Freon** se guarda y Freon se reinicia sola en unos segundos.
