@@ -2074,7 +2074,7 @@ int main(int argc, char** argv) {
         if (audio && audio->isStreamOpen()) { if (audio->isStreamRunning()) audio->stopStream(); audio->closeStream(); }
         audio = std::make_unique<RtAudio>();
         if (audio->getDeviceIds().empty()) { if (!quiet) std::printf("No hay interfaces de audio. Prueba con --sin-audio.\n"); return false; }
-        const std::string wantOut = !autoOut.empty() ? autoOut : forceDefault ? std::string() : cfgS("audio", "--audio"), wantIn = !autoOut.empty() ? autoOut : cfgS("entrada", "--entrada");
+        const std::string wantOut = !autoOut.empty() ? autoOut : forceDefault ? std::string() : cfgS("audio", "--audio"), wantIn = cfgS("entrada", "--entrada") == "none" ? std::string("none") : !autoOut.empty() ? autoOut : cfgS("entrada", "--entrada");
         int od = findDevice(*audio, wantOut, false);
 #ifdef __linux__
         // de reserva, en la Pi: su salida de auriculares, directa y en estéreo (el «default» de ALSA pasa por conversiones y suena peor)
