@@ -174,7 +174,7 @@ struct Follower {
 // Une la mezcla: detector estéreo enlazado, rodilla suave de 6 dB, ganancia de recuperación automática parcial y mezcla en
 // paralelo. La ganancia se calcula cada 8 muestras y se interpola: poco gasto en la Pi.
 struct BusComp {
-    // ratio: 0 = 2:1, 1 = 4:1, 2 = 10:1. air: realce suave de agudos tras comprimir (0..+6 dB desde 10 kHz). makeup: ganancia extra en dB
+    // ratio: 0 = 2:1, 1 = 4:1, 2 = 10:1. air: realce de agudos tras comprimir, estilo «glue» (0..+10 dB desde 7 kHz, con un pequeño pico). makeup: ganancia extra en dB
     float amount = 0, ratio = 1, attack = 10, release = 0.3f, mix = 1, air = 0, makeup = 0, lastGrDb = 0;
     void prepare(float s) { sr = s; airSet = -1; }
     void reset() { env = 0; gDb = 0; gLin = 1; mkLin = 1; airSet = -1; for (auto& h : hs) h.z1 = h.z2 = 0; }
@@ -183,7 +183,7 @@ struct BusComp {
         if (!std::isfinite(env) || !std::isfinite(gDb) || !std::isfinite(gLin) || !std::isfinite(hs[0].z1 + hs[0].z2 + hs[1].z1 + hs[1].z2)) reset();
         if (amount >= 0.005f) compress(L, R, n); else { lastGrDb = 0; gDb = 0; gLin = 1; env = 0; }
         if (air >= 0.005f) {
-            if (air != airSet) { airSet = air; for (auto& h : hs) { const float z1 = h.z1, z2 = h.z2; h.set(1, 10000.0f, air * 6.0f, 0.7f, sr); h.z1 = z1; h.z2 = z2; } }
+            if (air != airSet) { airSet = air; for (auto& h : hs) { const float z1 = h.z1, z2 = h.z2; h.set(1, 7000.0f, air * 10.0f, 0.9f, sr); h.z1 = z1; h.z2 = z2; } }
             for (int i = 0; i < n; ++i) { L[i] = hs[0].process(L[i]); R[i] = hs[1].process(R[i]); }
         } else if (airSet >= 0) { airSet = -1; for (auto& h : hs) h.z1 = h.z2 = 0; }
         const float mk = std::pow(10.0f, makeup / 20.0f);

@@ -178,8 +178,8 @@ h2 span { font-size: 11px; letter-spacing: 0.08em; color: var(--dim); text-trans
 .mfx .blk { justify-items: center; text-align: center; }
 .mfx .scenes { grid-column: 1 / -1; justify-items: stretch; }
 #sysBox select, .row .field select { max-width: 100%; }
-#sysBox .field { min-width: 0; max-width: 100%; flex: 1 1 150px; }
-#sysBox .scrow { flex: 1 1 100%; }
+#sysBox .field { min-width: 0; max-width: 100%; flex: 0 1 200px; }   /* todos del mismo tamaño: el último de una fila no se estira */
+#sysBox .scrow, #sysBox > .hint { flex: 1 1 100%; }
 .mfx .scrow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .mfx .blk .knob { width: 74px; } .mfx .blk .knob svg { width: 52px; height: 52px; }
 .mfx .blk.live { border-color: #5a2a20; box-shadow: inset 0 0 0 1px rgba(255,77,46,.25); }
@@ -368,9 +368,10 @@ function selK(k, pairs, label, after) {
   const s = el("select", { "aria-label": label }); pairs.forEach(([v, l]) => s.append(el("option", { value: v }, l)));
   const d = () => { s.value = String(ST[k]); }; s.addEventListener("change", () => { send(k, Number(s.value)); after && after(); }); d(); regDraw(k, d); return s;
 }
-function groupedKnobs(params, keyOf, onTouch) {
+function groupedKnobs(params, keyOf, onTouch, only) {
   const box = el("div", { class: "grps" }); let kb = null, g = null;
   params.forEach((q, i) => {
+    if (only && !only.includes(i)) return;
     if (q.g !== g) { g = q.g; kb = el("div", { class: "knobs" }); box.append(el("div", { class: "grp" }, el("span", { class: "label" }, q.g), kb)); }
     specKnob(kb, keyOf(i), q, (a, b) => onTouch(`${q.g} · ${a}`, b));
   });
@@ -577,12 +578,11 @@ function buildLive() {
     box.append(c.card);
   }
   {
-    const c = liveCard("Voice", "live voice transformer: clean-up, dynamics, pitch & formant, auto-pitch, robot, harmony, vocoder", "voz"); LV.voz = c;
-    LV.vozGr = el("span", { class: "grmeter", title: "Compressor gain reduction" }, el("i"));
-    LV.tuner = el("span", { class: "screen tuner" }, "—");
-    c.head.append(toggleKey("voz.on", "On", (v) => c.msg("Voice", v ? "on · Voice channel in the mixer" : "off")), el("span", { class: "label" }, "Comp"), LV.vozGr, el("span", { class: "label" }, "Pitch in"), LV.tuner);
-    c.card.append(groupedKnobs(L.voz, (i) => `voz.${i}`, (a, b) => c.msg(a, b)),
-      el("p", { class: "hint" }, "Mode: Normal shifts pitch and formant; Auto-pitch snaps to the key and scale (Retune = how hard); Robot sings a fixed note; Harmony adds voices; Vocoder uses your voice to shape a saw/pulse played by MIDI notes or one of the tracks. MIDI notes on the Voice channel set the note you sing (60 = your pitch in Normal). If you use the Voice, mute the input channel in the mixer so you don’t hear it twice. Use headphones."));
+    const c = liveCard("Voice", "live voice: input gain, low cut, gate, pitch and formant", "voz"); LV.voz = c;
+    c.head.append(toggleKey("voz.on", "On", (v) => c.msg("Voice", v ? "on · Voice channel in the mixer" : "off")));
+    // solo lo esencial: entrada, ganancia, corte de graves, puerta, pitch y formant (Freon deja el resto neutro)
+    c.card.append(groupedKnobs(L.voz, (i) => `voz.${i}`, (a, b) => c.msg(a, b), [0, 1, 2, 3, 7, 8]),
+      el("p", { class: "hint" }, "Gain raises the input, Low cut removes rumble, Gate silences what is below its level, Pitch moves the voice in semitones and Formant makes it sound bigger or smaller without changing the note. Its level is the Voice fader in the mixer."));
     box.append(c.card);
   }
   drawRec(); drawWaves(); if (ui.tab === "live") requestWaves();
@@ -789,7 +789,7 @@ function buildMaster() {
   // compresor de bus: une la mezcla
   const bk = el("div", { class: "knobs" }); kn(bk, "m.bcomp", "Amount", 0, 1, 0.01, PCT, 0, "sm"); kn(bk, "m.bcAtk", "Attack", 0.1, 30, 0.1, (v) => v.toFixed(1) + " ms", 10, "sm");
   kn(bk, "m.bcRel", "Release", 0.05, 1.2, 0.01, (v) => Math.round(v * 1000) + " ms", 0.3, "sm"); kn(bk, "m.bcMix", "Mix", 0, 1, 0.01, PCT, 1, "sm");
-  kn(bk, "m.bcAir", "Air", 0, 1, 0.01, (v) => "+" + (v * 6).toFixed(1) + " dB", 0, "sm"); kn(bk, "m.bcMkp", "Makeup", -6, 12, 0.1, (v) => (v > 0 ? "+" : "") + v.toFixed(1) + " dB", 0, "sm");
+  kn(bk, "m.bcAir", "Air", 0, 1, 0.01, (v) => "+" + (v * 10).toFixed(1) + " dB", 0, "sm"); kn(bk, "m.bcMkp", "Makeup", -6, 12, 0.1, (v) => (v > 0 ? "+" : "") + v.toFixed(1) + " dB", 0, "sm");
   mixUI.bcRead = el("span", { class: "hint" }, "No reduction");
   const bus = el("div", { class: "blk" }, el("span", { class: "label" }, "Bus compressor"), selK("m.bcRatio", [[0, "2:1"], [1, "4:1"], [2, "10:1"]], "Ratio"), bk, mixUI.bcRead);
   // 8 combinaciones: guardar y disparar

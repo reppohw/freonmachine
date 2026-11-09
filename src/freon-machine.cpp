@@ -1216,6 +1216,10 @@ struct Control {
         if (from != -1 && cbCur_ >= 0 && k.rfind("m.", 0) == 0) comboEdit(k, old, v);
     }
     void pushAll() {
+        // voz simplificada: entrada, ganancia, corte de graves, puerta, pitch y formant. Lo demás queda neutro
+        // (sin compresor, de-esser, efectos, reverb ni eco; modo normal; todo señal procesada)
+        for (const auto& [i, v] : std::initializer_list<std::pair<int, float>>{{VZ_COMP, 0}, {VZ_DESS, 0}, {VZ_MODE, VM_NORMAL}, {VZ_FX, 0}, {VZ_REVERB, 0}, {VZ_ECHO, 0}, {VZ_BAL, 1}})
+            st["voz." + std::to_string(i)] = v;
         for (auto& [k, v] : st) { Cmd c; if (toCmd(k, v, c)) au.cmds.push(c); }
         for (int pad = 0; pad < kPads; ++pad) assignPad(pad);
         assignBreak(false);

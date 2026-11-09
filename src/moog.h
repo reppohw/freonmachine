@@ -131,7 +131,9 @@ public:
                 float m = p.lvl1 * wave(p.wave1, ph_[0], dt1) + p.lvl2 * wave(p.wave2, ph_[1], dt2) + (p.o3lfo ? 0.0f : p.lvl3 * o3);
                 if (p.noise > 0.001f) m += p.noise * noise_.next();
                 m = softClip(m * 0.45f * dg) * dcomp * 1.6f;
-                o = lad_.process(m) * 2.2f;
+                // el ladder pierde graves y volumen al subir la resonancia (aunque el filtro esté abierto): se compensa el 70 %,
+                // normalizado a Emphasis 0,45 (el valor de los presets), así que ahí suena igual que antes y ya no se hunde al subirla
+                o = lad_.process(m) * 2.2f * (1.0f + 0.7f * lad_.resQ) * (1.0f / 2.41f);
             }
             float y = dec_.process(os[0], os[1]);
             y *= ae * vol * vol * 0.9f * vs;
