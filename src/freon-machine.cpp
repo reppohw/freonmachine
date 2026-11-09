@@ -2011,6 +2011,7 @@ int main(int argc, char** argv) {
     // ajustes de sistema: lo elegido en la pantalla manda sobre las opciones de arranque
     const std::string base = exeDir(argv[0]) + "/..", sysFile = base + "/freon-sistema.txt", sysPrev = sysFile + ".previo", sysPend = sysFile + ".probando", sysBack = sysFile + ".revertido";
     SysCfg cfg = sysLoad(sysFile); bool forceDefault = false;
+    std::string autoOut;   // interfaz USB tomada sola porque la elegida no está (no se guarda en los ajustes)
     const auto cfgS = [&](const char* k, const char* arg) { const auto it = cfg.find(k); return it != cfg.end() && !it->second.empty() ? it->second : argStr(argc, argv, arg); };
     const auto cfgI = [&](const char* k, const char* arg, int def) { const std::string s = cfgS(k, arg); const int v = s.empty() ? def : std::atoi(s.c_str()); return v > 0 ? v : def; };
     gNuc = std::clamp(cfgI("nucleos", "--nucleos", nucDef), 1, std::min(4, hw));
@@ -2073,8 +2074,12 @@ int main(int argc, char** argv) {
         if (audio && audio->isStreamOpen()) { if (audio->isStreamRunning()) audio->stopStream(); audio->closeStream(); }
         audio = std::make_unique<RtAudio>();
         if (audio->getDeviceIds().empty()) { if (!quiet) std::printf("No hay interfaces de audio. Prueba con --sin-audio.\n"); return false; }
-        const std::string wantOut = forceDefault ? std::string() : cfgS("audio", "--audio"), wantIn = cfgS("entrada", "--entrada");
+        const std::string wantOut = !autoOut.empty() ? autoOut : forceDefault ? std::string() : cfgS("audio", "--audio"), wantIn = !autoOut.empty() ? autoOut : cfgS("entrada", "--entrada");
         int od = findDevice(*audio, wantOut, false);
+#ifdef __linux__
+        // de reserva, en la Pi: su salida de auriculares, directa y en estéreo (el «default» de ALSA pasa por conversiones y suena peor)
+        if (wantOut.empty()) { od = findDevice(*audio, "Headphones", false); if (od < 0) od = findDevice(*audio, "bcm2835", false); if (od < 0) od = -1; }
+#endif
         if (od == -2) { if (!quiet) std::printf("No encuentro la salida de audio '%s' (mira --list).\n", wantOut.c_str()); return false; }
         out.deviceId = od >= 0 ? static_cast<unsigned>(od) : audio->getDefaultOutputDevice();
         const int firstOut = std::max(1, argInt(argc, argv, "--out", 1));
@@ -2083,7 +2088,7 @@ int main(int argc, char** argv) {
         if (info.outputChannels < out.firstChannel + 2) { if (!quiet) std::printf("La interfaz '%s' tiene %u salidas; no se puede usar --out %d.\n", info.name.c_str(), info.outputChannels, firstOut); return false; }
         out.nChannels = std::min(16u, (info.outputChannels - out.firstChannel) & ~1u);   // todas las salidas (por pares), hasta 16
         // el jack de la Raspberry dice tener 8 canales, pero es estéreo
-        if (lower(info.name).find("bcm2835") != std::string::npos) out.nChannels = 2;
+        if (lower(info.name).find("bcm2835") != std::string::npos || lower(info.name).find("default") != std::string::npos) out.nChannels = 2;
         out.nChannels = std::min(out.nChannels, static_cast<unsigned>(std::max(2, cfgI("salidas", "--salidas", 16))));
         au->outCh = static_cast<int>(out.nChannels);
         setRoutes();
@@ -2178,27 +2183,48 @@ int main(int argc, char** argv) {
         // la interfaz elegida no está: mejor la de por defecto, y si tampoco hay, sin audio. La pantalla debe seguir accesible para arreglarlo
         if (!ok) { std::printf("Aviso: no encuentro la interfaz elegida; pruebo la de por defecto.\n"); forceDefault = true; ok = openAudio(true); audioNote = ok ? "default" : "none"; }
         if (!ok) { std::printf("Aviso: sin interfaz de audio. Elige otra en la pantalla.\n"); startFake(); } else ctl.watchAudio = true;
-        ctl.onStall = [&]() { if (!openAudio(true)) std::printf("Aún sin audio; lo vuelvo a intentar.\n"); };
-        // la interfaz elegida no estaba al arrancar (suena por la de la Pi, o no suena): en cuanto aparece, se pasa a ella sola
-        ctl.onAudioCheck = [&, seen = 0, wait = 0]() mutable {
-            if (!forceDefault) return;
-            const std::string want = cfgS("audio", "--audio"); if (want.empty() || std::all_of(want.begin(), want.end(), ::isdigit)) return;
+        // si la interfaz se cae en marcha: se intenta reabrir; tras 3 intentos, a la de reserva (y vuelve sola cuando reaparece)
+        ctl.onStall = [&, fails = 0]() mutable {
+            if (openAudio(true)) { fails = 0; return; }
+            std::printf("Aún sin audio; lo vuelvo a intentar.\n");
+            if (++fails < 3 || (forceDefault && autoOut.empty())) return;
+            fails = 0; autoOut.clear(); forceDefault = true; audioNote = "default";
+            std::printf("La interfaz no vuelve: paso a la salida de la Pi hasta que reaparezca.\n");
+            if (!openAudio(true)) { audioNote = "none"; ctl.watchAudio = false; startFake(); }
+        };
+        // la elegida no está (suena por la de la Pi, o no suena): en cuanto aparece, se pasa a ella; y si mientras tanto
+        // se enchufa otra interfaz USB, se usa esa (sin guardarla: la elegida sigue siendo la de Ajustes)
+        ctl.onAudioCheck = [&, seen = 0, wait = 0, bad = std::string()]() mutable {
+            if (!forceDefault && autoOut.empty()) return;
+            const std::string want = cfgS("audio", "--audio");
             if (wait > 0) { --wait; return; }
-            bool here = false;
+            bool here = false; std::string other;
 #ifdef __linux__
-            { std::ifstream f("/proc/asound/cards"); std::string l; while (std::getline(f, l)) if (lower(l).find(lower(want)) != std::string::npos) here = true; }
+            {   // /proc/asound/cards: « 3 [CODEC ]: USB-Audio - USB Audio CODEC»
+                std::ifstream f("/proc/asound/cards"); std::string l;
+                while (std::getline(f, l)) {
+                    if (!want.empty() && lower(l).find(lower(want)) != std::string::npos) here = true;
+                    const size_t u = l.find("]: USB-Audio - "); if (u == std::string::npos) continue;
+                    const std::string nm = l.substr(u + 15), ln = lower(nm);
+                    if (ln.find("oxi") != std::string::npos || ln.find("mc-24") != std::string::npos || nm == bad || nm == autoOut) continue;
+                    if (other.empty()) other = nm;
+                }
+            }
 #else
-            try { RtAudio a; here = findDevice(a, want, false) >= 0; } catch (...) {}
+            if (!want.empty()) try { RtAudio a; here = findDevice(a, want, false) >= 0; } catch (...) {}
 #endif
-            if (!here) { seen = 0; return; }
+            if (!here && (other.empty() || !autoOut.empty())) { seen = 0; return; }
             if (++seen < 2) return;   // recién enchufada: se le da un momento para que esté lista
-            std::printf("Ha aparecido la interfaz elegida (%s): paso a ella.\n", want.c_str());
             if (fake.joinable()) { fakeStop = true; fake.join(); }
+            const std::string prevAuto = autoOut;
+            if (here) { std::printf("Ha aparecido la interfaz elegida (%s): paso a ella.\n", want.c_str()); autoOut.clear(); }
+            else { std::printf("Ha aparecido otra interfaz (%s): paso a ella mientras no esté la elegida.\n", other.c_str()); autoOut = other; }
             forceDefault = false;
-            if (openAudio(true)) { audioNote.clear(); ctl.watchAudio = true; std::printf("Audio: %s\n", outName.c_str()); return; }
+            if (openAudio(true)) { audioNote = autoOut.empty() ? "" : "auto"; ctl.watchAudio = true; seen = 0; std::printf("Audio: %s\n", outName.c_str()); return; }
             std::printf("Aún no responde; sigo con la de antes y lo vuelvo a intentar.\n");
-            forceDefault = true; seen = 0; wait = 5;
-            if (openAudio(true)) ctl.watchAudio = true; else { ctl.watchAudio = false; startFake(); }
+            if (!here) bad = other;
+            autoOut = prevAuto; forceDefault = autoOut.empty(); seen = 0; wait = 5;
+            if (openAudio(true)) ctl.watchAudio = true; else { autoOut.clear(); forceDefault = true; if (openAudio(true)) ctl.watchAudio = true; else { ctl.watchAudio = false; startFake(); } }
         };
     }
     std::printf("\nPantalla: abre http://%s:%d en Chrome o Safari.\nPara salir: Ctrl+C.\n", host == "0.0.0.0" ? "localhost" : host.c_str(), port);

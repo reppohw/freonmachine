@@ -9,8 +9,9 @@ set -e
 USER_NAME="$(id -un)"
 CLAVE="${1:-}"
 [ ${#CLAVE} -ge 8 ] || CLAVE="$(nmcli -s -g 802-11-wireless-security.psk connection show Freon-Machine 2>/dev/null || true)"
-while [ ${#CLAVE} -lt 8 ]; do printf "Clave para la wifi de Freon (8 caracteres o más): "; read -r CLAVE; done
 echo "Te pedirá la contraseña de la Pi (la de entrar como $USER_NAME)."
+[ ${#CLAVE} -ge 8 ] || CLAVE="$(sudo sed -n 's/^wpa_passphrase=//p' /etc/hostapd/freon.conf 2>/dev/null || true)"   # ya instalada: la misma clave
+while [ ${#CLAVE} -lt 8 ]; do printf "Clave para la wifi de Freon (8 caracteres o más): "; read -r CLAVE; done
 
 echo "== Instalo hostapd"
 sudo apt-get install -y hostapd >/dev/null
@@ -38,7 +39,8 @@ sudo chmod 600 /etc/hostapd/freon.conf
 echo "== Programa que la enciende si no hay wifi conocida"
 sudo tee /usr/local/sbin/freon-wifi >/dev/null <<'EOF'
 #!/bin/sh
-# freon-wifi            al arrancar: espera a una wifi conocida y si no la hay crea «Freon-Machine»
+# freon-wifi            al arrancar: espera a una wifi conocida y si no la hay crea «Freon-Machine»;
+#                       después vigila: si la wifi conocida se pierde 1 minuto, crea la propia (hasta reiniciar)
 # freon-wifi propia     crea «Freon-Machine» ya
 # freon-wifi casa       vuelve a la wifi normal
 modo="${1:-auto}"
@@ -49,17 +51,26 @@ propia() {
   hostapd -B /etc/hostapd/freon.conf || { logger -t freon-wifi "hostapd no arranca"; casa; exit 1; }
   dnsmasq --conf-file=/dev/null --interface=wlan0 --bind-interfaces --except-interface=lo --dhcp-range=10.42.0.10,10.42.0.100,255.255.255.0,12h \
     --dhcp-option=3 --address=/freonmachine.local/10.42.0.1 --pid-file=/run/freon-wifi-dnsmasq.pid --log-facility=-
+  systemctl restart avahi-daemon 2>/dev/null   # freonmachine.local también en esta wifi
   logger -t freon-wifi "wifi propia Freon-Machine encendida (10.42.0.1)"
 }
 casa() {
   pkill -f "hostapd /etc/hostapd/freon.conf" 2>/dev/null; [ -f /run/freon-wifi-dnsmasq.pid ] && kill "$(cat /run/freon-wifi-dnsmasq.pid)" 2>/dev/null
-  ip addr flush dev wlan0; nmcli device set wlan0 managed yes; logger -t freon-wifi "vuelta a la wifi normal"
+  ip addr flush dev wlan0; nmcli device set wlan0 managed yes; systemctl restart avahi-daemon 2>/dev/null; logger -t freon-wifi "vuelta a la wifi normal"
 }
 case "$modo" in
   propia) propia ;;
   casa) casa ;;
-  *) for i in $(seq 1 45); do nmcli -t -f DEVICE,STATE device 2>/dev/null | grep -q '^wlan0:connected$' && exit 0; sleep 2; done
-     logger -t freon-wifi "no hay wifi conocida: creo la propia"; propia ;;
+  *) conn() { nmcli -t -f DEVICE,STATE device 2>/dev/null | grep -q '^wlan0:connected$'; }
+     ok=0; for i in $(seq 1 45); do conn && { ok=1; break; }; sleep 2; done
+     if [ $ok = 0 ]; then logger -t freon-wifi "no hay wifi conocida: creo la propia"; propia; exit 0; fi
+     lost=0
+     while true; do
+       sleep 10
+       pgrep -f "hostapd /etc/hostapd/freon.conf" >/dev/null && exit 0   # ya está en la propia
+       if conn; then lost=0; else lost=$((lost + 10)); fi
+       if [ $lost -ge 60 ]; then logger -t freon-wifi "se ha perdido la wifi: creo la propia"; propia; exit 0; fi
+     done ;;
 esac
 EOF
 sudo chmod 755 /usr/local/sbin/freon-wifi
@@ -71,7 +82,7 @@ After=NetworkManager.service
 Wants=NetworkManager.service
 
 [Service]
-Type=oneshot
+Type=simple
 ExecStart=/usr/local/sbin/freon-wifi
 
 [Install]
@@ -79,6 +90,7 @@ WantedBy=multi-user.target
 EOF
 sudo systemctl daemon-reload
 sudo systemctl enable freon-wifi.service >/dev/null 2>&1
+sudo systemctl restart freon-wifi.service
 
 echo "== Freon (y tú) podéis cambiar de wifi sin contraseña"
 echo "$USER_NAME ALL=(root) NOPASSWD: /usr/local/sbin/freon-wifi" | sudo tee /etc/sudoers.d/freon-wifi >/dev/null
