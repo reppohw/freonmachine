@@ -57,6 +57,7 @@ propia() {
 casa() {
   pkill -f "hostapd /etc/hostapd/freon.conf" 2>/dev/null; [ -f /run/freon-wifi-dnsmasq.pid ] && kill "$(cat /run/freon-wifi-dnsmasq.pid)" 2>/dev/null
   ip addr flush dev wlan0; nmcli device set wlan0 managed yes; systemctl restart avahi-daemon 2>/dev/null; logger -t freon-wifi "vuelta a la wifi normal"
+  systemctl restart --no-block freon-wifi.service 2>/dev/null   # la vigilancia vuelve a empezar
 }
 case "$modo" in
   propia) propia ;;
