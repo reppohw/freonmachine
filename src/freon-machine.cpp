@@ -2168,7 +2168,7 @@ int main(int argc, char** argv) {
         std::printf("Audio: sin tarjeta de sonido (modo de prueba)\n");
     } else {
         // en la Pi la interfaz USB puede tardar en aparecer al arrancar: se espera hasta --esperar-audio segundos
-        const int wait = argInt(argc, argv, "--esperar-audio", 0);
+        const int wait = std::min(8, argInt(argc, argv, "--esperar-audio", 0));   // como mucho 8 s: si la interfaz llega después, se pasa a ella sola
         const bool trying = std::filesystem::exists(sysPend);
         bool ok = openAudio(false);
         for (int t = 0; !ok && t < (trying ? 6 : wait) && !gQuit; t += 2) { std::this_thread::sleep_for(std::chrono::seconds(2)); ok = openAudio(true); }
