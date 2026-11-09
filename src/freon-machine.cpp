@@ -1973,6 +1973,22 @@ bool sysSave(const std::string& path, const SysCfg& c) {
 int minBuffer() { std::ifstream f("/proc/device-tree/model"); std::string m; std::getline(f, m); return m.find("Raspberry Pi 3") != std::string::npos ? 256 : 64; }
 int cpuTempC() { std::ifstream f("/sys/class/thermal/thermal_zone0/temp"); long t = 0; return f >> t ? static_cast<int>(t / 1000) : -1; }
 std::string piThrottled() { std::ifstream f("/sys/devices/platform/soc/soc:firmware/get_throttled"); std::string s; return f >> s ? s : "-"; }
+// ¿Es una interfaz USB 1.1 (full speed)? En la Pi 3, con entradas y salidas a la vez suenan «crusheadas»: se abre solo la salida
+bool usbFullSpeed(const std::string& devName) {
+#ifdef __linux__
+    std::ifstream cards("/proc/asound/cards"); std::string l; const std::string dn = lower(devName);
+    while (std::getline(cards, l)) {
+        const size_t u = l.find("]: USB-Audio - "); if (u == std::string::npos) continue;
+        const std::string nm = lower(l.substr(u + 15)); if (nm.empty() || dn.find(nm) == std::string::npos) continue;
+        const int card = std::atoi(l.c_str());
+        std::ifstream st("/proc/asound/card" + std::to_string(card) + "/stream0"); std::string first; std::getline(st, first);
+        return first.find("full speed") != std::string::npos;
+    }
+#else
+    (void)devName;
+#endif
+    return false;
+}
 int findDevice(RtAudio& a, const std::string& want, bool input) {
     if (want.empty()) return -1;
     if (std::all_of(want.begin(), want.end(), [](char c) { return std::isdigit(static_cast<unsigned char>(c)); })) {
@@ -2098,6 +2114,7 @@ int main(int argc, char** argv) {
         inp.firstChannel = 0; inp.deviceId = id >= 0 ? static_cast<unsigned>(id) : out.deviceId;
         const auto iinfo = audio->getDeviceInfo(inp.deviceId); inName = iinfo.name;
         inp.nChannels = hasArg(argc, argv, "--sin-entradas") || wantIn == "none" || (id < 0 && (!wantIn.empty() || info.inputChannels == 0)) ? 0 : std::min(16u, iinfo.inputChannels);
+        if (inp.nChannels > 0 && inp.deviceId == out.deviceId && usbFullSpeed(outName)) { inp.nChannels = 0; std::printf("%s es USB 1.1: solo salida (con entradas a la vez suena mal en la Pi).\n", outName.c_str()); }
         opts = {}; opts.flags = RTAUDIO_SCHEDULE_REALTIME; opts.priority = 80; opts.numberOfBuffers = static_cast<unsigned>(std::clamp(cfgI("bloques", "--bloques", 3), 2, 4));   // sin MINIMIZE_LATENCY: en el Mac elegía buffers de 15 muestras y crujía
         bool ok = false;
         if (inp.nChannels > 0) { au->inCh = static_cast<int>(inp.nChannels); ok = audio->openStream(&out, &inp, RTAUDIO_FLOAT32, rate, &frames, cb, au.get(), &opts) == RTAUDIO_NO_ERROR; }
@@ -2206,6 +2223,7 @@ int main(int argc, char** argv) {
                     if (!want.empty() && lower(l).find(lower(want)) != std::string::npos) here = true;
                     const size_t u = l.find("]: USB-Audio - "); if (u == std::string::npos) continue;
                     const std::string nm = l.substr(u + 15), ln = lower(nm);
+                    if (!want.empty() && !ln.empty() && lower(want).find(ln) != std::string::npos) { here = true; continue; }   // «Clarett+ 2Pre (USB Audio)» guardado con el nombre largo
                     if (ln.find("oxi") != std::string::npos || ln.find("mc-24") != std::string::npos || nm == bad || nm == autoOut) continue;
                     if (other.empty()) other = nm;
                 }

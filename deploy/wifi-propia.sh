@@ -84,6 +84,9 @@ Wants=NetworkManager.service
 [Service]
 Type=simple
 ExecStart=/usr/local/sbin/freon-wifi
+# la wifi propia (hostapd y dnsmasq) debe seguir viva cuando este programa termina
+RemainAfterExit=yes
+KillMode=process
 
 [Install]
 WantedBy=multi-user.target
@@ -91,6 +94,11 @@ EOF
 sudo systemctl daemon-reload
 sudo systemctl enable freon-wifi.service >/dev/null 2>&1
 sudo systemctl restart freon-wifi.service
+
+echo "== Registro del sistema guardado entre reinicios (para saber qué pasó si algo falla fuera de casa)"
+sudo mkdir -p /var/log/journal /etc/systemd/journald.conf.d
+printf '[Journal]\nStorage=persistent\nSystemMaxUse=40M\n' | sudo tee /etc/systemd/journald.conf.d/freon.conf >/dev/null
+sudo systemctl restart systemd-journald
 
 echo "== Freon (y tú) podéis cambiar de wifi sin contraseña"
 echo "$USER_NAME ALL=(root) NOPASSWD: /usr/local/sbin/freon-wifi" | sudo tee /etc/sudoers.d/freon-wifi >/dev/null

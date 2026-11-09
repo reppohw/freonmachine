@@ -361,7 +361,7 @@ y la vuelve a abrir en cuanto reaparece.
 
 En la Pi, desde la carpeta del proyecto: `./deploy/ajustes-pi.sh "tu-clave"`. Freon deja de esperar a la red al arrancar, y si la Pi no encuentra tu wifi crea la suya, «Freon-Machine», con esa clave: te conectas desde el móvil y abres http://10.42.0.1:8080. Si la Pi dejara de verse en la red, conéctala por cable al router.
 
-Si Freon arranca sin la interfaz enchufada, suena por la salida de auriculares de la Pi (calidad baja, solo de reserva). En cuanto enchufas la interfaz elegida pasa a ella sola en unos segundos; si enchufas otra interfaz USB, pasa a esa mientras no esté la elegida. Si la interfaz se desconecta en marcha, tras unos segundos pasa a la salida de la Pi y vuelve sola cuando reaparece.
+Si Freon arranca sin la interfaz enchufada, suena por la salida de auriculares de la Pi (calidad baja, solo de reserva). En cuanto enchufas la interfaz elegida pasa a ella sola en unos segundos; si enchufas otra interfaz USB, pasa a esa mientras no esté la elegida. Las interfaces USB 1.1 (las baratas, como las de chip Burr-Brown) se usan solo como salida: en la Pi 3, con entradas a la vez suenan «crusheadas». Si la interfaz se desconecta en marcha, tras unos segundos pasa a la salida de la Pi y vuelve sola cuando reaparece.
 
 Wifi propia: la crea hostapd (`./deploy/wifi-propia.sh`, una vez). Al encender, si en 90 s no hay wifi conocida, aparece «Freon-Machine»; y si la wifi conocida se pierde durante 1 minuto con la Pi encendida, también (hasta reiniciar). Web: http://10.42.0.1:8080 o http://freonmachine.local:8080.
 
