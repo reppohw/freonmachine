@@ -164,8 +164,8 @@ Programado desde Freon Machine (copia del original en `controladoras/lpd8-origin
 | Programa (color) | Canal | Pads 1-8 | Knobs 1-8 |
 |---|---|---|---|
 | 1 Sampler (naranja) | 11 | disparan los samples 1-8 y eligen el que editan los knobs | afinación, inicio, final, ataque, release, filtro, resonancia, nivel |
-| 2 Breaks (verde) | 12 | efectos mientras se pulsan: Repeat, Repeat 1/32, Reverse, Half time, Random, Octave down, Chop, Backwards | afinación, longitud, aleatorio, stutter, filtro, resonancia, drive, tamaño de repetición |
+| 2 Breaks (verde) | 12 | efectos mientras se pulsan: Repeat, Repeat 1/32, Reverse, Half time, Random, Octave down, Chop, Backwards | **qué break** (los de fábrica y luego los de la carpeta breaks/), afinación, longitud, aleatorio, stutter, filtro, resonancia, tamaño de repetición |
 | 3 Granular (azul) | 13 | 1 enciende/apaga, 2 congela, 3-8 notas (do, re, mi♭, fa, sol, do') en el modo tocado | posición, tamaño, densidad, afinación, dispersión, estéreo, feedback, nivel |
-| 4 Máster (amarillo) | 14 | las 8 combinaciones de efectos (toque = fija, mantener = mientras se pulsa) | filtro DJ, repeat, gater, space, throw, tape stop, pitch de la voz, formant de la voz |
+| 4 Máster (amarillo) | 14 | eligen y activan las 8 combinaciones (toque = fija, otro toque en la misma = la quita, mantener = mientras se pulsa) | filtro DJ, repeat, gater, space, throw, pitch de la voz, formant de la voz, **crossfader** de las combinaciones (seco → combinación) |
 
 Para cambiar de programa: mantener PROG SELECT y tocar el pad 1-4.

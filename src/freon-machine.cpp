@@ -1418,6 +1418,7 @@ struct Control {
     //   canal 11 sampler: pads disparan los samples 1-8 y eligen el que editan los knobs
     //   canal 12 breaks: pads = los 8 efectos (mientras se pulsan)
     //   canal 13 granular: pad 1 enciende, pad 2 congela, pads 3-8 notas; canal 14 máster: pads = combinaciones, knobs 7-8 = voz
+    std::vector<std::string> lpdBrk_; std::chrono::steady_clock::time_point lpdBrkAt_{};
     bool lpd8(const CtlMidi& m) {
         const int prog = (m.s & 0x0F) - 10, ty = m.s & 0xF0; if (prog < 0 || prog > 3) return false;
         const bool isNote = ty == 0x90 || ty == 0x80, down = ty == 0x90 && m.d2 > 0;
@@ -1428,23 +1429,35 @@ struct Control {
         auto cc = [&](int ch, int c, int v) { if (ch >= 0) onCtl({static_cast<unsigned char>(0xB0 | ch), static_cast<unsigned char>(c), static_cast<unsigned char>(v), port}); };
         auto note = [&](int ch, int n) { if (ch >= 0) au.midi.push({static_cast<unsigned char>((down ? 0x90 : 0x80) | ch), static_cast<unsigned char>(n), static_cast<unsigned char>(down ? std::max(1, static_cast<int>(m.d2)) : 0), monoNow()}); };
         static const int kSamp[8] = {SA_TUNE, SA_START, SA_END, SA_ATT, SA_REL, SA_FILT, SA_RES, SA_LVL};
-        static const int kBrk[8] = {BK_TUNE, BK_GATE, BK_RAND, BK_STUT, BK_FILT, BK_RES, BK_DRIVE, BK_RSIZE};
+        static const int kBrk[8] = {-1, BK_TUNE, BK_GATE, BK_RAND, BK_STUT, BK_FILT, BK_RES, BK_RSIZE};   // knob 1: qué break
         static const int kGr[8] = {GR_POS, GR_SIZE, GR_DENS, GR_PITCH, GR_SPRAY, GR_SPREAD, GR_FB, GR_LVL};
         static const int kGrNote[6] = {60, 62, 63, 65, 67, 72};
-        static const int kMst[6] = {108, 102, 103, 105, 106, 107};   // filtro, repeat, gater, space, throw, tape stop
+        static const int kMst[5] = {108, 102, 103, 105, 106};   // filtro, repeat, gater, space, throw
         switch (prog) {
         case 0: { const int ch = chOf("samp.ch");
             if (isNote) { if (down && static_cast<int>(st["samp.sel"]) != pad) set("samp.sel", static_cast<float>(pad), kMidiSrc); note(ch, 36 + pad); }
             else cc(ch, 16 + kSamp[knob], val);
             break; }
-        case 1: { const int ch = chOf("brk.ch"); if (isNote) cc(ch, 102 + pad, val); else cc(ch, 16 + kBrk[knob], val); break; }
+        case 1: { const int ch = chOf("brk.ch");
+            if (isNote) cc(ch, 102 + pad, val);
+            else if (knob == 0) {   // elegir break: los de fábrica y luego los de la carpeta breaks/ (la lista se relee cada 5 s como mucho)
+                const auto now = std::chrono::steady_clock::now();
+                if (lpdBrk_.empty() || now - lpdBrkAt_ > std::chrono::seconds(5)) {
+                    lpdBrk_.clear(); lpdBrkAt_ = now;
+                    for (size_t i = 0; i < facB.size(); ++i) lpdBrk_.push_back("fab:" + std::to_string(i));
+                    for (const auto& f : listWavs(brkDir())) lpdBrk_.push_back(f);
+                }
+                if (!lpdBrk_.empty()) { const std::string& nm = lpdBrk_[std::min(lpdBrk_.size() - 1, static_cast<size_t>(val) * lpdBrk_.size() / 128)]; if (ss["brk.name"] != nm) sset("brk.name", nm, kMidiSrc); }
+            } else cc(ch, 16 + kBrk[knob], val);
+            break; }
         case 2: { const int ch = chOf("gran.ch");
             if (!isNote) cc(ch, 16 + kGr[knob], val); else if (pad < 2) cc(ch, 110 + pad, val); else note(ch, kGrNote[pad - 2]);
             break; }
         default:
             if (isNote) onMixNote(mixCh(), 64 + pad, val);
-            else if (knob < 6) cc(mixCh(), kMst[knob], val);
-            else cc(chOf("voz.ch"), 16 + (knob == 6 ? VZ_PITCH : VZ_FORMANT), val);
+            else if (knob < 5) cc(mixCh(), kMst[knob], val);
+            else if (knob < 7) cc(chOf("voz.ch"), 16 + (knob == 5 ? VZ_PITCH : VZ_FORMANT), val);
+            else cc(mixCh(), 95, val);   // knob 8: crossfader de las combinaciones (seco → combinación)
         }
         return true;
     }
