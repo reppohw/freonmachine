@@ -1414,7 +1414,42 @@ struct Control {
     std::map<int, std::pair<int, std::chrono::steady_clock::time_point>> outAt_;
     bool isEcho(int addr, int v) { const auto it = outAt_.find(addr); return it != outAt_.end() && it->second.first == v && std::chrono::steady_clock::now() - it->second.second < std::chrono::milliseconds(120); }
     // Mensajes de las controladoras (CC, cambios de programa y notas del canal del mezclador)
+    // Akai LPD8: un programa por módulo, cada uno en su canal (ver CONTROLADORAS.md). Pads = notas 36-43, knobs = CC 70-77.
+    //   canal 11 sampler: pads disparan los samples 1-8 y eligen el que editan los knobs
+    //   canal 12 breaks: pads = los 8 efectos (mientras se pulsan)
+    //   canal 13 granular: pad 1 enciende, pad 2 congela, pads 3-8 notas; canal 14 máster: pads = combinaciones, knobs 7-8 = voz
+    bool lpd8(const CtlMidi& m) {
+        const int prog = (m.s & 0x0F) - 10, ty = m.s & 0xF0; if (prog < 0 || prog > 3) return false;
+        const bool isNote = ty == 0x90 || ty == 0x80, down = ty == 0x90 && m.d2 > 0;
+        const int pad = m.d1 - 36, knob = m.d1 - 70, val = isNote ? (down ? 127 : 0) : m.d2;
+        if (isNote && (pad < 0 || pad > 7)) return true;
+        if (!isNote && (ty != 0xB0 || knob < 0 || knob > 7)) return true;
+        const int16_t port = static_cast<int16_t>(m.port + 1000);   // fuera de la lista de puertos: no se vuelve a traducir
+        auto cc = [&](int ch, int c, int v) { if (ch >= 0) onCtl({static_cast<unsigned char>(0xB0 | ch), static_cast<unsigned char>(c), static_cast<unsigned char>(v), port}); };
+        auto note = [&](int ch, int n) { if (ch >= 0) au.midi.push({static_cast<unsigned char>((down ? 0x90 : 0x80) | ch), static_cast<unsigned char>(n), static_cast<unsigned char>(down ? std::max(1, static_cast<int>(m.d2)) : 0), monoNow()}); };
+        static const int kSamp[8] = {SA_TUNE, SA_START, SA_END, SA_ATT, SA_REL, SA_FILT, SA_RES, SA_LVL};
+        static const int kBrk[8] = {BK_TUNE, BK_GATE, BK_RAND, BK_STUT, BK_FILT, BK_RES, BK_DRIVE, BK_RSIZE};
+        static const int kGr[8] = {GR_POS, GR_SIZE, GR_DENS, GR_PITCH, GR_SPRAY, GR_SPREAD, GR_FB, GR_LVL};
+        static const int kGrNote[6] = {60, 62, 63, 65, 67, 72};
+        static const int kMst[6] = {108, 102, 103, 105, 106, 107};   // filtro, repeat, gater, space, throw, tape stop
+        switch (prog) {
+        case 0: { const int ch = chOf("samp.ch");
+            if (isNote) { if (down && static_cast<int>(st["samp.sel"]) != pad) set("samp.sel", static_cast<float>(pad), kMidiSrc); note(ch, 36 + pad); }
+            else cc(ch, 16 + kSamp[knob], val);
+            break; }
+        case 1: { const int ch = chOf("brk.ch"); if (isNote) cc(ch, 102 + pad, val); else cc(ch, 16 + kBrk[knob], val); break; }
+        case 2: { const int ch = chOf("gran.ch");
+            if (!isNote) cc(ch, 16 + kGr[knob], val); else if (pad < 2) cc(ch, 110 + pad, val); else note(ch, kGrNote[pad - 2]);
+            break; }
+        default:
+            if (isNote) onMixNote(mixCh(), 64 + pad, val);
+            else if (knob < 6) cc(mixCh(), kMst[knob], val);
+            else cc(chOf("voz.ch"), 16 + (knob == 6 ? VZ_PITCH : VZ_FORMANT), val);
+        }
+        return true;
+    }
     void onCtl(const CtlMidi& m) {
+        if (m.port >= 0 && m.port < 1000 && portHas(m.port, "lpd8") && lpd8(m)) return;
         const int ty = m.s & 0xF0; int ch = m.s & 0x0F;
         if (ty == 0xC0) { onProgram(ch, m.d1); return; }
         if (ty == 0x90 || ty == 0x80) { onMixNote(ch, m.d1, ty == 0x90 ? m.d2 : 0); return; }
@@ -1448,7 +1483,7 @@ struct Control {
         if (t.type == 1) { button(a, t.key, val >= 64); return; }
         const float cur = st[t.key], cn = norm(t, cur);
         // el Oxi es un secuenciador: manda valores exactos y a saltos, así que con él siempre es absoluto
-        const int mode = portHas(m.port, "oxi") ? 0 : static_cast<int>(st["midi.knob"]);
+        const int mode = portHas(m.port, "oxi") || m.port >= 1000 ? 0 : static_cast<int>(st["midi.knob"]);   // Oxi y LPD8 (port+1000): absoluto
         const bool stepped = t.step >= 1.0f && (t.max - t.min) / t.step <= 1024;
         float nv;
         if (mode >= 2) {   // encoders sin fin: relativo
@@ -1837,7 +1872,7 @@ int renderTest(const std::string& path) {
 struct MidiHub {
     Audio* au = nullptr; std::mutex mx; int only = -1; const void* clockOwner = nullptr; double clockAge = 1e9;
     std::function<void(const std::string&)> onPortsChanged;   // aviso al hilo de control (estado completo a las controladoras nuevas)
-    struct Port { std::unique_ptr<RtMidiIn> in; std::string name; MidiHub* hub = nullptr; double acc = 0; ClockEst est; int idx = 0; };
+    struct Port { std::unique_ptr<RtMidiIn> in; std::string name; MidiHub* hub = nullptr; double acc = 0; ClockEst est; int idx = 0; bool lpd = false; };
     struct Out { std::unique_ptr<RtMidiOut> out; std::string name; };
     std::vector<std::unique_ptr<Port>> ports; std::vector<std::unique_ptr<Out>> outs; int nextIdx = 0;
     static void cb(double dt, std::vector<unsigned char>* m, void* u) {
@@ -1856,7 +1891,9 @@ struct MidiHub {
             p->acc = 0;
         }
         const unsigned char d1 = m->size() > 1 ? (*m)[1] : 0, d2 = m->size() > 2 ? (*m)[2] : 0, ty = st & 0xF0;
-        if (ty == 0xB0 || ty == 0xC0) {
+        // Akai LPD8 (canales 11 a 14): todo, notas incluidas, lo traduce el hilo de control (Control::lpd8)
+        if (p->lpd && (st & 0x0F) >= 10 && (st & 0x0F) <= 13 && (ty == 0x90 || ty == 0x80 || ty == 0xB0)) h.au->ctlq.push({st, d1, d2, static_cast<int16_t>(p->idx)});
+        else if (ty == 0xB0 || ty == 0xC0) {
             h.au->ctlq.push({st, d1, d2, static_cast<int16_t>(p->idx)});   // knobs, botones y cambios de programa: hilo de control
             if (ty == 0xB0 && (d1 == 120 || d1 == 123)) h.au->midi.push({st, d1, d2, t});
         } else if ((ty == 0x90 || ty == 0x80) && (st & 0x0F) == gMixCh.load(std::memory_order_relaxed)) h.au->ctlq.push({st, d1, d2, static_cast<int16_t>(p->idx)});
@@ -1896,7 +1933,7 @@ struct MidiHub {
                 if (notADevice(nm) || isIgnored(nm)) continue;
                 bool have = false; for (auto& p : ports) have |= p->name == nm;
                 if (have) continue;
-                auto p = std::make_unique<Port>(); p->name = nm; p->hub = this; p->idx = nextIdx++;
+                auto p = std::make_unique<Port>(); p->name = nm; p->hub = this; p->idx = nextIdx++; p->lpd = lower(nm).find("lpd8") != std::string::npos;
                 p->in = std::make_unique<RtMidiIn>(); p->in->openPort(i); p->in->ignoreTypes(true, false, true); p->in->setCallback(&MidiHub::cb, p.get());
                 std::printf("MIDI:  %s\n", nm.c_str());
                 ports.push_back(std::move(p)); changed = true;
@@ -1910,7 +1947,7 @@ struct MidiHub {
             for (unsigned i = 0; i < n; ++i) {
                 const std::string& nm = now[i];
                 // al MC-24 no se le abre salida: solo tiene potenciómetros, y tras cerrarla deja de mandar hasta reenchufarlo
-                if (notADevice(nm) || isIgnored(nm) || lower(nm).find("mc-24") != std::string::npos) continue;
+                if (notADevice(nm) || isIgnored(nm) || lower(nm).find("mc-24") != std::string::npos || lower(nm).find("lpd8") != std::string::npos) continue;
                 bool have = false; for (auto& o : outs) have |= o->name == nm;
                 if (have) continue;
                 auto o = std::make_unique<Out>(); o->name = nm; o->out = std::make_unique<RtMidiOut>(); o->out->openPort(i);

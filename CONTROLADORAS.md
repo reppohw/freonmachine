@@ -156,3 +156,16 @@ Manda por el canal 3, potenciómetros absolutos: fila 1 CC 8–15, fila 2 CC 16�
 No debe recibir MIDI: lo que le llega atasca su USB (`urb status -32`) y deja de mandar. Por eso está en «Don’t send to» (`midi.skip`). Si ocurre, se recupera reenchufándolo.
 
 Escribirle la configuración por MIDI desde la Pi no funcionó: lo dejó colgado hasta reenchufarlo y no guardó nada.
+
+## Akai LPD8 mk2 (sampler, breaks, granular y efectos del máster)
+
+Programado desde Freon Machine (copia del original en `controladoras/lpd8-original.syx.txt`, la de Freon en `controladoras/lpd8-freon.syx.txt`). Cada programa manda en su canal y Freon lo traduce (como el MC-24); los knobs van en modo absoluto. Pads: notas 36-43, sensibles a la fuerza, sin enclavar. Knobs: CC 70-77. Freon no le manda nada de vuelta.
+
+| Programa (color) | Canal | Pads 1-8 | Knobs 1-8 |
+|---|---|---|---|
+| 1 Sampler (naranja) | 11 | disparan los samples 1-8 y eligen el que editan los knobs | afinación, inicio, final, ataque, release, filtro, resonancia, nivel |
+| 2 Breaks (verde) | 12 | efectos mientras se pulsan: Repeat, Repeat 1/32, Reverse, Half time, Random, Octave down, Chop, Backwards | afinación, longitud, aleatorio, stutter, filtro, resonancia, drive, tamaño de repetición |
+| 3 Granular (azul) | 13 | 1 enciende/apaga, 2 congela, 3-8 notas (do, re, mi♭, fa, sol, do') en el modo tocado | posición, tamaño, densidad, afinación, dispersión, estéreo, feedback, nivel |
+| 4 Máster (amarillo) | 14 | las 8 combinaciones de efectos (toque = fija, mantener = mientras se pulsa) | filtro DJ, repeat, gater, space, throw, tape stop, pitch de la voz, formant de la voz |
+
+Para cambiar de programa: mantener PROG SELECT y tocar el pad 1-4.
