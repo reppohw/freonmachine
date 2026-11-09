@@ -157,7 +157,7 @@ struct Strip {
         if (trimG != 1.0f) for (int i = 0; i < n; ++i) { L[i] *= trimG; R[i] *= trimG; }
         // canal en silencio: nada que procesar (los filtros no tienen cola audible)
         float pkIn = 0, acc = 0; for (int i = 0; i < n; ++i) { pkIn = std::max(pkIn, std::fabs(L[i]) + std::fabs(R[i])); acc += L[i] + R[i]; }
-        if (!std::isfinite(acc)) { std::fill(L, L + n, 0.0f); std::fill(R, R + n, 0.0f); pkIn = 0; }   // un motor averiado no contagia al resto de la mezcla
+        if (!std::isfinite(acc) || !(pkIn < 128.0f)) { std::fill(L, L + n, 0.0f); std::fill(R, R + n, 0.0f); pkIn = 0; }   // un motor averiado (o un filtro desbocado, +36 dB) no contagia al resto de la mezcla
         silent = pkIn < 1e-6f;
         if (silent) { std::fill(pre[0], pre[0] + n, 0.0f); std::fill(pre[1], pre[1] + n, 0.0f); return; }
         dist.process(L, R, n);
@@ -517,12 +517,15 @@ struct Audio {
               fEnvS += (0.5f * e - fEnvS) * (0.5f * e > fEnvS ? 0.6f : 0.03f); const float m = std::min(fEnvS * ef, std::fabs(base) - 0.03f); mdj.f = base + (base < 0 ? m : -m); } }
         mdj.process(L, R, k);
         mfx.process(L, R, k, bpm, pos);
-        { float acc = 0; for (int i = 0; i < k; ++i) acc += L[i] + R[i];
-          if (!std::isfinite(acc)) { std::fill(L, L + k, 0.0f); std::fill(R, R + k, 0.0f); mfx.reset(); mdist.reset(); mdj.reset(); } }   // avería: un bloque en silencio, nunca ruido
+        // avería: un valor imposible o desmesurado (más de +36 dB) deja el bloque en silencio y reinicia los efectos, nunca ruido
+        { float acc = 0, top = 0; for (int i = 0; i < k; ++i) { acc += L[i] + R[i]; top = std::max(top, std::max(std::fabs(L[i]), std::fabs(R[i]))); }
+          if (!std::isfinite(acc) || !(top < 64.0f)) { std::fill(L, L + k, 0.0f); std::fill(R, R + k, 0.0f); mfx.reset(); mdist.reset(); mdj.reset(); bcomp.reset(); } }
         bcomp.process(L, R, k); bcGrDb.store(bcomp.lastGrDb, std::memory_order_relaxed);   // compresor de bus: une la mezcla antes del volumen y el limitador
         { const float vol = mp[MP_VOL], d = (vol - volP) * rk; float a = volP;
           for (int i = 0; i < k; ++i) { a += d; L[i] *= a; R[i] *= a; } volP = vol; }
         mlim.process(L, R, k);
+        { float acc = 0; for (int i = 0; i < k; ++i) acc += L[i] + R[i];   // última red: nada imposible llega a la salida, y el máster no se queda mudo
+          if (!std::isfinite(acc)) { std::fill(L, L + k, 0.0f); std::fill(R, R + k, 0.0f); bcomp.reset(); mlim.reset(); } }
         float mpk = 0;
         for (int i = 0; i < k; ++i) { L[i] = softClip(L[i]); R[i] = softClip(R[i]); mpk = std::max(mpk, std::max(std::fabs(L[i]), std::fabs(R[i]))); }
         pk[NCH + NGRP] = mpk;
