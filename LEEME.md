@@ -361,6 +361,8 @@ y la vuelve a abrir en cuanto reaparece.
 
 En la Pi, desde la carpeta del proyecto: `./deploy/ajustes-pi.sh "tu-clave"`. Freon deja de esperar a la red al arrancar, y si la Pi no encuentra tu wifi crea la suya, «Freon-Machine», con esa clave: te conectas desde el móvil y abres http://10.42.0.1:8080. Si la Pi dejara de verse en la red, conéctala por cable al router.
 
+Si Freon arranca sin la interfaz enchufada, suena por la salida de la propia Pi; en cuanto enchufas la interfaz elegida, pasa a ella sola en unos segundos (sin reiniciar).
+
 ## Ajustes de sistema, sin terminal
 
 En la pestaña **Settings**, tarjeta **System**, eliges salida y entradas de audio, buffer, frecuencia, núcleos, salidas y qué puertos MIDI se usan. Con **Apply and restart Freon** se guarda y Freon se reinicia sola en unos segundos.

@@ -1515,7 +1515,7 @@ struct Control {
         }
         ledInit = true;
     }
-    bool audioStalled = false, watchAudio = false; std::function<void()> onStall;
+    int audioCheckN = 0; bool audioStalled = false, watchAudio = false; std::function<void()> onStall, onAudioCheck;   // onAudioCheck: cada 2 s (¿ha aparecido la interfaz elegida?)
     std::chrono::steady_clock::time_point lastFb{}, lastWd{}, stallSince = std::chrono::steady_clock::now(); uint64_t lastCalls = 0;
     void run(std::atomic<bool>& quit) {
         srv.onMessage = [this](int c, const std::string& m) { onMessage(c, m); };
@@ -1542,7 +1542,7 @@ struct Control {
             }
             // vigilante: si el audio deja de llamar más de 1 s, se intenta reabrir
             if (now - lastWd > std::chrono::milliseconds(500)) {
-                lastWd = now; const uint64_t c = au.calls.load();
+                lastWd = now; if (onAudioCheck && ++audioCheckN % 4 == 0) onAudioCheck(); const uint64_t c = au.calls.load();
                 const unsigned xr = au.xruns.load(); if (xr != lastXr) { std::printf("Aviso: %u cortes de audio (el procesador no llegó a tiempo)\n", xr - lastXr); std::fflush(stdout); lastXr = xr; }
                 if (c != lastCalls) { lastCalls = c; stallSince = now; if (audioStalled) { audioStalled = false; std::printf("Audio de vuelta.\n"); } }
                 else if (watchAudio && now - stallSince > std::chrono::seconds(1) && !audioStalled) { audioStalled = true; std::printf("Aviso: el audio se ha parado; intento reabrirlo.\n"); if (onStall) onStall(); stallSince = now; }
@@ -2114,7 +2114,8 @@ int main(int argc, char** argv) {
     std::string audioNote; const bool rolledBack = std::filesystem::exists(sysBack);
     { std::error_code ec; std::filesystem::remove(sysBack, ec); }
     std::atomic<bool> restart{false};
-    const auto startFake = [&]() { fake = std::thread([&]() { std::vector<float> b(512); while (!gQuit) { au->process(b.data(), 2, nullptr, 0, 256); std::this_thread::sleep_for(std::chrono::microseconds(256 * 1000000 / rate)); } }); };
+    std::atomic<bool> fakeStop{false};
+    const auto startFake = [&]() { fakeStop = false; fake = std::thread([&]() { std::vector<float> b(512); while (!gQuit && !fakeStop) { au->process(b.data(), 2, nullptr, 0, 256); std::this_thread::sleep_for(std::chrono::microseconds(256 * 1000000 / rate)); } }); };
     ctl.sysStatus = [&]() { return std::to_string(cpuTempC()) + " " + piThrottled() + " " + std::to_string(au->xruns.load()) + " " + jnum(au->cpu.load()) + " " + jnum(au->cpuPeak.exchange(0.0f)); };
     ctl.sysInfo = [&]() {
         std::string o = "{\"outs\":["; std::string in = "\"ins\":[", mid = "\"midi\":[", off = "\"midioff\":["; bool fo = true, fi = true, fm = true;
@@ -2178,6 +2179,27 @@ int main(int argc, char** argv) {
         if (!ok) { std::printf("Aviso: no encuentro la interfaz elegida; pruebo la de por defecto.\n"); forceDefault = true; ok = openAudio(true); audioNote = ok ? "default" : "none"; }
         if (!ok) { std::printf("Aviso: sin interfaz de audio. Elige otra en la pantalla.\n"); startFake(); } else ctl.watchAudio = true;
         ctl.onStall = [&]() { if (!openAudio(true)) std::printf("Aún sin audio; lo vuelvo a intentar.\n"); };
+        // la interfaz elegida no estaba al arrancar (suena por la de la Pi, o no suena): en cuanto aparece, se pasa a ella sola
+        ctl.onAudioCheck = [&, seen = 0, wait = 0]() mutable {
+            if (!forceDefault) return;
+            const std::string want = cfgS("audio", "--audio"); if (want.empty() || std::all_of(want.begin(), want.end(), ::isdigit)) return;
+            if (wait > 0) { --wait; return; }
+            bool here = false;
+#ifdef __linux__
+            { std::ifstream f("/proc/asound/cards"); std::string l; while (std::getline(f, l)) if (lower(l).find(lower(want)) != std::string::npos) here = true; }
+#else
+            try { RtAudio a; here = findDevice(a, want, false) >= 0; } catch (...) {}
+#endif
+            if (!here) { seen = 0; return; }
+            if (++seen < 2) return;   // recién enchufada: se le da un momento para que esté lista
+            std::printf("Ha aparecido la interfaz elegida (%s): paso a ella.\n", want.c_str());
+            if (fake.joinable()) { fakeStop = true; fake.join(); }
+            forceDefault = false;
+            if (openAudio(true)) { audioNote.clear(); ctl.watchAudio = true; std::printf("Audio: %s\n", outName.c_str()); return; }
+            std::printf("Aún no responde; sigo con la de antes y lo vuelvo a intentar.\n");
+            forceDefault = true; seen = 0; wait = 5;
+            if (openAudio(true)) ctl.watchAudio = true; else { ctl.watchAudio = false; startFake(); }
+        };
     }
     std::printf("\nPantalla: abre http://%s:%d en Chrome o Safari.\nPara salir: Ctrl+C.\n", host == "0.0.0.0" ? "localhost" : host.c_str(), port);
     ctl.run(gQuit);

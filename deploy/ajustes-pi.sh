@@ -29,7 +29,9 @@ echo "== Wifi propia «Freon-Machine» (solo si no hay una wifi conocida)"
 sudo nmcli connection delete Freon-Machine >/dev/null 2>&1 || true
 sudo nmcli connection add type wifi ifname wlan0 con-name Freon-Machine autoconnect yes connection.autoconnect-priority -100 \
   ssid Freon-Machine 802-11-wireless.mode ap 802-11-wireless.band bg ipv4.method shared \
-  wifi-sec.key-mgmt wpa-psk wifi-sec.psk "$CLAVE" >/dev/null
+  wifi-sec.key-mgmt wpa-psk wifi-sec.psk "$CLAVE" \
+  802-11-wireless.channel 6 802-11-wireless-security.pmf disable 802-11-wireless-security.proto rsn \
+  802-11-wireless-security.pairwise ccmp 802-11-wireless-security.group ccmp >/dev/null   # el chip de la Pi no admite WPA-PSK-SHA256: WPA2 clásico
 
 echo "== Permiso para gestionar la wifi desde la web de Freon"
 printf '%s\n' \
