@@ -2235,6 +2235,9 @@ int main(int argc, char** argv) {
     ctl.sysInfo = [&]() {
         std::string o = "{\"outs\":["; std::string in = "\"ins\":[", mid = "\"midi\":[", off = "\"midioff\":["; bool fo = true, fi = true, fm = true;
         try { RtAudio a; for (unsigned id : a.getDeviceIds()) { const auto inf = a.getDeviceInfo(id); if (inf.outputChannels) { o += (fo ? "" : ",") + jstr(utf8Clean(inf.name).c_str()); fo = false; } if (inf.inputChannels) { in += (fi ? "" : ",") + jstr(utf8Clean(inf.name).c_str()); fi = false; } } } catch (...) {}
+        // la interfaz que Freon tiene abierta no se deja consultar (está ocupada): se añade igual para poder elegirla
+        if (!outName.empty() && o.find(jstr(utf8Clean(outName).c_str())) == std::string::npos) { o += (fo ? "" : ",") + jstr(utf8Clean(outName).c_str()); fo = false; }
+        if (au->inCh > 0 && !inName.empty() && in.find(jstr(utf8Clean(inName).c_str())) == std::string::npos) { in += (fi ? "" : ",") + jstr(utf8Clean(inName).c_str()); fi = false; }
         try { RtMidiIn m; for (unsigned i = 0; i < m.getPortCount(); ++i) { const std::string n = m.getPortName(i); if (!MidiHub::notADevice(n)) { mid += (fm ? "" : ",") + jstr(utf8Clean(MidiHub::portKey(n)).c_str()); fm = false; } } } catch (...) {}
         for (const auto& n : hub.ignored) { if (!fm || mid.back() != '[') mid += ","; mid += jstr(n.c_str()); fm = false; off += (off.back() == '[' ? "" : ",") + jstr(n.c_str()); }
         return o + "]," + in + "]," + mid + "]," + off + "],\"audio\":" + jstr(cfgS("audio", "--audio").c_str()) + ",\"entrada\":" + jstr(cfgS("entrada", "--entrada").c_str()) +

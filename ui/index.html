@@ -905,7 +905,7 @@ function buildSys() {
   [a, i, b, q, r, c, o].forEach(x => x.addEventListener("change", markPend)); mid.addEventListener("click", markPend);
   const acts = el("div", { class: "scrow" }, apply, keyBtn("Refresh list", "", () => sendRaw("sys")), confirmKey("Restart Freon", "Sure?", () => sendRaw("sysact restart")));
   if (SYS.power) acts.append(confirmKey("Power off", "Sure? Needs power cycle", () => sendRaw("sysact poweroff"), "danger"));
-  const warn = SYS.rolled ? "The last change did not work, so the previous settings were restored." : SYS.note === "default" ? "The chosen audio interface was not found: using the default one." : SYS.note === "none" ? "No audio interface: there is no sound until you choose one." : SYS.note === "auto" ? `The chosen interface is not connected: using ${SYS.cur} until it is.` : "";
+  const warn = SYS.rolled ? "The last change did not work, so the previous settings were restored." : SYS.note === "default" ? "The chosen audio interface was not found: using the default one." : SYS.note === "none" ? "No audio interface: there is no sound until you choose one." : SYS.note === "auto" ? `The chosen interface is not connected: using ${SYS.cur} until it is. To keep this one, choose it in Audio output and apply.` : "";
   box.append(mid, pend, acts, el("p", { class: "hint" }, `Now: ${SYS.cur || "no audio"}${SYS.curIn ? " · in: " + SYS.curIn : ""} · output delay about ${(1000 * SYS.buffer * SYS.bloques / SYS.rate).toFixed(0)} ms`), el("p", { class: "hint", id: "sysStat" }, "…"));
   if (warn) { box.append(el("p", { class: "hint", style: "color:var(--led)" }, warn)); topMsg("System", warn); }
 }
