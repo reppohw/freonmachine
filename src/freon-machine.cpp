@@ -1488,10 +1488,10 @@ struct Control {
         if (ty != 0xB0) return;
         int cc = m.d1; const int val = m.d2;
         // MC-24: cada fila controla un sinte, sea cual sea el canal de esa pista. Filas 1 a 3 = T2 a T4: los 7 primeros knobs
-        // de la capa y Volume; el último knob de la fila 3 es el crossfader Dry–Wet
+        // de la capa y Volume
         if (cc >= 8 && cc <= 31 && portHas(m.port, "mc-24")) {
             const int r = (cc - 8) / 8, s = (cc - 8) % 8; ch = chOf("t" + std::to_string(r + 2) + ".ch"); if (ch < 0) return;
-            cc = s < 7 ? 8 + s : r < 2 ? 23 : 15;
+            cc = s < 7 ? 8 + s : 23;   // el 8.º de cada fila: Volume de su pista
         }
         if (isEcho(addrCC(ch, cc), val)) return;
         if (cc == 110 && (ch == mixCh() || isSynthCh(ch))) { shift[ch] = val >= 64; return; }   // shift

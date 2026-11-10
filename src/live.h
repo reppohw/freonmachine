@@ -218,6 +218,7 @@ public:
     int bars() const { static const int b[4] = {1, 2, 4, 8}; return b[std::clamp(static_cast<int>(p[BK_BARS]), 0, 3)]; }
     void setHold(int k, bool v) { hold[k] = v; if (v && (k == 0 || k == 1)) repIdx_ = -1; if (v && k == 3) halfStart_ = -1; }
     // nota MIDI: salta a ese corte (y lo toca si el break no está en marcha)
+    bool startPending_ = false;
     void jump(int k16, float bpm, bool playing) {
         const Sample* s = smp.load(); if (!s) return;
         const int n = bars() * 16, target = (k16 * n / 16) % n;
@@ -230,9 +231,17 @@ public:
         const Sample* s = smp.load();
         const double spb = sr_ * 60.0 / bpm / 4.0;
         if (s && playing && on) {
+            // al encenderlo o al arrancar el Oxi, el break espera al 1 del compás y empieza desde su principio
+            if (lastStep_ == -1000000) startPending_ = true;
             for (int i = 0; i < n; ++i) {
                 const long st = static_cast<long>(std::floor(pos0 + dp * i));
-                if (st != lastStep_) { lastStep_ = st; step(*s, st, spb, bpm, i); }
+                if (st == lastStep_) continue;
+                lastStep_ = st;
+                if (startPending_) {
+                    if (((st % 16) + 16) % 16 != 0) continue;   // aún no es el 1 del compás (4/4: 16 semicorcheas)
+                    const int nb = bars() * 16; offset_ = static_cast<int>(((-st) % nb + nb) % nb); jumpTo_ = -1; startPending_ = false;
+                }
+                step(*s, st, spb, bpm, i);
             }
         } else lastStep_ = -1000000;
         if (!s) { for (auto& v : v_) v.on = false; return; }

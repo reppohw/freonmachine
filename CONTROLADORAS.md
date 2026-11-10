@@ -151,7 +151,7 @@ Manda por el canal 3, potenciómetros absolutos: fila 1 CC 8–15, fila 2 CC 16�
 
 - Fila 1 → T2, fila 2 → T3, fila 3 → T4, siguiendo el canal que tenga cada pista.
 - Cada fila: Cutoff, Reso, Env, A, B, C, D y Volume.
-- Último knob de la fila 3: crossfader Dry–Wet, en lugar del Volume de T4.
+- Último knob de cada fila (también la 3): Volume de su pista. El crossfader de las combinaciones está en el knob 8 del programa 4 del LPD8.
 
 No debe recibir MIDI: lo que le llega atasca su USB (`urb status -32`) y deja de mandar. Por eso está en «Don’t send to» (`midi.skip`). Si ocurre, se recupera reenchufándolo.
 
