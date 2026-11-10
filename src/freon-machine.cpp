@@ -2170,7 +2170,10 @@ int main(int argc, char** argv) {
     if (mlockall(MCL_CURRENT | MCL_FUTURE) != 0) std::printf("Aviso: no se pudo bloquear la memoria (mlockall); puede haber cortes si el sistema pagina.\n");
 #endif
     // la carpeta del proyecto es la que contiene bin/ (así da igual desde dónde se abra)
-    auto au = std::make_unique<Audio>(); au->prepare(static_cast<float>(rate));
+    const bool tiempos0 = std::getenv("FREON_TIEMPOS") != nullptr;
+    auto marca0 = [&](const char* q) { if (tiempos0) std::fprintf(stderr, "  %-22s %6.0f ms desde el inicio\n", q, std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - tMain).count()); };
+    marca0("memoria bloqueada");
+    auto au = std::make_unique<Audio>(); au->prepare(static_cast<float>(rate)); marca0("motores preparados");
     { const int got = au->par.start(gNuc - 1, 80); std::printf("Núcleos para el audio: %d de %d pedidos\n", 1 + got, gNuc); }
     // tiempos del arranque: FREON_TIEMPOS=1 los muestra
     const bool tiempos = std::getenv("FREON_TIEMPOS") != nullptr; auto t0 = tMain;
