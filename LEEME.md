@@ -357,6 +357,10 @@ y la vuelve a abrir en cuanto reaparece.
 
 **Prueba de estrés:** `./bin/freon-machine --estres 30 --nucleos 4` toca el peor caso (18 voces de Juno, batería, 4 efectos de envío y todos los efectos moviéndose al azar) y dice cuánto gasta. «Pico de cálculo» es lo que cuesta de verdad; «pico de reloj» incluye las veces que el sistema le quita el procesador. En un Mac sin tiempo real el de reloj sale alto y no significa nada; en la Pi, con el servicio parado (`sudo systemctl stop freon-machine`) y si la prueba dice «Tiempo real: sí», tiene que quedar por debajo del 100 %.
 
+## Arranque lo más corto posible (una vez)
+
+En la Pi, desde la carpeta del proyecto: `./deploy/arranque-rapido.sh`. Freon arranca sin esperar a «sound.target», el arranque es silencioso y sin logo, y se apagan Bluetooth, cloud-init, los discos externos y las tareas automáticas (actualizaciones y mantenimiento) que podrían saltar en mitad de un concierto. Se deshace con `./deploy/arranque-rapido.sh deshacer`. Además, Freon guarda los sonidos de fábrica del sampler y los breaks en `cache/` la primera vez (en la Pi 3 generarlos costaba unos 5 s de cada arranque). Para ver cuánto tarda cada paso: `FREON_TIEMPOS=1 ./bin/freon-machine`.
+
 ## Arranque rápido y wifi propia (una vez)
 
 En la Pi, desde la carpeta del proyecto: `./deploy/ajustes-pi.sh "tu-clave"`. Freon deja de esperar a la red al arrancar, y si la Pi no encuentra tu wifi crea la suya, «Freon-Machine», con esa clave: te conectas desde el móvil y abres http://10.42.0.1:8080. Si la Pi dejara de verse en la red, conéctala por cable al router.

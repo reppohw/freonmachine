@@ -739,8 +739,43 @@ struct Control {
     std::vector<Sample*> facS, facB; std::map<std::string, Sample*> cache;
     std::string sampDir() const { return base + "/samples"; }
     std::string brkDir() const { return base + "/breaks"; }
+    // Los sonidos de fábrica del sampler y los breaks se generan una vez y se guardan en cache/ (en la Pi 3, generarlos
+    // costaba ~5 s de cada arranque). La caché lleva la frecuencia y la fecha de compilación: si cambia, se rehace sola.
     void initLive() {
+        std::string tag = std::string(__DATE__) + "-" + __TIME__; for (char& c : tag) if (!std::isalnum(static_cast<unsigned char>(c))) c = '-';
+        const std::string dir = base + "/cache", cf = dir + "/fabrica-" + std::to_string(static_cast<int>(au.sr)) + "-" + tag + ".bin";
+        if (loadFab(cf)) return;
         facS = factorySamples(au.sr); facB = factoryBreaks(au.sr);
+        std::error_code ec; std::filesystem::create_directories(dir, ec);
+        for (const auto& e : std::filesystem::directory_iterator(dir, ec)) if (e.path().filename().string().rfind("fabrica-", 0) == 0) std::filesystem::remove(e.path(), ec);
+        saveFab(cf);
+    }
+    bool loadFab(const std::string& f) {
+        FILE* in = std::fopen(f.c_str(), "rb"); if (!in) return false;
+        auto rd = [&](void* p, size_t n) { return std::fread(p, 1, n, in) == n; };
+        char mg[4]; uint32_t cnt[2]; bool ok = rd(mg, 4) && std::memcmp(mg, "FRN1", 4) == 0 && rd(cnt, sizeof cnt) && cnt[0] < 256 && cnt[1] < 256;
+        std::vector<Sample*> v[2];
+        for (int k = 0; ok && k < 2; ++k) for (uint32_t i = 0; ok && i < cnt[k]; ++i) {
+            uint32_t nl = 0; uint64_t nL = 0, nR = 0; auto* s = new Sample();
+            ok = rd(&nl, 4) && nl < 256; if (ok) { s->name.resize(nl); ok = rd(s->name.data(), nl); }
+            ok = ok && rd(&s->sr, sizeof s->sr) && rd(&nL, 8) && rd(&nR, 8) && nL < 50000000 && nR < 50000000;
+            if (ok) { s->L.resize(nL); s->R.resize(nR); ok = rd(s->L.data(), nL * sizeof(float)) && rd(s->R.data(), nR * sizeof(float)); }
+            if (ok) v[k].push_back(s); else delete s;
+        }
+        std::fclose(in);
+        if (!ok) { for (auto& w : v) for (auto* s : w) delete s; return false; }
+        facS = v[0]; facB = v[1]; return true;
+    }
+    void saveFab(const std::string& f) {
+        const std::string tmp = f + ".tmp"; FILE* o = std::fopen(tmp.c_str(), "wb"); if (!o) return;
+        const uint32_t cnt[2] = {static_cast<uint32_t>(facS.size()), static_cast<uint32_t>(facB.size())}; bool ok = std::fwrite("FRN1", 1, 4, o) == 4 && std::fwrite(cnt, sizeof cnt, 1, o) == 1;
+        for (const auto* w : {&facS, &facB}) for (const Sample* s : *w) {
+            const uint32_t nl = static_cast<uint32_t>(s->name.size()); const uint64_t nL = s->L.size(), nR = s->R.size();
+            ok = ok && std::fwrite(&nl, 4, 1, o) == 1 && std::fwrite(s->name.data(), 1, nl, o) == nl && std::fwrite(&s->sr, sizeof s->sr, 1, o) == 1 && std::fwrite(&nL, 8, 1, o) == 1 && std::fwrite(&nR, 8, 1, o) == 1
+                 && std::fwrite(s->L.data(), sizeof(float), nL, o) == nL && std::fwrite(s->R.data(), sizeof(float), nR, o) == nR;
+        }
+        ok = std::fclose(o) == 0 && ok; std::error_code ec;
+        if (ok) std::filesystem::rename(tmp, f, ec); else std::filesystem::remove(tmp, ec);
     }
     Sample* fileSample(const std::string& dir, const std::string& name) {
         const std::string key = dir + "/" + name; auto it = cache.find(key); if (it != cache.end()) return it->second;
@@ -2094,6 +2129,7 @@ int findDevice(RtAudio& a, const std::string& want, bool input) {
 }
 
 int main(int argc, char** argv) {
+    const auto tMain = std::chrono::steady_clock::now();
 #if defined(__SSE__) || defined(__x86_64__)
     _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON); _MM_SET_DENORMALS_ZERO_MODE(_MM_DENORMALS_ZERO_ON);
 #endif
@@ -2136,16 +2172,21 @@ int main(int argc, char** argv) {
     // la carpeta del proyecto es la que contiene bin/ (así da igual desde dónde se abra)
     auto au = std::make_unique<Audio>(); au->prepare(static_cast<float>(rate));
     { const int got = au->par.start(gNuc - 1, 80); std::printf("Núcleos para el audio: %d de %d pedidos\n", 1 + got, gNuc); }
+    // tiempos del arranque: FREON_TIEMPOS=1 los muestra
+    const bool tiempos = std::getenv("FREON_TIEMPOS") != nullptr; auto t0 = tMain;
+    auto marca = [&](const char* q) { if (tiempos) { const auto t = std::chrono::steady_clock::now(); std::fprintf(stderr, "  %-22s %6.0f ms\n", q, std::chrono::duration<double, std::milli>(t - t0).count()); t0 = t; } };
+    marca("hasta los núcleos");
     dx7::libInit(base + "/dx7");   // sonidos del DX7: los de serie y los bancos .syx de la carpeta dx7/
-    Control ctl(*au); ctl.base = base; ctl.initLive();
+    marca("biblioteca DX7");
+    Control ctl(*au); ctl.base = base; ctl.initLive(); marca("sampler y breaks");
     ctl.file = argStr(argc, argv, "--estado", base + "/freon-estado.json");
-    ctl.defaults(); ctl.defs = ctl.st;
+    ctl.defaults(); ctl.defs = ctl.st; marca("valores de fábrica");
     // primera vez con el nombre nuevo: se recoge el estado del groovebox (en esta carpeta o en la carpeta groovebox de al lado)
     if (!hasArg(argc, argv, "--estado") && !std::filesystem::exists(ctl.file))
         for (const std::string& old : {base + "/groovebox-estado.json", base + "/../groovebox/groovebox-estado.json"})
             if (std::filesystem::exists(old)) { const std::string nf = ctl.file; ctl.file = old; ctl.load(); ctl.file = nf; ctl.dirty = true; std::printf("Estado recogido de %s\n", old.c_str()); break; }
-    if (!ctl.dirty) ctl.load();
-    ctl.pushAll();
+    if (!ctl.dirty) ctl.load(); marca("cargar estado");
+    ctl.pushAll(); marca("aplicar estado");
     gMixCh = ctl.mixCh();
     ctl.powerOffEnabled = hasArg(argc, argv, "--apagado-midi");
     ctl.srv.root = argStr(argc, argv, "--ui", base + "/ui");
