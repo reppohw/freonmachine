@@ -48,6 +48,10 @@
 #include "voice.h"
 #include "params.h"
 #include "server.h"
+#ifdef __linux__
+#include <ifaddrs.h>
+#include <netinet/in.h>
+#endif
 
 #if defined(__SSE__) || defined(__x86_64__)
 #include <xmmintrin.h>
@@ -715,6 +719,7 @@ std::vector<Sample*> factoryBreaks(float sr) {
 }
 
 // último mensaje MIDI recibido (para el monitor de la pantalla)
+std::atomic<bool> gReopen{false};   // SIGUSR1: reabrir el audio (ver onReopenSignal)
 std::atomic<uint32_t> gMidiLast{0}; std::atomic<int> gMidiPort{-1}; std::atomic<unsigned> gMidiCount{0};
 std::vector<std::string> gMidiNames; std::mutex gMidiNamesMx;
 std::atomic<int> gMixCh{15};   // canal del mezclador (0-15): sus notas son mutes, solos... y no van al audio
@@ -1570,7 +1575,7 @@ struct Control {
         }
         ledInit = true;
     }
-    int audioCheckN = 0; bool audioStalled = false, watchAudio = false; std::function<void()> onStall, onAudioCheck;   // onAudioCheck: cada 2 s (¿ha aparecido la interfaz elegida?)
+    int audioCheckN = 0; bool audioStalled = false, watchAudio = false; std::function<void()> onStall, onAudioCheck, onReopen, onNetCheck;   // onAudioCheck: cada 2 s (¿ha aparecido la interfaz elegida?)
     std::chrono::steady_clock::time_point lastFb{}, lastWd{}, stallSince = std::chrono::steady_clock::now(); uint64_t lastCalls = 0;
     void run(std::atomic<bool>& quit) {
         srv.onMessage = [this](int c, const std::string& m) { onMessage(c, m); };
@@ -1597,7 +1602,8 @@ struct Control {
             }
             // vigilante: si el audio deja de llamar más de 1 s, se intenta reabrir
             if (now - lastWd > std::chrono::milliseconds(500)) {
-                lastWd = now; if (onAudioCheck && ++audioCheckN % 4 == 0) onAudioCheck(); const uint64_t c = au.calls.load();
+                lastWd = now; if (++audioCheckN % 4 == 0) { if (onAudioCheck) onAudioCheck(); if (onNetCheck) onNetCheck(); }
+                if (gReopen.exchange(false) && onReopen) { std::printf("Reabro el audio (aviso de cambio de wifi).\n"); std::fflush(stdout); onReopen(); } const uint64_t c = au.calls.load();
                 const unsigned xr = au.xruns.load(); if (xr != lastXr) { std::printf("Aviso: %u cortes de audio (el procesador no llegó a tiempo)\n", xr - lastXr); std::fflush(stdout); lastXr = xr; }
                 if (c != lastCalls) { lastCalls = c; stallSince = now; if (audioStalled) { audioStalled = false; std::printf("Audio de vuelta.\n"); } }
                 else if (watchAudio && now - stallSince > std::chrono::seconds(1) && !audioStalled) { audioStalled = true; std::printf("Aviso: el audio se ha parado; intento reabrirlo.\n"); if (onStall) onStall(); stallSince = now; }
@@ -1991,6 +1997,8 @@ struct MidiHub {
 
 std::atomic<bool> gQuit{false};
 void onSignal(int) { gQuit = true; }
+// SIGUSR1: reabrir el audio (lo manda freon-wifi al cambiar de wifi: el USB puede perder datos y la interfaz quedar desalineada, «crusheada»)
+void onReopenSignal(int) { gReopen = true; }
 
 }  // namespace
 
@@ -2189,7 +2197,7 @@ int main(int argc, char** argv) {
         if (au->inCh > 0) std::printf("Entradas: %d de %s\n", au->inCh, inName.c_str()); else if (!quiet) std::printf("Entradas: ninguna (elige una con --entrada N o --entrada nombre; mira --list)\n");
         return true;
     };
-    std::signal(SIGINT, onSignal); std::signal(SIGTERM, onSignal);
+    std::signal(SIGINT, onSignal); std::signal(SIGTERM, onSignal); std::signal(SIGUSR1, onReopenSignal);
     std::string audioNote; const bool rolledBack = std::filesystem::exists(sysBack);
     { std::error_code ec; std::filesystem::remove(sysBack, ec); }
     std::atomic<bool> restart{false};
@@ -2258,6 +2266,19 @@ int main(int argc, char** argv) {
         if (!ok) { std::printf("Aviso: no encuentro la interfaz elegida; pruebo la de por defecto.\n"); forceDefault = true; ok = openAudio(true); audioNote = ok ? "default" : "none"; }
         if (!ok) { std::printf("Aviso: sin interfaz de audio. Elige otra en la pantalla.\n"); startFake(); } else ctl.watchAudio = true;
         // si la interfaz se cae en marcha: se intenta reabrir; tras 3 intentos, a la de reserva (y vuelve sola cuando reaparece)
+        // cambio de wifi (de la de casa a la propia o al revés): el USB puede perder datos y la interfaz quedarse desalineada,
+        // sonando «crusheada». Freon lo detecta sola (cambia la dirección IPv4 de wlan0) y reabre el audio 4 s después.
+        ctl.onNetCheck = [last = std::string("?"), due = 0]() mutable {
+#ifdef __linux__
+            std::string ip; ifaddrs* ifa = nullptr;
+            if (getifaddrs(&ifa) == 0) { for (ifaddrs* i = ifa; i; i = i->ifa_next) if (i->ifa_addr && i->ifa_addr->sa_family == AF_INET && std::string(i->ifa_name) == "wlan0") {
+                const auto a = reinterpret_cast<sockaddr_in*>(i->ifa_addr)->sin_addr.s_addr; ip = std::to_string(a); } freeifaddrs(ifa); }
+            if (last != "?" && ip != last && !ip.empty()) due = 2;   // comprobación cada 2 s: 2 vueltas = 4 s
+            last = ip;
+            if (due > 0 && --due == 0) gReopen = true;
+#endif
+        };
+        ctl.onReopen = [&]() { if (ctl.watchAudio && !openAudio(true)) std::printf("No pude reabrir el audio; lo intenta el vigilante.\n"); };
         ctl.onStall = [&, fails = 0]() mutable {
             if (openAudio(true)) { fails = 0; return; }
             std::printf("Aún sin audio; lo vuelvo a intentar.\n");
