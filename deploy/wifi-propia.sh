@@ -7,6 +7,7 @@
 # crea «Freon-Machine»: te conectas desde el móvil y abres http://10.42.0.1:8080. En casa no hace nada.
 set -e
 USER_NAME="$(id -un)"
+FREON_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 CLAVE="${1:-}"
 [ ${#CLAVE} -ge 8 ] || CLAVE="$(nmcli -s -g 802-11-wireless-security.psk connection show Freon-Machine 2>/dev/null || true)"
 echo "Te pedirá la contraseña de la Pi (la de entrar como $USER_NAME)."
@@ -36,10 +37,13 @@ wpa_passphrase=$CLAVE
 EOF
 sudo chmod 600 /etc/hostapd/freon.conf
 
+echo "== Dónde guarda Freon la red elegida (Ajustes → Network)"
+echo "SISTEMA=$FREON_DIR/freon-sistema.txt" | sudo tee /etc/freon-wifi.conf >/dev/null
+
 echo "== Programa que la enciende si no hay wifi conocida"
 sudo tee /usr/local/sbin/freon-wifi >/dev/null <<'EOF'
 #!/bin/sh
-# freon-wifi            al arrancar: espera a una wifi conocida y si no la hay crea «Freon-Machine»;
+# freon-wifi            al arrancar: con «red=propia» en los ajustes de Freon crea «Freon-Machine» ya; si no, espera a una wifi conocida y si no la hay la crea;
 #                       después vigila: si la wifi conocida se pierde 1 minuto, crea la propia (hasta reiniciar)
 # freon-wifi propia     crea «Freon-Machine» ya
 # freon-wifi casa       vuelve a la wifi normal
@@ -62,7 +66,9 @@ casa() {
 case "$modo" in
   propia) propia ;;
   casa) casa ;;
-  *) conn() { nmcli -t -f DEVICE,STATE device 2>/dev/null | grep -q '^wlan0:connected$'; }
+  *) SISTEMA=""; [ -f /etc/freon-wifi.conf ] && . /etc/freon-wifi.conf
+     if [ -n "$SISTEMA" ] && grep -q '^red=propia' "$SISTEMA" 2>/dev/null; then logger -t freon-wifi "red propia elegida en Freon"; sleep 5; propia; exit 0; fi
+     conn() { nmcli -t -f DEVICE,STATE device 2>/dev/null | grep -q '^wlan0:connected$'; }
      ok=0; for i in $(seq 1 45); do conn && { ok=1; break; }; sleep 2; done
      if [ $ok = 0 ]; then logger -t freon-wifi "no hay wifi conocida: creo la propia"; propia; exit 0; fi
      lost=0

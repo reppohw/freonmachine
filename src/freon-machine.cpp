@@ -2211,7 +2211,7 @@ int main(int argc, char** argv) {
         for (const auto& n : hub.ignored) { if (!fm || mid.back() != '[') mid += ","; mid += jstr(n.c_str()); fm = false; off += (off.back() == '[' ? "" : ",") + jstr(n.c_str()); }
         return o + "]," + in + "]," + mid + "]," + off + "],\"audio\":" + jstr(cfgS("audio", "--audio").c_str()) + ",\"entrada\":" + jstr(cfgS("entrada", "--entrada").c_str()) +
                ",\"buffer\":" + std::to_string(frames) + ",\"minbuf\":" + std::to_string(minBuffer()) + ",\"bloques\":" + std::to_string(std::clamp(cfgI("bloques", "--bloques", 3), 2, 4)) + ",\"rate\":" + std::to_string(rate) + ",\"nucleos\":" + std::to_string(gNuc) + ",\"hw\":" + std::to_string(std::min(4, hw)) + ",\"salidas\":" + std::to_string(cfgI("salidas", "--salidas", 16)) +
-               ",\"nout\":" + std::to_string(au->outCh) + ",\"nin\":" + std::to_string(au->inCh) + ",\"principal\":" + std::to_string(2 * std::min(au->mainPair.load(), std::max(0, au->outCh / 2 - 1)) + 1) + ",\"cue\":" + jstr(au->cuePair == -2 ? "auto" : au->cuePair == -1 ? "no" : std::to_string(2 * au->cuePair + 1).c_str()) +
+               ",\"red\":" + jstr(cfgS("red", "--red").empty() ? "casa" : cfgS("red", "--red").c_str()) + ",\"redOk\":" + (std::filesystem::exists("/etc/freon-wifi.conf") ? "true" : "false") + ",\"nout\":" + std::to_string(au->outCh) + ",\"nin\":" + std::to_string(au->inCh) + ",\"principal\":" + std::to_string(2 * std::min(au->mainPair.load(), std::max(0, au->outCh / 2 - 1)) + 1) + ",\"cue\":" + jstr(au->cuePair == -2 ? "auto" : au->cuePair == -1 ? "no" : std::to_string(2 * au->cuePair + 1).c_str()) +
                ",\"ents\":[" + std::to_string(au->inMap[0] + 1) + "," + std::to_string(au->inMap[1] + 1) + "," + std::to_string(au->inMap[2] + 1) + "," + std::to_string(au->inMap[3] + 1) + "]" +
                ",\"cur\":" + jstr(utf8Clean(outName).c_str()) + ",\"curIn\":" + jstr(au->inCh > 0 ? utf8Clean(inName).c_str() : "") + ",\"note\":" + jstr(audioNote.c_str()) + ",\"rolled\":" + (rolledBack ? "true" : "false") + ",\"power\":" + (ctl.powerOffEnabled ? "true" : "false") + "}";
     };
@@ -2236,6 +2236,12 @@ int main(int argc, char** argv) {
             const bool ok = (k == "principal" && std::find(odd.begin(), odd.end(), v) != odd.end()) || (k == "cue" && (v == "auto" || v == "no" || std::find(odd.begin(), odd.end(), v) != odd.end())) ||
                             ((k == "ent1" || k == "ent2" || k == "ent3" || k == "ent4") && v == std::to_string(n) && n >= 0 && n <= 16);
             if (ok) { cfg[k] = v; any = true; }
+            // red: «propia» = la Pi crea siempre su wifi; «casa» = se conecta a la de casa (y crea la propia si no la encuentra)
+            if (k == "red" && (v == "propia" || v == "casa")) {
+                cfg[k] = v; if (!sysSave(sysFile, cfg)) std::printf("Aviso: no se pudieron guardar los ajustes de sistema.\n");
+                std::thread([v]() { if (std::system(("sudo -n /usr/local/sbin/freon-wifi " + v + " >/dev/null 2>&1").c_str()) != 0) std::printf("No se pudo cambiar la red (¿falta instalar deploy/wifi-propia.sh?).\n"); }).detach();
+                std::printf("Red: %s\n", v.c_str()); std::fflush(stdout);
+            }
         }
         if (!any) return;
         setRoutes();

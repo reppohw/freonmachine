@@ -877,6 +877,13 @@ function buildSys() {
   const r = sel("Sample rate", SYS.rate, [[44100, "44.1 kHz"], [48000, "48 kHz"]]);
   const c = sel("CPU cores", SYS.nucleos, Array.from({ length: SYS.hw }, (_, k) => [k + 1, String(k + 1)]));
   const o = sel("Outputs", SYS.salidas, [[16, "All"], [8, "8"], [6, "6"], [4, "4"], [2, "2"]]);
+  // network: own wifi always (normal use) or home wifi (development); it changes at once
+  const net = sel("Network", SYS.red || "casa", [["propia", "Own wifi always (Freon-Machine)"], ["casa", "Home wifi (own wifi only if not found)"]]);
+  net.addEventListener("change", () => {
+    if (!SYS.redOk) { topMsg("Network", "install deploy/wifi-propia.sh on the Pi first"); net.value = SYS.red || "casa"; return; }
+    if (!confirm(net.value === "propia" ? "Switch to Freon's own wifi now? Devices on the home wifi will lose this page: join Freon-Machine and open http://10.42.0.1:8080" : "Switch to the home wifi now? Devices on Freon-Machine will lose this page.")) { net.value = SYS.red || "casa"; return; }
+    sendRaw(`sysroute red=${net.value}`); SYS.red = net.value; topMsg("Network", "changing… audio reopens by itself in a few seconds");
+  });
   // routing: which outputs of the interface are the main mix and the cue, and which interface input feeds each Freon input
   const nout = Math.max(2, SYS.nout || 2), nin = Math.max(2, SYS.nin || 2), prs = Array.from({ length: nout >> 1 }, (_, k) => [2 * k + 1, `${2 * k + 1}-${2 * k + 2}`]);
   box.append(el("p", { class: "hint" }, "Outputs and inputs below change at once, no restart:"));
