@@ -2342,6 +2342,7 @@ int main(int argc, char** argv) {
                     const std::string nm = l.substr(u + 15), ln = lower(nm);
                     if (!want.empty() && !ln.empty() && lower(want).find(ln) != std::string::npos) { here = true; continue; }   // «Clarett+ 2Pre (USB Audio)» guardado con el nombre largo
                     if (ln.find("oxi") != std::string::npos || ln.find("mc-24") != std::string::npos || nm == bad || nm == autoOut) continue;
+                    if (!std::filesystem::exists("/proc/asound/card" + std::to_string(std::atoi(l.c_str())) + "/pcm0p")) continue;   // sin salida de audio (controladoras MIDI como el LPD8)
                     if (other.empty()) other = nm;
                 }
             }
