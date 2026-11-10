@@ -191,7 +191,7 @@ inline const int kLayer[E_COUNT][16] = {
     /* Juno      */ {10, 11, 12,   4,  6, 13,  0, 21,   15, 16, 17, 18,    9,  7,  3,  1},   // A PWM, B sub, C VCF LFO, D velocidad del LFO; abajo: ADSR (la única del Juno), HPF, ruido, DCO LFO, retardo del LFO
     /* DX7       */ { 1,  2,  3,   4,  5,  0,  6,  7,    8,  9, 10, 11,   12, 13, 14, 15},   // «filtro» = brillo (nivel de los moduladores), «reso» = su caída, «env» = feedback; A desafinación, B vibrato, C sonido, D tono
     /* Moog      */ {13, 14, 15,   4, 10, 12, 26, 28,   17, 18, 19, 20,   21, 22, 23, 24},   // A fino osc 2, B nivel osc 3, C drive, D glide
-    /* 303       */ { 0,  1,  2,   4,  6,  5, 13,  7,   12,  3,  8, 10,   14, 11, 15,  9},   // A accent, B drive, C onda, D sub; abajo: ataque suave, decay, afinación, decay del accent, tono del drive, decay de amp, velocidad, slide
+    /* 303       */ { 0,  1,  2,   4,  6,  8, 13,  7,   12,  3,  5, 10,   14, 11, 15,  9},   // A accent, B drive, C afinación, D sub; abajo: ataque suave, decay, onda, decay del accent, tono del drive, decay de amp, velocidad, slide
     /* Game Boy  */ {14,  1,  2,   9,  8, 13, 12, 15,    3,  4,  5,  6,   10, 11,  7,  0},   // todo en la página 1: «filtro» = DMG, duty y tabla; A prof. vibrato, B vel. vibrato, C glide, D fino; abajo: volumen, envolvente, sweep, arpegio, pan y canal
     /* Wavetable */ { 8,  9, 10,   1,  2,  3,  6, 21,   12, 13, 14, 15,   16, 17, 18, 19},   // A posición, B env→posición, C LFO→posición, D detune
     /* Supersaw  */ { 4,  5,  7,   1,  2,  9,  6, 20,   11, 12, 13, 14,   15, 16, 17, 18},   // A detune, B mezcla, C ensemble, D paso alto
