@@ -738,7 +738,7 @@ function buildMix() {
   }
   for (let g = 0; g < 2; g++) u3.append(stripEl(`g${g}`, g ? "B" : "A", "Group", true));
   const a = el("div", { class: "sk" });
-  kn(a, "m.lim", "Limiter", -12, 0, 0.5, (v) => v.toFixed(1) + " dB", -3, "sm"); kn(a, "m.cueLvl", "Cue level", 0, 1.2, 0.01, PCT, 0.8, "sm");
+  kn(a, "m.lim", "Limiter", -12, 0, 0.5, (v) => v.toFixed(1) + " dB", -3, "sm"); a.append(selK("m.clip", [[1, "Clip: color"], [0, "Clip: clean"]], "Final clipper: color = soft saturation as always; clean = untouched below -1 dB")); kn(a, "m.cueLvl", "Cue level", 0, 1.2, 0.01, PCT, 0.8, "sm");
   const fd = vfader("m.vol", "Master volume"); mixUI.grRead = el("span", { class: "limread" });
   const cueSel = SPEC.outs >= 4 ? el("span", { class: "hint" }, "Cue: outputs 3-4") : selK("m.cueMode", [[0, "Cue: L master / R cue"], [2, "Cue: replaces output"]], "Where the cue plays");
   u3.append(el("div", { class: "strip master" }, el("div", { class: "sname" }, el("span", {}, "Output"), el("b", {}, "Master")), a, mixUI.grRead, cueSel, el("div", { class: "frow" }, meterEl(), fd.f), fd.read,
@@ -910,8 +910,9 @@ function buildSys() {
   if (warn) { box.append(el("p", { class: "hint", style: "color:var(--led)" }, warn)); topMsg("System", warn); }
 }
 function sysStatus(p) {
-  const e = $("#sysStat"); if (!e) return; const [t, th, x, c, pk] = p, hot = th !== "-" && th !== "0x0" && th !== "0";
-  e.textContent = `${t >= 0 ? `Temperature ${t} °C · ` : ""}CPU ${Number(c).toFixed(0)} % (peak ${Number(pk).toFixed(0)} %) · dropouts ${x}${hot ? " · has slowed down from heat since power-on" : ""}`;
+  const e = $("#sysStat"); if (!e) return; const [t, th, x, c, pk] = p, hot = th !== "-" && th !== "0x0" && th !== "0" && th !== "lowvolt", low = th === "lowvolt" || (/^0x/.test(th) && (parseInt(th, 16) & 0x50005) !== 0);
+  e.textContent = `${t >= 0 ? `Temperature ${t} °C · ` : ""}CPU ${Number(c).toFixed(0)} % (peak ${Number(pk).toFixed(0)} %) · dropouts ${x}${low ? " · LOW VOLTAGE since power-on: use a stronger power supply or a powered USB hub" : hot ? " · has slowed down from heat since power-on" : ""}`;
+  e.style.color = low || Number(x) > 0 ? "var(--led)" : "";
 }
 function buildSet() {
   const box = $("#setBox"); box.textContent = "";

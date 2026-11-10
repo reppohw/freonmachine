@@ -13,6 +13,11 @@ inline float velGain(float v, float amt) { return std::exp2(-5.0f * amt * (1.0f 
 inline float mtof(float n) { return 440.0f * std::exp2((n - 69.0f) / 12.0f); }
 
 // Saturación suave barata (aprox. de tanh, monótona y acotada en ±1).
+// red de seguridad: lineal hasta −1 dBFS (0,891) y curva suave solo por encima; nunca pasa de 1
+inline float safeClip(float x) {
+    const float a = std::fabs(x), t = 0.891f; if (a <= t) return x;
+    return std::copysign(t + (1.0f - t) * std::tanh((a - t) / (1.0f - t)), x);
+}
 inline float softClip(float x) {
     x = std::clamp(x, -3.0f, 3.0f);
     return x * (27.0f + x * x) / (27.0f + 9.0f * x * x);
