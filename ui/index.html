@@ -768,7 +768,7 @@ function buildFx() {
 // master effects: choose one with the buttons, then Amount, a second parameter and Zero
 const MFX_ALL = [
   { n: "Filter", a: "m.filt", amin: -1, af: djf, b: "m.res", bl: "Resonance", bmin: 0.7, bmax: 15, bstep: 0.1, bf: (v) => v.toFixed(1), bdef: 1.4, more: [["m.fEnv", "Env", 0, 1, 0.01, PCT, 0]] },
-  { n: "Repeat", a: "m.rep", af: (v) => (v < 0.02 ? "Off" : PCT(v)), b: "m.rSize", bl: "Size", bmin: 0, bmax: 5, bstep: 1, bf: (v) => ["1 bar", "1/2", "1/4", "1/8", "1/16", "1/32"][Math.round(v)] || "", bdef: 2, more: [["m.rDecay", "Decay", 0, 1, 0.01, PCT, 0], ["m.rPitch", "Pitch", -1, 1, 0.01, (v) => v.toFixed(2), 0]] },
+  { n: "Repeat", a: "m.rep", af: (v) => (v < 0.02 ? "Off" : PCT(v)), b: "m.rSize", bl: "Size", bmin: 0, bmax: 5, bstep: 1, bf: (v) => (ST["m.rTri"] >= 0.5 ? ["2/3 bar", "1/2T", "1/4T", "1/8T", "1/16T", "1/32T"] : ["1 bar", "1/2", "1/4", "1/8", "1/16", "1/32"])[Math.round(v)] || "", bdef: 2, more: [["m.rDecay", "Decay", 0, 1, 0.01, PCT, 0], ["m.rPitch", "Pitch", -1, 1, 0.01, (v) => v.toFixed(2), 0]], tog: ["m.rTri", "Triplets"] },
   { n: "Gater", a: "m.gate", af: PCT, b: "m.gdiv", bl: "Division", bmin: 0, bmax: 3, bstep: 1, bf: (v) => ["1/4", "1/8", "1/16", "1/32"][Math.round(v)], bdef: 2, more: [["m.gShape", "Shape", 0, 1, 0.01, PCT, 0], ["m.gPan", "Pan", 0, 1, 0.01, PCT, 0]] },
   { n: "Riser", a: "m.riser", af: PCT, b: "m.rNoise", bl: "Noise", bmin: 0, bmax: 1, bstep: 0.01, bf: PCT, bdef: 0.5 },
   { n: "Space", a: "m.space", af: PCT, b: "m.spSize", bl: "Size", bmin: 0, bmax: 1, bstep: 0.01, bf: PCT, bdef: 0.7, more: [["m.spDamp", "Damp", 0, 1, 0.01, PCT, 0.53], ["m.spType", "Type", 0, 3, 1, (v) => ["Hall", "Plate", "Spring", "Dark"][Math.round(v)] || "", 0]], tog: ["m.spFrz", "Freeze"] },

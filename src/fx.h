@@ -520,6 +520,7 @@ struct MasterFx {
     float tape = 0;                           // tape stop: 1 = cinta parada
     float repDecay = 0, riserNoise = 0.5f, tapeInertia = 0.5f;   // segundos parámetros
     float repPitch = 0;                       // repeat: cada vuelta sube o baja (−1..1 = hasta una octava por vuelta)
+    bool repTri = false;                      // repeat: tamaños ternarios
     float gShape = 0, gPan = 0;               // gater: de corte seco a trémolo suave; alternar izquierda y derecha
     float spDamp = 0.53f; bool spFreeze = false;   // space: tono de la cola; congelar lo que ya está sonando
     float spType = 0;                              // space: 0 Hall, 1 Plate, 2 Spring, 3 Dark (como las reverbs de la Octatrack)
@@ -546,7 +547,7 @@ struct MasterFx {
         for (auto& v : tape_) std::fill(v.begin(), v.end(), 0.0f);
         for (auto& a : apS_) for (auto& x : a) x = 0;
         cbLpL_ = OnePoleLP{}; cbLpR_ = OnePoleLP{}; thLp_ = OnePoleLP{}; thHp_ = OnePoleHP{}; swFbL_ = swFbR_ = 0;
-        hpR_[0].reset(); hpR_[1].reset(); nbp_.reset(); tapeRate_ = 1; repState_ = 0; repGain_ = 1;
+        hpR_[0].reset(); hpR_[1].reset(); nbp_.reset(); tapeRate_ = 1; repState_ = 0; repGain_ = 1; repW_ = 0; xfI_ = xfN_ = 0;
     }
     static int repBand(float a) { return a < 0.02f ? -1 : a < 0.25f ? 0 : a < 0.5f ? 1 : a < 0.75f ? 2 : 3; }
     // pos: posición en semicorcheas (para cuadrar repeat y gater con el tempo)
@@ -581,25 +582,45 @@ struct MasterFx {
         // Con Pitch cada vuelta sube o baja: el redoble que trepa.
         static const float kLen[6] = {16, 8, 4, 2, 1, 0.5f};
         const int band = rep < 0.02f ? -1 : std::clamp(static_cast<int>(std::lround(repSize)), 0, 5);
-        if (band != repBand_) { repBand_ = band; repState_ = 0; }
+        const float tri = repTri ? 2.0f / 3.0f : 1.0f;   // ternarios: cada tamaño dura 2/3
+        const int len = band < 0 ? 64 : std::clamp(static_cast<int>(kLen[band] * tri * spb), 64, static_cast<int>(rep_[0].size()));
+        if (band != repBand_ || tri != repTriK_) {
+            // cambio de tamaño: si el nuevo cabe en lo grabado, se sigue al vuelo con un fundido de 3 ms entre bucle viejo y nuevo;
+            // si es más largo hay que volver a grabar (el paso al seco y la vuelta van fundidos, sin clic)
+            if (repState_ == 2 && band >= 0 && len <= repCap_) { xfPos_ = repPos_; xfLen_ = repLen_; xfN_ = static_cast<int>(0.003f * sr); xfI_ = 0; repPos_ = 0; repLen_ = len; }
+            else repState_ = repState_ == 2 ? 3 : 0;   // 3: el bucle viejo se funde sonando y luego se graba el nuevo
+            repBand_ = band; repTriK_ = tri;
+        }
         repMix_ += (rep - repMix_) * sm;
-        const int len = band < 0 ? 64 : std::clamp(static_cast<int>(kLen[band] * spb), 64, static_cast<int>(rep_[0].size()));
-        const float turn = std::exp2(repPitch);
+        const float turn = std::exp2(repPitch), wk = 1.0f - std::exp(-1.0f / (0.002f * sr));
+        auto rd = [&](const std::vector<float>& v, double pp) { const size_t i0 = static_cast<size_t>(pp); const float fr = static_cast<float>(pp - static_cast<double>(i0)); return v[i0] + (v[i0 + 1] - v[i0]) * fr; };
         for (int i = 0; i < n; ++i) {
             const double p = pos + i / spb;
             if (band >= 0 && repState_ == 0) { if (std::floor(p * 2) != std::floor((p - 1.0 / spb) * 2)) { repState_ = 1; repI_ = 0; } }
-            if (band < 0) repState_ = 0;
-            if (repState_ == 1) { rep_[0][static_cast<size_t>(repI_)] = L[i]; rep_[1][static_cast<size_t>(repI_)] = R[i]; if (++repI_ >= len) { repState_ = 2; repPos_ = 0; repRate_ = 1; repGain_ = 1; } }
-            else if (repState_ == 2) {
-                // en los bordes de cada vuelta la repetición cede al seco 2 ms: sin clics
-                const double lim = len - 2.0;
-                const float fade = std::min(1.0f, static_cast<float>(std::min(repPos_, lim - repPos_)) / (0.002f * sr)), w = repMix_ * std::max(fade, 0.0f);
-                const size_t i0 = static_cast<size_t>(repPos_); const float fr = static_cast<float>(repPos_ - static_cast<double>(i0));
-                const float a = rep_[0][i0] + (rep_[0][i0 + 1] - rep_[0][i0]) * fr, b = rep_[1][i0] + (rep_[1][i0 + 1] - rep_[1][i0]) * fr;
-                L[i] = L[i] * (1.0f - w) + a * w * repGain_; R[i] = R[i] * (1.0f - w) + b * w * repGain_;
+            if (band < 0 && repState_ != 3) repState_ = repState_ == 2 ? 3 : 0;
+            gS_ += ((repState_ == 2 ? repMix_ : 0.0f) - gS_) * wk;   // la mezcla nunca salta: 2 ms
+            if (repState_ == 3 && gS_ < 0.003f) repState_ = 0;
+            float wt = 0, a = 0, b = 0;
+            if (repState_ == 1) { rep_[0][static_cast<size_t>(repI_)] = L[i]; rep_[1][static_cast<size_t>(repI_)] = R[i]; if (++repI_ >= len) { repState_ = 2; repPos_ = 0; repRate_ = 1; repGain_ = 1; repCap_ = len; repLen_ = len; } }
+            else if (repState_ == 2 || repState_ == 3) {
+                // en los bordes de cada vuelta la repetición cede al seco 2 ms: sin clics. Durante un cambio de tamaño suenan
+                // el bucle viejo y el nuevo, cada uno con su propio borde, y se cruzan en 3 ms
+                const double lim = repLen_ - 2.0; const float e2 = 0.002f * sr;
+                const float fN = std::clamp(static_cast<float>(std::min(repPos_, lim - repPos_)) / e2, 0.0f, 1.0f);
+                float wN = gS_ * fN, wO = 0, ao = 0, bo = 0;
+                a = rd(rep_[0], repPos_) * repGain_; b = rd(rep_[1], repPos_) * repGain_;
+                if (xfI_ < xfN_) {
+                    const float t = static_cast<float>(xfI_) / static_cast<float>(xfN_), limO = static_cast<float>(xfLen_ - 2.0);
+                    const float fO = std::clamp(static_cast<float>(std::min(xfPos_, static_cast<double>(limO) - xfPos_)) / e2, 0.0f, 1.0f);
+                    wO = gS_ * fO * (1.0f - t); wN *= t;
+                    ao = rd(rep_[0], xfPos_) * repGain_; bo = rd(rep_[1], xfPos_) * repGain_;
+                    xfPos_ += repRate_; if (xfPos_ >= limO) xfPos_ = 0; ++xfI_;
+                }
+                wt = wN + wO; a = a * wN + ao * wO; b = b * wN + bo * wO;   // a y b ya van pesados
                 repPos_ += repRate_;
                 if (repPos_ >= lim) { repPos_ = 0; repGain_ *= 1.0f - repDecay * 0.45f; repRate_ = std::clamp(repRate_ * turn, 0.25f, 4.0f); }
             }
+            L[i] = L[i] * (1.0f - wt) + a; R[i] = R[i] * (1.0f - wt) + b;
         }
         // --- space (reverb larga, con cola) y delay throw
         spaceSend_ += (std::max(space, 0.6f * rk) - spaceSend_) * sm;
@@ -753,6 +774,7 @@ private:
             }
         }
     }
+    double xfPos_ = 0; int xfN_ = 0, xfI_ = 0, repCap_ = 0, repLen_ = 64; double xfLen_ = 64; float repW_ = 0, gS_ = 0, repTriK_ = 1;
     std::vector<float> rep_[2], tape_[2]; int repState_ = 0, repI_ = 0, repBand_ = -1; long tw_ = 0; double tr_ = 0, repPos_ = 0; float tapeRate_ = 1, repGain_ = 1, repMix_ = 0, repRate_ = 1;
     float gateLvl_ = 1, gateLvlR_ = 1, riserS_ = 0, spaceSend_ = 0, spaceTail_ = 0, throwSend_ = 0, throwTail_ = 0, thDsm_ = 0, thToneK_ = -1;
     float spDry_ = 0; static constexpr float kWetBoost = 1.6f;   // al 100 % el efecto sube ~8 dB: sin seco, suena tan fuerte como la mezcla (medido)
