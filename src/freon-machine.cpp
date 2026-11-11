@@ -1249,6 +1249,13 @@ struct Control {
     // --- memorias: fotos completas del sistema (sintes, batería, mezclador, efectos, sampler, breaks, combinaciones…)
     // en memorias/NOMBRE.json. Cargar una lo cambia todo menos los ajustes de MIDI (canales y controladoras), que son del montaje.
     std::string memDir() const { return base + "/memorias"; }
+    // Efectos de actuación: al encender (y al cargar una memoria) empiezan apagados, aunque se guardaran puestos. Un Repeat o un
+    // Freeze que arranca solo tapa todo lo demás. Space, Delay, filtros y el resto conservan su ajuste.
+    void performanceOff() {
+        for (const char* k : {"m.rep", "m.tape", "m.riser", "m.gate", "m.spFrz", "m.thFrz"}) st[k] = 0;
+        for (int c = 0; c < kCombos; ++c) st["cb." + std::to_string(c) + ".act"] = 0;
+        st["cb.sel"] = -1;
+    }
     static std::string memName(const std::string& n) {
         std::string o; for (char c : n) { const unsigned char u = static_cast<unsigned char>(c); if (std::isalnum(u) || c == ' ' || c == '-' || c == '_' || u >= 0x80) o += c; }
         while (!o.empty() && o.back() == ' ') o.pop_back(); while (!o.empty() && o.front() == ' ') o.erase(o.begin());
@@ -1277,7 +1284,7 @@ struct Control {
         for (auto& [k, v] : ss) if (k.rfind("midi.", 0) == 0) keepS[k] = v;
         const std::string keep = file; file = f; load(); file = keep;
         for (auto& [k, v] : keepF) st[k] = v; for (auto& [k, v] : keepS) ss[k] = v;
-        for (int c = 0; c < kCombos; ++c) st["cb." + std::to_string(c) + ".act"] = 0; st["cb.sel"] = -1;
+        performanceOff();
         au.cmds.push({K_ALLOFF, 0, 0, 0, 0});   // notas sueltas de la configuración anterior, fuera
         pushAll(); mapDirty = true; dirty = true; dirtyAt = std::chrono::steady_clock::now();
         srv.broadcast("state " + stateJson()); srv.broadcast("memmsg loaded " + n);
@@ -2287,7 +2294,8 @@ int main(int argc, char** argv) {
     if (!hasArg(argc, argv, "--estado") && !std::filesystem::exists(ctl.file))
         for (const std::string& old : {base + "/groovebox-estado.json", base + "/../groovebox/groovebox-estado.json"})
             if (std::filesystem::exists(old)) { const std::string nf = ctl.file; ctl.file = old; ctl.load(); ctl.file = nf; ctl.dirty = true; std::printf("Estado recogido de %s\n", old.c_str()); break; }
-    if (!ctl.dirty) ctl.load(); marca("cargar estado");
+    if (!ctl.dirty) ctl.load();
+    ctl.performanceOff(); marca("cargar estado");
     ctl.pushAll(); marca("aplicar estado");
     gMixCh = ctl.mixCh();
     ctl.powerOffEnabled = hasArg(argc, argv, "--apagado-midi");
