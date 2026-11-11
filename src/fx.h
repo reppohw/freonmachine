@@ -500,6 +500,9 @@ struct MasterFx {
     float thTone = 0.7f;                      // throw: tono de las repeticiones
     float comb = 0, cbPitch = 48, cbFb = 0.8f, cbDamp = 0.3f;              // comb: filtro afinado a una nota
     float sweep = 0, swRate = 2, swDepth = 0.7f, swFb = 0.4f, swMode = 0;  // sweep: phaser o flanger a tempo
+    float chorus = 0, chRate = 0.4f, chDepth = 0.5f;   // chorus: 3 voces por lado; velocidad 0,1-5 Hz
+    float width = 0, wBass = 0.5f;                     // spatializer: anchura; los graves (60-300 Hz) quedan en mono
+    bool thFreeze = false;                             // echo freeze: el throw repite para siempre lo que tenía, sin entrada nueva
 
     void prepare(float s) {
         sr = s; rep_[0].assign(static_cast<size_t>(sr * 4), 0); rep_[1].assign(static_cast<size_t>(sr * 4), 0);
@@ -507,10 +510,11 @@ struct MasterFx {
         spaceRv_.prepare(sr); thL_.resize(static_cast<int>(sr * 4)); thR_.resize(static_cast<int>(sr * 4));
         cbL_.resize(static_cast<int>(sr / 15.0f)); cbR_.resize(static_cast<int>(sr / 15.0f));
         flL_.resize(static_cast<int>(sr * 0.02f)); flR_.resize(static_cast<int>(sr * 0.02f));
+        chL_.resize(static_cast<int>(sr * 0.03f)); chR_.resize(static_cast<int>(sr * 0.03f));
     }
     // Si algo se hubiera roto (un NaN), se limpia lo que tiene memoria. Solo ocurre en caso de avería.
     void reset() {
-        spaceRv_.zero(); thL_.zero(); thR_.zero(); cbL_.zero(); cbR_.zero(); flL_.zero(); flR_.zero();
+        spaceRv_.zero(); thL_.zero(); thR_.zero(); cbL_.zero(); cbR_.zero(); flL_.zero(); flR_.zero(); chL_.zero(); chR_.zero(); wLp_ = 0;
         for (auto& v : rep_) std::fill(v.begin(), v.end(), 0.0f);
         for (auto& v : tape_) std::fill(v.begin(), v.end(), 0.0f);
         for (auto& a : apS_) for (auto& x : a) x = 0;
@@ -524,6 +528,7 @@ struct MasterFx {
         const float sm = std::min(1.0f, n / (0.02f * sr));
         processComb(L, R, n, sm);
         processSweep(L, R, n, sm, spb, pos);
+        processChorus(L, R, n, sm);
         // --- riser: paso alto que sube, ruido y algo de reverb
         riserS_ += (riser - riserS_) * sm;
         const float rk = riserS_;
@@ -583,13 +588,17 @@ struct MasterFx {
                 for (int i = 0; i < k; ++i) { L[o + i] += ol[i] * 0.9f; R[o + i] += orr[i] * 0.9f; }
             }
         }
-        if (throwSend_ > 0.001f || throwTail_ > 0) {
-            throwTail_ = throwSend_ > 0.001f ? 15.0f : throwTail_ - n / sr;
+        if (throwSend_ > 0.001f || throwTail_ > 0 || thFreeze) {
+            throwTail_ = throwSend_ > 0.001f || thFreeze ? 15.0f : throwTail_ - n / sr;
             const float dT = kDivs[std::clamp(static_cast<int>(throwDiv + 0.5f), 0, 9)] * s16 * sr;
             if (thDsm_ <= 0) thDsm_ = dT;
             thDsm_ += (dT - thDsm_) * std::min(1.0f, n / (0.2f * sr));
             if (thToneK_ != thTone) { thToneK_ = thTone; thLp_.set(300.0f * std::pow(40.0f, thTone), sr); thHp_.set(250, sr); }
             const float fb = std::min(throwFb, 1.0f);
+            if (thFreeze) {   // echo freeze: el bucle se cierra (sin entrada, sin filtros, realimentación 1) y repite tal cual
+                for (int i = 0; i < n; ++i) { const float y = thL_.read(thDsm_), yr = thR_.read(thDsm_ * 1.5f); thL_.push(y); thR_.push(yr);
+                    L[i] += y * 0.9f; R[i] += (0.5f * y + 0.5f * yr) * 0.9f; }
+            } else
             for (int i = 0; i < n; ++i) {
                 const float y = softClip(thHp_.process(thLp_.process(thL_.read(thDsm_))));
                 const float yr = thR_.read(thDsm_ * 1.5f);
@@ -613,8 +622,35 @@ struct MasterFx {
             } else tr_ = static_cast<double>(tw_);
             if (++tw_ >= static_cast<long>(N)) tw_ = 0;
         }
+        processWidth(L, R, n, sm);
     }
 private:
+    // --- chorus: 3 voces por lado, retardos de 8-20 ms movidos por osciladores desfasados; la cantidad mezcla
+    void processChorus(float* L, float* R, int n, float sm) {
+        chorusS_ += (chorus - chorusS_) * sm;
+        if (chorusS_ < 0.001f) return;
+        const float hz = 0.1f * std::pow(50.0f, std::clamp(chRate, 0.0f, 1.0f)), inc = hz / sr, base = 0.010f * sr, dep = (0.001f + 0.007f * std::clamp(chDepth, 0.0f, 1.0f)) * sr;
+        const float wet = chorusS_ * 0.75f, dry = 1.0f - chorusS_ * 0.3f;
+        for (int i = 0; i < n; ++i) {
+            chPh_ += inc; if (chPh_ >= 1.0f) chPh_ -= 1.0f;
+            float yl = 0, yr = 0;
+            for (int v = 0; v < 3; ++v) { const float o = v / 3.0f; yl += chL_.read(base + dep * (0.5f + 0.5f * fsin(chPh_ + o))); yr += chR_.read(base + dep * (0.5f + 0.5f * fsin(chPh_ + o + 0.1667f))); }
+            chL_.push(L[i]); chR_.push(R[i]);
+            L[i] = L[i] * dry + yl * (wet / 3.0f); R[i] = R[i] * dry + yr * (wet / 3.0f);
+        }
+    }
+    // --- spatializer: más lados (L−R) para abrir la imagen; por debajo de wBass los lados se quitan (graves en mono, pegados)
+    void processWidth(float* L, float* R, int n, float sm) {
+        widthS_ += (width - widthS_) * sm;
+        if (widthS_ < 0.001f) { wLp_ = 0; return; }
+        const float fc = 60.0f * std::pow(5.0f, std::clamp(wBass, 0.0f, 1.0f)), a = 1.0f - std::exp(-2.0f * kPi * fc / sr);
+        const float hi = 1.0f + widthS_, lo = 1.0f - widthS_, g = 1.0f / (1.0f + 0.12f * widthS_);   // hasta el doble de lados; g compensa el volumen
+        for (int i = 0; i < n; ++i) {
+            const float m = 0.5f * (L[i] + R[i]), sd = 0.5f * (L[i] - R[i]);
+            wLp_ += (sd - wLp_) * a; const float s2 = wLp_ * lo + (sd - wLp_) * hi;
+            L[i] = (m + s2) * g; R[i] = (m - s2) * g;
+        }
+    }
     // --- comb: un eco tan corto que se convierte en nota. Amount mezcla, Pitch afina, Feedback da cuerpo, Damp oscurece
     void processComb(float* L, float* R, int n, float sm) {
         combS_ += (comb - combS_) * sm;
@@ -662,6 +698,7 @@ private:
     }
     std::vector<float> rep_[2], tape_[2]; int repState_ = 0, repI_ = 0, repBand_ = -1; long tw_ = 0; double tr_ = 0, repPos_ = 0; float tapeRate_ = 1, repGain_ = 1, repMix_ = 0, repRate_ = 1;
     float gateLvl_ = 1, gateLvlR_ = 1, riserS_ = 0, spaceSend_ = 0, spaceTail_ = 0, throwSend_ = 0, throwTail_ = 0, thDsm_ = 0, thToneK_ = -1;
+    float chorusS_ = 0, chPh_ = 0, widthS_ = 0, wLp_ = 0; DelayLine chL_, chR_;
     float combS_ = 0, combTail_ = 0, cbD_ = 0, cbDampK_ = -1, sweepS_ = 0, apA_[2] = {}, apS_[2][6] = {}, swFbL_ = 0, swFbR_ = 0;
     BQ hpR_[2], nbp_; Noise noise_; FDN spaceRv_; DelayLine thL_, thR_, cbL_, cbR_, flL_, flR_; OnePoleLP thLp_, cbLpL_, cbLpR_; OnePoleHP thHp_;
 };
