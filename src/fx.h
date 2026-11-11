@@ -603,6 +603,7 @@ struct MasterFx {
         }
         // --- space (reverb larga, con cola) y delay throw
         spaceSend_ += (std::max(space, 0.6f * rk) - spaceSend_) * sm;
+        spDry_ += (space - spDry_) * sm;   // al subir el space se va el seco: al 100 % solo queda la reverb (el riser no lo quita)
         throwSend_ += (thr - throwSend_) * std::min(1.0f, n / (0.01f * sr));
         if (spaceSend_ > 0.001f || spaceTail_ > 0 || spFreeze) {
             spaceTail_ = spaceSend_ > 0.001f || spFreeze ? 14.0f : spaceTail_ - n / sr;
@@ -625,7 +626,8 @@ struct MasterFx {
                 const float sg = (ty == 1 && spFreeze) ? 0.0f : spaceSend_;
                 for (int i = 0; i < k; ++i) { sl[i] = L[o + i] * sg; sr2[i] = R[o + i] * sg; }
                 if (ty == 1) plate_.process(sl, sr2, ol, orr, k); else if (ty == 2) spring_.process(sl, sr2, ol, orr, k); else spaceRv_.process(sl, sr2, ol, orr, k);
-                for (int i = 0; i < k; ++i) { L[o + i] += ol[i] * kSpGain[ty]; R[o + i] += orr[i] * kSpGain[ty]; }
+                const float dg = 1.0f - spDry_ * spDry_, wg = kSpGain[ty] * (1.0f + kWetBoost * spDry_ * spDry_);
+                for (int i = 0; i < k; ++i) { L[o + i] = L[o + i] * dg + ol[i] * wg; R[o + i] = R[o + i] * dg + orr[i] * wg; }
             }
         }
         if (throwSend_ > 0.001f || throwTail_ > 0 || thFreeze) {
@@ -635,15 +637,16 @@ struct MasterFx {
             thDsm_ += (dT - thDsm_) * std::min(1.0f, n / (0.2f * sr));
             if (thToneK_ != thTone) { thToneK_ = thTone; thLp_.set(300.0f * std::pow(40.0f, thTone), sr); thHp_.set(250, sr); }
             const float fb = std::min(throwFb, 1.0f);
+            const float tdg = 1.0f - throwSend_ * throwSend_, twb = 1.0f + kWetBoost * throwSend_ * throwSend_;   // al subir el delay se va el seco: al 100 % solo quedan las repeticiones
             if (thFreeze) {   // echo freeze: el bucle se cierra (sin entrada, sin filtros, realimentación 1) y repite tal cual
                 for (int i = 0; i < n; ++i) { const float y = thL_.read(thDsm_), yr = thR_.read(thDsm_ * 1.5f); thL_.push(y); thR_.push(yr);
-                    L[i] += y * 0.9f; R[i] += (0.5f * y + 0.5f * yr) * 0.9f; }
+                    L[i] = L[i] * tdg + y * 0.9f * twb; R[i] = R[i] * tdg + (0.5f * y + 0.5f * yr) * 0.9f * twb; }
             } else
             for (int i = 0; i < n; ++i) {
                 const float y = softClip(thHp_.process(thLp_.process(thL_.read(thDsm_))));
                 const float yr = thR_.read(thDsm_ * 1.5f);
                 thL_.push(0.5f * (L[i] + R[i]) * throwSend_ + y * fb); thR_.push(y * 0.8f);
-                L[i] += y * 0.9f; R[i] += (0.5f * y + 0.5f * yr) * 0.9f;
+                L[i] = L[i] * tdg + y * 0.9f * twb; R[i] = R[i] * tdg + (0.5f * y + 0.5f * yr) * 0.9f * twb;
             }
         }
         // --- tape stop: la cantidad frena la cinta; a 0 vuelve a tiempo real
@@ -752,6 +755,7 @@ private:
     }
     std::vector<float> rep_[2], tape_[2]; int repState_ = 0, repI_ = 0, repBand_ = -1; long tw_ = 0; double tr_ = 0, repPos_ = 0; float tapeRate_ = 1, repGain_ = 1, repMix_ = 0, repRate_ = 1;
     float gateLvl_ = 1, gateLvlR_ = 1, riserS_ = 0, spaceSend_ = 0, spaceTail_ = 0, throwSend_ = 0, throwTail_ = 0, thDsm_ = 0, thToneK_ = -1;
+    float spDry_ = 0; static constexpr float kWetBoost = 1.6f;   // al 100 % el efecto sube ~8 dB: sin seco, suena tan fuerte como la mezcla (medido)
     float lofiS_ = 0, lfCnt_ = 0, lfHL_ = 0, lfHR_ = 0, lfPh_ = 0;
     float chorusS_ = 0, chPh_ = 0, widthS_ = 0, wLp_ = 0; DelayLine chL_, chR_;
     float combS_ = 0, combTail_ = 0, cbD_ = 0, cbDampK_ = -1, sweepS_ = 0, apA_[2] = {}, apS_[2][6] = {}, swFbL_ = 0, swFbR_ = 0;

@@ -766,7 +766,7 @@ function buildFx() {
   }
 }
 // master effects: choose one with the buttons, then Amount, a second parameter and Zero
-const MFX = [
+const MFX_ALL = [
   { n: "Filter", a: "m.filt", amin: -1, af: djf, b: "m.res", bl: "Resonance", bmin: 0.7, bmax: 15, bstep: 0.1, bf: (v) => v.toFixed(1), bdef: 1.4, more: [["m.fEnv", "Env", 0, 1, 0.01, PCT, 0]] },
   { n: "Repeat", a: "m.rep", af: (v) => (v < 0.02 ? "Off" : PCT(v)), b: "m.rSize", bl: "Size", bmin: 0, bmax: 5, bstep: 1, bf: (v) => ["1 bar", "1/2", "1/4", "1/8", "1/16", "1/32"][Math.round(v)] || "", bdef: 2, more: [["m.rDecay", "Decay", 0, 1, 0.01, PCT, 0], ["m.rPitch", "Pitch", -1, 1, 0.01, (v) => v.toFixed(2), 0]] },
   { n: "Gater", a: "m.gate", af: PCT, b: "m.gdiv", bl: "Division", bmin: 0, bmax: 3, bstep: 1, bf: (v) => ["1/4", "1/8", "1/16", "1/32"][Math.round(v)], bdef: 2, more: [["m.gShape", "Shape", 0, 1, 0.01, PCT, 0], ["m.gPan", "Pan", 0, 1, 0.01, PCT, 0]] },
@@ -779,6 +779,10 @@ const MFX = [
   { n: "Lo-Fi", a: "m.lofi", af: PCT, b: "m.lfSrr", bl: "Rate", bmin: 0, bmax: 1, bstep: 0.01, bf: (v) => "÷" + (1 + v * v * 39).toFixed(1), bdef: 0.4, more: [["m.lfBits", "Bits", 0, 1, 0.01, (v) => (16 - 14 * v).toFixed(1), 0.4], ["m.lfAm", "AM", 0, 1, 0.01, (v) => (v < 0.02 ? "Off" : Math.round(1500 * v * v) + " Hz"), 0]] },
   { n: "Spatializer", a: "m.width", af: PCT, b: "m.wBass", bl: "Mono bass", bmin: 0, bmax: 1, bstep: 0.01, bf: (v) => Math.round(60 * Math.pow(5, v)) + " Hz", bdef: 0.5 },
   { n: "Sweep", a: "m.sweep", af: PCT, b: "m.swRate", bl: "Rate", bmin: 0, bmax: 5, bstep: 1, bf: (v) => ["1/4", "1/2", "1 bar", "2 bars", "4 bars", "8 bars"][Math.round(v)], bdef: 2, more: [["m.swDepth", "Depth", 0, 1, 0.01, PCT, 0.7], ["m.swFb", "Feedback", 0, 0.9, 0.01, PCT, 0.4]], tog: ["m.swMode", "Flanger"] }];
+// La vista: 8 efectos, cada uno con Amount y su parámetro principal; el resto de ajustes, plegados en «More».
+// (Gater, Chorus, Spatializer y Sweep siguen en el motor y en las combinaciones guardadas, pero no en la vista.)
+const MFX_VIEW = ["Filter", "Repeat", "Comb", "Space", "Throw", "Tape stop", "Riser", "Lo-Fi"];
+const MFX = MFX_VIEW.map(n => MFX_ALL.find(m => m.n === n)).filter(Boolean).map(m => m.n === "Throw" ? { ...m, n: "Delay" } : m);
 function buildMaster() {
   const box = $("#masterFx"); box.textContent = "";
   ui.mfx = clamp(ui.mfx | 0, 0, MFX.length - 1);
@@ -790,10 +794,11 @@ function buildMaster() {
   });
   kn(knobs, fx.a, "Amount", fx.amin ?? 0, 1, 0.005, fx.af, 0);
   kn(knobs, fx.b, fx.bl, fx.bmin, fx.bmax, fx.bstep, fx.bf, fx.bdef);
-  (fx.more || []).forEach(m => kn(knobs, ...m));
+  const more = el("div", { class: "knobs" }); more.hidden = !ui.mfxMore; (fx.more || []).forEach(m => kn(more, ...m));
+  const moreBtn = (fx.more || []).length ? keyBtn(ui.mfxMore ? "Less" : "More", "", () => { ui.mfxMore = !ui.mfxMore; saveUi(); buildMaster(); }) : null;
   const zero = keyBtn("Zero", "zero", () => { send(fx.a, 0); (draws.get(fx.a) || []).forEach(f => f()); topMsg(fx.n, "off"); });
-  const allZero = keyBtn("All off", "zero", () => { sendRaw("combo off 0"); send("m.spFrz", 0); MFX.forEach(m => { send(m.a, 0); (draws.get(m.a) || []).forEach(f => f()); }); topMsg("Master effects", "all off"); });
-  const main = el("div", { class: "blk live" }, el("span", { class: "label" }, fx.n), knobs, ...(fx.tog ? [toggleKey(fx.tog[0], fx.tog[1])] : []), zero, allZero);
+  const allZero = keyBtn("All off", "zero", () => { sendRaw("combo off 0"); send("m.spFrz", 0); MFX_ALL.forEach(m => { send(m.a, 0); (draws.get(m.a) || []).forEach(f => f()); }); send("m.thFrz", 0); topMsg("Master effects", "all off"); });
+  const main = el("div", { class: "blk live" }, el("span", { class: "label" }, fx.n), knobs, ...(moreBtn ? [moreBtn, more] : []), ...(fx.tog ? [toggleKey(fx.tog[0], fx.tog[1])] : []), zero, allZero);
   main.classList.add("mfxmain");
   const dx = el("div", { class: "knobs" }); kn(dx, "m.drive", "Drive", 0, 1, 0.01, PCT, 0, "sm"); kn(dx, "m.dtone", "Tone", 0, 1, 0.01, PCT, 1, "sm"); kn(dx, "m.dmix", "Mix", 0, 1, 0.01, PCT, 1, "sm");
   const dist = el("div", { class: "blk" }, el("span", { class: "label" }, "Distortion"), selK("m.dtype", DIST.map((n, i) => [i, n]), "Master distortion type"), dx,
@@ -805,9 +810,9 @@ function buildMaster() {
   mixUI.bcRead = el("span", { class: "hint" }, "No reduction");
   const bus = el("div", { class: "blk" }, el("span", { class: "label" }, "Bus compressor"), selK("m.bcRatio", [[0, "2:1"], [1, "4:1"], [2, "10:1"]], "Ratio"), bk, mixUI.bcRead);
   // 8 combinaciones: guardar y disparar
-  const FXN = { "m.filt": "Filter", "m.rep": "Repeat", "m.gate": "Gater", "m.riser": "Riser", "m.space": "Space", "m.throw": "Throw", "m.tape": "Tape", "m.comb": "Comb", "m.sweep": "Sweep", "m.drive": "Dist", "m.chorus": "Chorus", "m.width": "Spatializer", "m.lofi": "Lo-Fi" };
+  const FXN = { "m.filt": "Filter", "m.rep": "Repeat", "m.gate": "Gater", "m.riser": "Riser", "m.space": "Space", "m.throw": "Delay", "m.tape": "Tape", "m.comb": "Comb", "m.sweep": "Sweep", "m.drive": "Dist", "m.chorus": "Chorus", "m.width": "Spatializer", "m.lofi": "Lo-Fi" };
   // nombre de un slot: los efectos que usa; si es una macro aprendida, sus parámetros
-  const pname = (k) => { const m = MFX.find(f => f.a === k || f.b === k || (f.more || []).some(x => x[0] === k)); if (!m) return k.slice(2); if (m.a === k) return m.n; if (m.b === k) return `${m.n} ${m.bl}`; const x = m.more.find(x => x[0] === k); return `${m.n} ${x[1]}`; };
+  const pname = (k) => { const m = MFX_ALL.find(f => f.a === k || f.b === k || (f.more || []).some(x => x[0] === k)); if (!m) return k.slice(2); if (m.a === k) return m.n; if (m.b === k) return `${m.n} ${m.bl}`; const x = m.more.find(x => x[0] === k); return `${m.n} ${x[1]}`; };
   const cbName = (n) => { const ks = String(ST[`cb.${n}.keys`] || "").split(",").filter(Boolean); if (ks.length) return ks.map(pname).join(" + ");
     return Object.keys(FXN).filter(k => Math.abs(ST[`cb.${n}.${k}`] || 0) > 0.005).map(k => FXN[k]).join(" + "); };
   const cbRow = el("div", { class: "scrow" });

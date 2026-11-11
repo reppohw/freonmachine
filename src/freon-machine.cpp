@@ -1161,9 +1161,9 @@ struct Control {
     void comboApply() {
         cbDirty = false; if (cbCur_ < 0) return;
         const float x = st["cb.amt"];
-        // los knobs continuos siguen al fader; los de pasos (tamaño del repeat, divisiones, tipos, freeze) no recorren los pasos
-        // intermedios: en cuanto el fader sale de 0 saltan a su valor, y la cantidad del efecto es la que hace la transición
-        static const std::set<std::string> kStepped = {"m.rSize", "m.gdiv", "m.throwDiv", "m.swRate", "m.swMode", "m.dtype", "m.spType", "m.spFrz", "m.thFrz"};
+        // los knobs siguen al fader, también los de pasos (tamaño del repeat, divisiones: pasan por todos); solo los
+        // interruptores y tipos (freeze, tipo de space, modo) saltan a su valor en cuanto el fader sale de 0
+        static const std::set<std::string> kStepped = {"m.swMode", "m.dtype", "m.spType", "m.spFrz", "m.thFrz"};   // tamaños y divisiones sí se recorren (el redoble que se acelera)
         for (const auto& i : cbLive_) {
             const float b0 = i.fixed ? i.from : i.base, v = kStepped.count(i.k) ? (x > 0.001f ? i.to : b0) : b0 + (i.to - b0) * x;
             if (st[i.k] != v) set(i.k, v, -1);
