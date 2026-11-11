@@ -26,6 +26,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <set>
 #include <sstream>
 #include <string>
 #include <thread>
@@ -406,7 +407,7 @@ struct Audio {
         const float load = static_cast<float>(std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count() * sr / n * 100.0);
         cpu = cpu.load() + (load - cpu.load()) * 0.05f;
         if (load > cpuPeak.load()) cpuPeak = load;
-        if (load > 100.0f) late.fetch_add(1, std::memory_order_relaxed);   // el bloque tardó más de lo que dura: se oye como un corte
+        if (load > 100.0f && calls.load(std::memory_order_relaxed) > 1000) late.fetch_add(1, std::memory_order_relaxed);   // los primeros ~10 s (arranque) no cuentan   // el bloque tardó más de lo que dura: se oye como un corte
     }
     void chunk(float* out, int oc, const float* in, int ic, int k) {
         // --- tempo: reloj del Oxi si llega; si no, el de la pantalla
@@ -973,7 +974,7 @@ struct Control {
         if ((k[0] == 'c' || k[0] == 'g') && k.size() > 2 && std::isdigit(static_cast<unsigned char>(k[1]))) {
             const size_t d = k.find('.'); if (d == std::string::npos) return true;
             static const std::map<std::string, std::pair<float, float>> R = {{"pan", {-1, 1}}, {"out", {0, 2 + NDIR}}, {"dtype", {0, 1}}, {"low", {-15, 15}}, {"mid", {-15, 15}}, {"high", {-15, 15}},
-                {"lim", {-24, 0}}, {"sc", {-1, NCH - 1}}, {"trim", {-24, 12}}, {"scRel", {0.02f, 1.0f}}, {"filt", {-1, 1}}, {"res", {0.7f, 15}}, {"lvl", {0, 1.5f}}};
+                {"lim", {-24, 0}}, {"sc", {-1, NCH - 1}}, {"trim", {-24, 24}}, {"scRel", {0.02f, 1.0f}}, {"filt", {-1, 1}}, {"res", {0.7f, 15}}, {"lvl", {0, 1.5f}}};
             const auto it = R.find(k.substr(d + 1)); if (it != R.end()) { lo = it->second.first; hi = it->second.second; } else { lo = 0; hi = 1; }
             return true;
         }
@@ -1160,7 +1161,13 @@ struct Control {
     void comboApply() {
         cbDirty = false; if (cbCur_ < 0) return;
         const float x = st["cb.amt"];
-        for (const auto& i : cbLive_) { const float b0 = i.fixed ? i.from : i.base, v = b0 + (i.to - b0) * x; if (st[i.k] != v) set(i.k, v, -1); }   // todos los knobs siguen al fader
+        // los knobs continuos siguen al fader; los de pasos (tamaño del repeat, divisiones, tipos, freeze) no recorren los pasos
+        // intermedios: en cuanto el fader sale de 0 saltan a su valor, y la cantidad del efecto es la que hace la transición
+        static const std::set<std::string> kStepped = {"m.rSize", "m.gdiv", "m.throwDiv", "m.swRate", "m.swMode", "m.dtype", "m.spType", "m.spFrz", "m.thFrz"};
+        for (const auto& i : cbLive_) {
+            const float b0 = i.fixed ? i.from : i.base, v = kStepped.count(i.k) ? (x > 0.001f ? i.to : b0) : b0 + (i.to - b0) * x;
+            if (st[i.k] != v) set(i.k, v, -1);
+        }
     }
     // --- macros al estilo Live: se elige un slot, se pulsa Aprender y los knobs del máster que se mueven quedan en él,
     // cada uno con su punto de partida (el valor antes de tocarlo) y de llegada (donde lo dejas). El crossfader los lleva juntos.
@@ -2322,7 +2329,7 @@ int main(int argc, char** argv) {
     std::atomic<bool> restart{false};
     std::atomic<bool> fakeStop{false};
     const auto startFake = [&]() { fakeStop = false; fake = std::thread([&]() { std::vector<float> b(512); while (!gQuit && !fakeStop) { au->process(b.data(), 2, nullptr, 0, 256); std::this_thread::sleep_for(std::chrono::microseconds(256 * 1000000 / rate)); } }); };
-    ctl.sysStatus = [&]() { return std::to_string(cpuTempC()) + " " + piThrottled() + " " + std::to_string(au->xruns.load() + au->late.load()) + " " + jnum(au->cpu.load()) + " " + jnum(au->cpuPeak.exchange(0.0f)); };
+    ctl.sysStatus = [&]() { return std::to_string(cpuTempC()) + " " + piThrottled() + " " + std::to_string(au->xruns.load() + au->late.load()) + " " + jnum(au->cpu.load()) + " " + jnum(au->cpuPeak.exchange(0.0f)) + " " + (audioNote.empty() ? std::string("-") : audioNote); };   // 6.º: interfaz de reserva (default/auto/none)
     ctl.sysInfo = [&]() {
         std::string o = "{\"outs\":["; std::string in = "\"ins\":[", mid = "\"midi\":[", off = "\"midioff\":["; bool fo = true, fi = true, fm = true;
         try { RtAudio a; for (unsigned id : a.getDeviceIds()) { const auto inf = a.getDeviceInfo(id); if (inf.outputChannels) { o += (fo ? "" : ",") + jstr(utf8Clean(inf.name).c_str()); fo = false; } if (inf.inputChannels) { in += (fi ? "" : ",") + jstr(utf8Clean(inf.name).c_str()); fi = false; } } } catch (...) {}
