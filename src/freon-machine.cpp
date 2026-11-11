@@ -103,9 +103,9 @@ const char* kSubKeys[8] = {"ch", "on", "oct", "tone", "glide", "vol", "mode", "s
 // Parámetros de canal y grupo (mismo orden en las claves y en el audio)
 enum SP { SP_LVL, SP_PAN, SP_MUTE, SP_SOLO, SP_CUE, SP_OUT, SP_DTYPE, SP_DRIVE, SP_DTONE, SP_DMIX, SP_LOW, SP_MID, SP_HIGH, SP_LIM, SP_SC, SP_SCAMT, SP_SCREL, SP_S0, SP_S1, SP_S2, SP_S3, SP_FILT, SP_RES, SP_TRIM, SP_COUNT };
 const char* kSP[SP_COUNT] = {"lvl", "pan", "mute", "solo", "cue", "out", "dtype", "drive", "dtone", "dmix", "low", "mid", "high", "lim", "sc", "scAmt", "scRel", "s0", "s1", "s2", "s3", "filt", "res", "trim"};
-enum MP { MP_VOL, MP_LIM, MP_CUELVL, MP_CUEMODE, MP_DTYPE, MP_DRIVE, MP_DTONE, MP_DMIX, MP_FILT, MP_RES, MP_REP, MP_GDIV, MP_GATE, MP_RISER, MP_SPACE, MP_SPSIZE, MP_THROW, MP_TDIV, MP_TFB, MP_TAPE, MP_BPM, MP_CLOCK, MP_RDECAY, MP_RNOISE, MP_TAPESM, MP_RSIZE, MP_FENV, MP_RPITCH, MP_GSHAPE, MP_GPAN, MP_SPDAMP, MP_SPFRZ, MP_TTONE, MP_COMB, MP_CBPITCH, MP_CBFB, MP_CBDAMP, MP_SWEEP, MP_SWRATE, MP_SWDEPTH, MP_SWFB, MP_SWMODE, MP_SUM, MP_BCOMP, MP_BCRAT, MP_BCATK, MP_BCREL, MP_BCMIX, MP_BCAIR, MP_BCMKP, MP_CLIP, MP_CHORUS, MP_CHRATE, MP_CHDEPTH, MP_WIDTH, MP_WBASS, MP_THFRZ, MP_LOFI, MP_LFSRR, MP_LFBITS, MP_LFAM, MP_COUNT };   // MP_SUM ya no se usa
-const char* kMP[MP_COUNT] = {"vol", "lim", "cueLvl", "cueMode", "dtype", "drive", "dtone", "dmix", "filt", "res", "rep", "gdiv", "gate", "riser", "space", "spSize", "throw", "throwDiv", "throwFb", "tape", "bpm", "clock", "rDecay", "rNoise", "tapeSm", "rSize", "fEnv", "rPitch", "gShape", "gPan", "spDamp", "spFrz", "tTone", "comb", "cbPitch", "cbFb", "cbDamp", "sweep", "swRate", "swDepth", "swFb", "swMode", "sum", "bcomp", "bcRatio", "bcAtk", "bcRel", "bcMix", "bcAir", "bcMkp", "clip", "chorus", "chRate", "chDepth", "width", "wBass", "thFrz", "lofi", "lfSrr", "lfBits", "lfAm"};
-const float kMpDef[MP_COUNT] = {0.85f, -1.5f, 0.8f, 0, 0, 0, 1, 1, 0, 1.4f, 0, 2, 0, 0, 0, 0.7f, 0, 6, 0.55f, 0, 120, 1, 0, 0.5f, 0.5f, 2, 0, 0, 0, 0, 0.53f, 0, 0.7f, 0, 48, 0.8f, 0.3f, 0, 2, 0.7f, 0.4f, 0, 0, 0, 1, 10, 0.3f, 1, 0, 0, 1, 0, 0.4f, 0.5f, 0, 0.5f, 0, 0, 0.4f, 0.4f, 0};
+enum MP { MP_VOL, MP_LIM, MP_CUELVL, MP_CUEMODE, MP_DTYPE, MP_DRIVE, MP_DTONE, MP_DMIX, MP_FILT, MP_RES, MP_REP, MP_GDIV, MP_GATE, MP_RISER, MP_SPACE, MP_SPSIZE, MP_THROW, MP_TDIV, MP_TFB, MP_TAPE, MP_BPM, MP_CLOCK, MP_RDECAY, MP_RNOISE, MP_TAPESM, MP_RSIZE, MP_FENV, MP_RPITCH, MP_GSHAPE, MP_GPAN, MP_SPDAMP, MP_SPFRZ, MP_TTONE, MP_COMB, MP_CBPITCH, MP_CBFB, MP_CBDAMP, MP_SWEEP, MP_SWRATE, MP_SWDEPTH, MP_SWFB, MP_SWMODE, MP_SUM, MP_BCOMP, MP_BCRAT, MP_BCATK, MP_BCREL, MP_BCMIX, MP_BCAIR, MP_BCMKP, MP_CLIP, MP_CHORUS, MP_CHRATE, MP_CHDEPTH, MP_WIDTH, MP_WBASS, MP_THFRZ, MP_LOFI, MP_LFSRR, MP_LFBITS, MP_LFAM, MP_SPTYPE, MP_COUNT };   // MP_SUM ya no se usa
+const char* kMP[MP_COUNT] = {"vol", "lim", "cueLvl", "cueMode", "dtype", "drive", "dtone", "dmix", "filt", "res", "rep", "gdiv", "gate", "riser", "space", "spSize", "throw", "throwDiv", "throwFb", "tape", "bpm", "clock", "rDecay", "rNoise", "tapeSm", "rSize", "fEnv", "rPitch", "gShape", "gPan", "spDamp", "spFrz", "tTone", "comb", "cbPitch", "cbFb", "cbDamp", "sweep", "swRate", "swDepth", "swFb", "swMode", "sum", "bcomp", "bcRatio", "bcAtk", "bcRel", "bcMix", "bcAir", "bcMkp", "clip", "chorus", "chRate", "chDepth", "width", "wBass", "thFrz", "lofi", "lfSrr", "lfBits", "lfAm", "spType"};
+const float kMpDef[MP_COUNT] = {0.85f, -1.5f, 0.8f, 0, 0, 0, 1, 1, 0, 1.4f, 0, 2, 0, 0, 0, 0.7f, 0, 6, 0.55f, 0, 120, 1, 0, 0.5f, 0.5f, 2, 0, 0, 0, 0, 0.53f, 0, 0.7f, 0, 48, 0.8f, 0.3f, 0, 2, 0.7f, 0.4f, 0, 0, 0, 1, 10, 0.3f, 1, 0, 0, 1, 0, 0.4f, 0.5f, 0, 0.5f, 0, 0, 0.4f, 0.4f, 0, 0};
 // Distorsión: Hard, Fuzz y Bitcrusher
 const int kDistMap[2] = {D_FUZZ, D_BITS};
 inline int distType(float v) { return kDistMap[std::clamp(static_cast<int>(v), 0, 1)]; }
@@ -312,7 +312,7 @@ struct Audio {
             case MP_BCOMP: bcomp.amount = v; break; case MP_BCRAT: bcomp.ratio = v; break; case MP_BCATK: bcomp.attack = v; break; case MP_BCREL: bcomp.release = v; break; case MP_BCMIX: bcomp.mix = v; break; case MP_BCAIR: bcomp.air = v; break; case MP_BCMKP: bcomp.makeup = v; break;
             case MP_SWEEP: mfx.sweep = v; break; case MP_SWRATE: mfx.swRate = v; break; case MP_SWDEPTH: mfx.swDepth = v; break; case MP_SWFB: mfx.swFb = v; break; case MP_SWMODE: mfx.swMode = v; break;
             case MP_CHORUS: mfx.chorus = v; break; case MP_CHRATE: mfx.chRate = v; break; case MP_CHDEPTH: mfx.chDepth = v; break; case MP_WIDTH: mfx.width = v; break; case MP_WBASS: mfx.wBass = v; break; case MP_THFRZ: mfx.thFreeze = v >= 0.5f; break;
-            case MP_LOFI: mfx.lofi = v; break; case MP_LFSRR: mfx.lfSrr = v; break; case MP_LFBITS: mfx.lfBits = v; break; case MP_LFAM: mfx.lfAm = v; break;
+            case MP_LOFI: mfx.lofi = v; break; case MP_LFSRR: mfx.lfSrr = v; break; case MP_LFBITS: mfx.lfBits = v; break; case MP_LFAM: mfx.lfAm = v; break; case MP_SPTYPE: mfx.spType = v; break;
             default: break;
         }
     }
@@ -979,7 +979,7 @@ struct Control {
         }
         if (k.rfind("m.", 0) == 0) {
             static const std::map<std::string, std::pair<float, float>> R = {{"vol", {0, 1.5f}}, {"lim", {-12, 0}}, {"cueLvl", {0, 1.2f}}, {"cueMode", {0, 2}}, {"dtype", {0, 1}}, {"filt", {-1, 1}}, {"res", {0.7f, 15}},
-                {"gdiv", {0, 3}}, {"throwDiv", {0, 9}}, {"bpm", {40, 220}}, {"rSize", {0, 5}}, {"rPitch", {-1, 1}}, {"bcRatio", {0, 2}}, {"bcAtk", {0.1f, 30}}, {"bcRel", {0.05f, 1.2f}}, {"bcMkp", {-6, 12}}, {"cbPitch", {24, 96}}, {"swRate", {0, 5}}};
+                {"gdiv", {0, 3}}, {"throwDiv", {0, 9}}, {"bpm", {40, 220}}, {"rSize", {0, 5}}, {"spType", {0, 3}}, {"rPitch", {-1, 1}}, {"bcRatio", {0, 2}}, {"bcAtk", {0.1f, 30}}, {"bcRel", {0.05f, 1.2f}}, {"bcMkp", {-6, 12}}, {"cbPitch", {24, 96}}, {"swRate", {0, 5}}};
             const auto it = R.find(k.substr(2)); if (it != R.end()) { lo = it->second.first; hi = it->second.second; } else { lo = 0; hi = 1; }
             return true;
         }
@@ -1100,7 +1100,7 @@ struct Control {
     struct CbFx { const char* amt; std::vector<const char*> params; };
     static const std::vector<CbFx>& cbFx() {
         static const std::vector<CbFx> F = {{"m.filt", {"m.res", "m.fEnv"}}, {"m.rep", {"m.rSize", "m.rDecay", "m.rPitch"}}, {"m.gate", {"m.gdiv", "m.gShape", "m.gPan"}}, {"m.riser", {"m.rNoise"}},
-            {"m.space", {"m.spSize", "m.spDamp", "m.spFrz"}}, {"m.throw", {"m.throwDiv", "m.throwFb", "m.tTone", "m.thFrz"}}, {"m.tape", {"m.tapeSm"}}, {"m.comb", {"m.cbPitch", "m.cbFb", "m.cbDamp"}},
+            {"m.space", {"m.spSize", "m.spDamp", "m.spFrz", "m.spType"}}, {"m.throw", {"m.throwDiv", "m.throwFb", "m.tTone", "m.thFrz"}}, {"m.tape", {"m.tapeSm"}}, {"m.comb", {"m.cbPitch", "m.cbFb", "m.cbDamp"}},
             {"m.sweep", {"m.swRate", "m.swDepth", "m.swFb", "m.swMode"}}, {"m.drive", {"m.dtype", "m.dtone", "m.dmix"}}, {"m.chorus", {"m.chRate", "m.chDepth"}}, {"m.width", {"m.wBass"}}, {"m.lofi", {"m.lfSrr", "m.lfBits", "m.lfAm"}}};
         return F;
     }

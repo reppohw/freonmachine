@@ -381,6 +381,31 @@ enum FxType { FX_HALL = 0, FX_PLATE, FX_DARK, FX_PING, FX_TAPE, FX_DUB, FX_MULTI
 // Divisiones de tiempo: semicorcheas
 inline const float kDivs[10] = {0.5f, 1, 4.0f / 3, 1.5f, 2, 8.0f / 3, 3, 4, 6, 8};
 
+// Reverb de muelle: en cada canal, una cadena de filtros pasa-todo dispersa los agudos (el «boing» que baja) dentro de un
+// lazo de retardo de ~40-50 ms con su filtro de tono. Barata: 16 pasa-todo por canal.
+struct Spring {
+    float sr = 48000, decay = 0.6f, damp = 0.5f; bool freeze = false;
+    void prepare(float s) { sr = s; for (int c = 0; c < 2; ++c) d_[c].resize(static_cast<int>(0.08f * sr)); zero(); }
+    void zero() { for (auto& d : d_) d.zero(); for (auto& c : ap_) for (auto& x : c) x = 0; lp_[0] = lp_[1] = 0; hp_[0] = hp_[1] = 0; fb_[0] = fb_[1] = 0; }
+    void process(const float* inL, const float* inR, float* outL, float* outR, int n) {
+        const float dl[2] = {0.041f * sr, 0.047f * sr}, g = freeze ? 0.999f : 0.55f + 0.42f * std::clamp(decay, 0.0f, 1.0f);
+        const float lpA = 1.0f - std::exp(-2.0f * kPi * (1500.0f + 5000.0f * (1.0f - damp)) / sr), hpA = 1.0f - std::exp(-2.0f * kPi * 180.0f / sr);
+        for (int i = 0; i < n; ++i) {
+            const float in[2] = {freeze ? 0.0f : inL[i], freeze ? 0.0f : inR[i]}; float out[2];
+            for (int c = 0; c < 2; ++c) {
+                hp_[c] += (in[c] - hp_[c]) * hpA; float x = in[c] - hp_[c] + fb_[c] * g;   // los muelles no tienen graves
+                for (int k = 0; k < 16; ++k) { const float a = 0.62f, y = -a * x + ap_[c][k]; ap_[c][k] = x + a * y; x = y; }   // dispersión
+                d_[c].push(x);
+                float y = d_[c].read(dl[c]); lp_[c] += (y - lp_[c]) * lpA; y = lp_[c];
+                fb_[c] = softClip(y); out[c] = y;
+            }
+            outL[i] = out[0] + 0.3f * out[1]; outR[i] = out[1] + 0.3f * out[0];
+        }
+    }
+private:
+    DelayLine d_[2]; float ap_[2][16] = {}, lp_[2] = {}, hp_[2] = {}, fb_[2] = {};
+};
+
 class SendFx {
 public:
     int type = FX_HALL; float p[5] = {0.55f, 0.4f, 0.02f, 0, 0}; float ret = 0.6f;
@@ -497,6 +522,7 @@ struct MasterFx {
     float repPitch = 0;                       // repeat: cada vuelta sube o baja (−1..1 = hasta una octava por vuelta)
     float gShape = 0, gPan = 0;               // gater: de corte seco a trémolo suave; alternar izquierda y derecha
     float spDamp = 0.53f; bool spFreeze = false;   // space: tono de la cola; congelar lo que ya está sonando
+    float spType = 0;                              // space: 0 Hall, 1 Plate, 2 Spring, 3 Dark (como las reverbs de la Octatrack)
     float thTone = 0.7f;                      // throw: tono de las repeticiones
     float comb = 0, cbPitch = 48, cbFb = 0.8f, cbDamp = 0.3f;              // comb: filtro afinado a una nota
     float sweep = 0, swRate = 2, swDepth = 0.7f, swFb = 0.4f, swMode = 0;  // sweep: phaser o flanger a tempo
@@ -508,14 +534,14 @@ struct MasterFx {
     void prepare(float s) {
         sr = s; rep_[0].assign(static_cast<size_t>(sr * 4), 0); rep_[1].assign(static_cast<size_t>(sr * 4), 0);
         tape_[0].assign(static_cast<size_t>(sr * 6), 0); tape_[1].assign(static_cast<size_t>(sr * 6), 0);
-        spaceRv_.prepare(sr); thL_.resize(static_cast<int>(sr * 4)); thR_.resize(static_cast<int>(sr * 4));
+        spaceRv_.prepare(sr); plate_.prepare(sr); spring_.prepare(sr); thL_.resize(static_cast<int>(sr * 4)); thR_.resize(static_cast<int>(sr * 4));
         cbL_.resize(static_cast<int>(sr / 15.0f)); cbR_.resize(static_cast<int>(sr / 15.0f));
         flL_.resize(static_cast<int>(sr * 0.02f)); flR_.resize(static_cast<int>(sr * 0.02f));
         chL_.resize(static_cast<int>(sr * 0.03f)); chR_.resize(static_cast<int>(sr * 0.03f));
     }
     // Si algo se hubiera roto (un NaN), se limpia lo que tiene memoria. Solo ocurre en caso de avería.
     void reset() {
-        spaceRv_.zero(); thL_.zero(); thR_.zero(); cbL_.zero(); cbR_.zero(); flL_.zero(); flR_.zero(); chL_.zero(); chR_.zero(); wLp_ = 0;
+        spaceRv_.zero(); plate_.zero(); spring_.zero(); thL_.zero(); thR_.zero(); cbL_.zero(); cbR_.zero(); flL_.zero(); flR_.zero(); chL_.zero(); chR_.zero(); wLp_ = 0;
         for (auto& v : rep_) std::fill(v.begin(), v.end(), 0.0f);
         for (auto& v : tape_) std::fill(v.begin(), v.end(), 0.0f);
         for (auto& a : apS_) for (auto& x : a) x = 0;
@@ -580,14 +606,26 @@ struct MasterFx {
         throwSend_ += (thr - throwSend_) * std::min(1.0f, n / (0.01f * sr));
         if (spaceSend_ > 0.001f || spaceTail_ > 0 || spFreeze) {
             spaceTail_ = spaceSend_ > 0.001f || spFreeze ? 14.0f : spaceTail_ - n / sr;
-            spaceRv_.t60 = 3.0f + spaceSize * 12.0f; spaceRv_.damp = 1500.0f * std::pow(8.0f, 1.0f - spDamp); spaceRv_.size = 0.4f + spaceSize * 0.6f; spaceRv_.pre = 0.03f;
-            spaceRv_.mod = 0.4f; spaceRv_.lowcut = 0.25f; spaceRv_.freeze = spFreeze;
+            const int ty = std::clamp(static_cast<int>(spType + 0.5f), 0, 3);
+            if (ty != spTypeK_) { spaceRv_.zero(); plate_.zero(); spring_.zero(); spTypeK_ = ty; }   // al cambiar de tipo, la cola anterior se corta
+            if (ty == 3) {   // dark: la sala, mucho más oscura, larga y moviéndose
+                spaceRv_.t60 = 5.0f + spaceSize * 15.0f; spaceRv_.damp = 400.0f * std::pow(5.0f, 1.0f - spDamp); spaceRv_.size = 0.6f + spaceSize * 0.4f; spaceRv_.pre = 0.05f;
+                spaceRv_.mod = 0.8f; spaceRv_.lowcut = 0.1f;
+            } else {
+                spaceRv_.t60 = 3.0f + spaceSize * 12.0f; spaceRv_.damp = 1500.0f * std::pow(8.0f, 1.0f - spDamp); spaceRv_.size = 0.4f + spaceSize * 0.6f; spaceRv_.pre = 0.03f;
+                spaceRv_.mod = 0.4f; spaceRv_.lowcut = 0.25f;
+            }
+            spaceRv_.freeze = spFreeze;
+            plate_.decay = spFreeze ? 0.9995f : 0.35f + 0.6f * spaceSize; plate_.damp = 0.05f + 0.8f * spDamp; plate_.pre = 0.02f; plate_.mod = 0.3f; plate_.lowcut = 0.2f;
+            spring_.decay = spaceSize; spring_.damp = spDamp; spring_.freeze = spFreeze;
+            static const float kSpGain[4] = {0.9f, 1.04f, 0.48f, 1.6f};   // niveles igualados con ruido (medido; la Dark un poco por debajo: es oscura)
             float sl[512], sr2[512], ol[512], orr[512];
             for (int o = 0; o < n; o += 512) {
                 const int k = std::min(512, n - o);
-                for (int i = 0; i < k; ++i) { sl[i] = L[o + i] * spaceSend_; sr2[i] = R[o + i] * spaceSend_; }
-                spaceRv_.process(sl, sr2, ol, orr, k);
-                for (int i = 0; i < k; ++i) { L[o + i] += ol[i] * 0.9f; R[o + i] += orr[i] * 0.9f; }
+                const float sg = (ty == 1 && spFreeze) ? 0.0f : spaceSend_;
+                for (int i = 0; i < k; ++i) { sl[i] = L[o + i] * sg; sr2[i] = R[o + i] * sg; }
+                if (ty == 1) plate_.process(sl, sr2, ol, orr, k); else if (ty == 2) spring_.process(sl, sr2, ol, orr, k); else spaceRv_.process(sl, sr2, ol, orr, k);
+                for (int i = 0; i < k; ++i) { L[o + i] += ol[i] * kSpGain[ty]; R[o + i] += orr[i] * kSpGain[ty]; }
             }
         }
         if (throwSend_ > 0.001f || throwTail_ > 0 || thFreeze) {
@@ -717,7 +755,7 @@ private:
     float lofiS_ = 0, lfCnt_ = 0, lfHL_ = 0, lfHR_ = 0, lfPh_ = 0;
     float chorusS_ = 0, chPh_ = 0, widthS_ = 0, wLp_ = 0; DelayLine chL_, chR_;
     float combS_ = 0, combTail_ = 0, cbD_ = 0, cbDampK_ = -1, sweepS_ = 0, apA_[2] = {}, apS_[2][6] = {}, swFbL_ = 0, swFbR_ = 0;
-    BQ hpR_[2], nbp_; Noise noise_; FDN spaceRv_; DelayLine thL_, thR_, cbL_, cbR_, flL_, flR_; OnePoleLP thLp_, cbLpL_, cbLpR_; OnePoleHP thHp_;
+    BQ hpR_[2], nbp_; Noise noise_; FDN spaceRv_; Plate plate_; Spring spring_; int spTypeK_ = 0; DelayLine thL_, thR_, cbL_, cbR_, flL_, flR_; OnePoleLP thLp_, cbLpL_, cbLpR_; OnePoleHP thHp_;
 };
 
 }  // namespace gb
