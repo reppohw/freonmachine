@@ -466,3 +466,7 @@ hacerlo con licencia GPL v3 y con su código. Para uso propio no cambia nada.
 Efectos: Filter, Repeat, Gater, Riser, Space (con 4 tipos: Hall, Plate, Spring y Dark, y Freeze), Throw (con Freeze, como el Echo Freeze Delay), Tape stop, Comb, Lo-Fi (frecuencia de muestreo, bits y AM), Chorus, Spatializer (anchura con los graves en mono) y Sweep (phaser o flanger), además de la distorsión y el compresor de bus. Cada uno solo gasta procesador mientras está activo.
 
 Macros: en el bloque de combinaciones, pulsa **Learn**, elige un slot y mueve los knobs del máster que quieras que se muevan juntos: cada uno recuerda dónde empezó y dónde lo dejaste. Pulsa **Learn** otra vez para terminar (los knobs vuelven al principio). Después, el pad del slot la enciende y el crossfader (knob 8 del programa amarillo del LPD8) los lleva a la vez de un punto a otro. **Clear** vacía un slot. Las combinaciones guardadas con **Save** siguen funcionando como antes.
+
+## Memorias
+
+En Settings → Memories: escribe un nombre y pulsa Save. Guarda todo el sistema (instrumentos, batería, mezclador, efectos, combinaciones y macros, sampler y breaks) en `memorias/NOMBRE.json`. Para cargarla, toca su nombre y confirma: corta las notas que suenan y lo cambia todo menos los ajustes de MIDI (canales y controladoras). La × la borra.

@@ -1246,6 +1246,47 @@ struct Control {
         if (ok != !saveErr) { saveErr = !ok; srv.broadcast(std::string("saveerr ") + (saveErr ? "1" : "0")); }
         if (!ok) { dirty = true; dirtyAt = std::chrono::steady_clock::now() + std::chrono::seconds(5); }
     }
+    // --- memorias: fotos completas del sistema (sintes, batería, mezclador, efectos, sampler, breaks, combinaciones…)
+    // en memorias/NOMBRE.json. Cargar una lo cambia todo menos los ajustes de MIDI (canales y controladoras), que son del montaje.
+    std::string memDir() const { return base + "/memorias"; }
+    static std::string memName(const std::string& n) {
+        std::string o; for (char c : n) { const unsigned char u = static_cast<unsigned char>(c); if (std::isalnum(u) || c == ' ' || c == '-' || c == '_' || u >= 0x80) o += c; }
+        while (!o.empty() && o.back() == ' ') o.pop_back(); while (!o.empty() && o.front() == ' ') o.erase(o.begin());
+        return o.substr(0, 40);
+    }
+    std::string memList() {
+        std::vector<std::string> v; std::error_code ec;
+        for (const auto& e : std::filesystem::directory_iterator(memDir(), ec)) { const auto f = e.path().filename().string(); if (f.size() > 5 && f.compare(f.size() - 5, 5, ".json") == 0) v.push_back(f.substr(0, f.size() - 5)); }
+        std::sort(v.begin(), v.end()); std::string o = "["; for (size_t i = 0; i < v.size(); ++i) { if (i) o += ","; o += jstr(v[i].c_str()); } return o + "]";
+    }
+    void memSave(const std::string& raw) {
+        const std::string n = memName(raw); if (n.empty()) return;
+        std::error_code ec; std::filesystem::create_directories(memDir(), ec);
+        const std::string f = memDir() + "/" + n + ".json", tmp = f + ".tmp", js = stateJson();
+        FILE* o = std::fopen(tmp.c_str(), "wb"); bool ok = o && std::fwrite(js.data(), 1, js.size(), o) == js.size();
+        if (o) { ok = std::fflush(o) == 0 && ok; ok = ::fsync(fileno(o)) == 0 && ok; ok = std::fclose(o) == 0 && ok; }
+        if (ok) ok = std::rename(tmp.c_str(), f.c_str()) == 0; else std::remove(tmp.c_str());
+        std::printf("Memoria %s: %s\n", ok ? "guardada" : "NO guardada", n.c_str()); std::fflush(stdout);
+        srv.broadcast("memlist " + memList()); srv.broadcast(std::string("memmsg ") + (ok ? "saved " : "error ") + n);
+    }
+    void memLoad(const std::string& raw) {
+        const std::string n = memName(raw), f = memDir() + "/" + n + ".json"; if (n.empty() || !std::filesystem::exists(f)) return;
+        if (learn_ >= 0) learnStop(); comboOff();
+        std::map<std::string, float> keepF; std::map<std::string, std::string> keepS;   // el montaje MIDI no cambia
+        for (auto& [k, v] : st) if (k.rfind("midi.", 0) == 0) keepF[k] = v;
+        for (auto& [k, v] : ss) if (k.rfind("midi.", 0) == 0) keepS[k] = v;
+        const std::string keep = file; file = f; load(); file = keep;
+        for (auto& [k, v] : keepF) st[k] = v; for (auto& [k, v] : keepS) ss[k] = v;
+        for (int c = 0; c < kCombos; ++c) st["cb." + std::to_string(c) + ".act"] = 0; st["cb.sel"] = -1;
+        au.cmds.push({K_ALLOFF, 0, 0, 0, 0});   // notas sueltas de la configuración anterior, fuera
+        pushAll(); mapDirty = true; dirty = true; dirtyAt = std::chrono::steady_clock::now();
+        srv.broadcast("state " + stateJson()); srv.broadcast("memmsg loaded " + n);
+        std::printf("Memoria cargada: %s\n", n.c_str()); std::fflush(stdout);
+    }
+    void memDel(const std::string& raw) {
+        const std::string n = memName(raw); if (n.empty()) return; std::error_code ec;
+        std::filesystem::remove(memDir() + "/" + n + ".json", ec); srv.broadcast("memlist " + memList());
+    }
     std::string stateJson() {
         std::string o = "{"; bool first = true;
         for (auto& [k, v] : st) { if (!first) o += ","; first = false; o += "\"" + k + "\":" + jnum(v); }
@@ -1332,10 +1373,14 @@ struct Control {
             std::string spec = specJson(); spec.pop_back(); spec += "," + mixSpecJson() + ",\"outs\":" + std::to_string(au.outCh) + ",\"ins\":" + std::to_string(au.inCh) + "}";
             spec.pop_back(); spec += "," + liveSpecJson() + "}";
             midiSeen_ = ~0u;   // que el monitor MIDI se reenvíe a la pantalla nueva
-            srv.send(client, "spec " + spec); srv.send(client, "files " + filesJson()); srv.send(client, "state " + stateJson());
+            srv.send(client, "spec " + spec); srv.send(client, "files " + filesJson()); srv.send(client, "state " + stateJson()); srv.send(client, "memlist " + memList());
         }
         else if (op == "kb") { int t, n, v; if (is >> t >> n >> v) au.cmds.push({K_NOTE, static_cast<int16_t>(t), static_cast<int16_t>(n), static_cast<int16_t>(v), 0}); }
         else if (op == "panic") au.cmds.push({K_ALLOFF, 0, 0, 0, 0});
+        else if (op == "mem") {   // mem list | mem save NOMBRE | mem load NOMBRE | mem del NOMBRE
+            std::string w; is >> w; std::string n; std::getline(is, n); if (!n.empty() && n[0] == ' ') n.erase(0, 1);
+            if (w == "list") srv.send(client, "memlist " + memList()); else if (w == "save") memSave(n); else if (w == "load") memLoad(n); else if (w == "del") memDel(n);
+        }
         else if (op == "midi") {   // mensaje MIDI simulado (pruebas): «midi estado d1 d2» en decimal
             int a0, a1, a2; if (is >> a0 >> a1 >> a2) { const unsigned char st0 = static_cast<unsigned char>(a0), ty = st0 & 0xF0;
                 if (ty == 0xB0 || ty == 0xC0 || ((ty == 0x90 || ty == 0x80) && (st0 & 0x0F) == gMixCh.load())) onCtl({st0, static_cast<unsigned char>(a1), static_cast<unsigned char>(a2), -1});

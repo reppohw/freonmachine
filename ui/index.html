@@ -242,6 +242,8 @@ function connect() {
     const m = ev.data, sp = m.indexOf(" "), op = sp < 0 ? m : m.slice(0, sp), rest = sp < 0 ? "" : m.slice(sp + 1);
     if (op === "spec") SPEC = JSON.parse(rest);
     else if (op === "files") { FILES = JSON.parse(rest); if (ready) buildLive(); }
+    else if (op === "memlist") { MEMS = JSON.parse(rest); if (ready && $("#memCard")) { const c = $("#memCard"), b = el("div"); buildMem(b); c.replaceWith(b.firstChild); } }
+    else if (op === "memmsg") { const [w, ...n] = rest.split(" "); topMsg("Memories", `${w} ${n.join(" ")}`); }
     else if (op === "state") { ST = JSON.parse(rest); ready = true; build(); }
     else if (op === "set") { const [k, v] = rest.split(" "); ST[k] = Number(v); onRemote(k); }
     else if (op === "cblearn") { ui.cbLearn = Number(rest); if (typeof buildMaster === "function") buildMaster(); }
@@ -964,8 +966,24 @@ function sysStatus(p) {
   e.textContent = `${t >= 0 ? `Temperature ${t} °C · ` : ""}CPU ${Number(c).toFixed(0)} % (peak ${Number(pk).toFixed(0)} %) · dropouts ${x}${low ? " · LOW VOLTAGE since power-on: use a stronger power supply or a powered USB hub" : hot ? " · has slowed down from heat since power-on" : ""}`;
   e.style.color = low || Number(x) > 0 ? "var(--led)" : "";
 }
+// --- memorias: fotos de todo el sistema (todo menos los ajustes de MIDI)
+let MEMS = [];
+function buildMem(box) {
+  const name = el("input", { type: "text", placeholder: "name", "aria-label": "Memory name", maxlength: 40, style: "width:160px" });
+  const save = keyBtn("Save", "save", () => { const n = name.value.trim(); if (!n) { topMsg("Memories", "write a name first"); return; }
+    if (MEMS.includes(n) && save.dataset.arm !== "1") { save.dataset.arm = "1"; save.textContent = "Overwrite?"; setTimeout(() => { save.dataset.arm = ""; save.textContent = "Save"; }, 2000); return; }
+    sendRaw(`mem save ${n}`); name.value = ""; });
+  const list = el("div", { class: "scrow" });
+  if (!MEMS.length) list.append(el("span", { class: "hint" }, "No memories yet"));
+  MEMS.forEach(n => list.append(el("span", { class: "memitem" }, confirmKey(n, `Load ${n}?`, () => { sendRaw(`mem load ${n}`); topMsg("Memories", `loading ${n}…`); }),
+    confirmKey("×", "Delete?", () => sendRaw(`mem del ${n}`), "danger"))));
+  box.append(el("div", { class: "card", id: "memCard" }, el("h3", {}, "Memories"),
+    el("p", { class: "hint" }, "A memory keeps everything: instruments, drums, mixer, effects, combos and macros, sampler and breaks. MIDI settings stay as they are. Loading cuts the notes that are sounding."),
+    el("div", { class: "scrow" }, name, save), list));
+}
 function buildSet() {
   const box = $("#setBox"); box.textContent = "";
+  buildMem(box);
   const chRow = el("div", { class: "row" });
   for (let ti = 0; ti < 4; ti++) chRow.append(chSelect(`t${ti + 1}.ch`, `T${ti + 1} · ${TN[ti]}`));
   [["samp", "Sampler"], ["brk", "Breaks"], ["gran", "Granular"], ["voz", "Voice"]].forEach(([m, n]) => chRow.append(chSelect(m + ".ch", n)));
