@@ -460,3 +460,9 @@ HPF, ruido, DCO LFO y retardo del LFO.
 
 Por el código GPL del Juno, si algún día se reparte Freon Machine a otras personas, hay que
 hacerlo con licencia GPL v3 y con su código. Para uso propio no cambia nada.
+
+## Efectos del máster y macros (al estilo Octatrack y Live)
+
+Efectos: Filter, Repeat, Gater, Riser, Space (con 4 tipos: Hall, Plate, Spring y Dark, y Freeze), Throw (con Freeze, como el Echo Freeze Delay), Tape stop, Comb, Lo-Fi (frecuencia de muestreo, bits y AM), Chorus, Spatializer (anchura con los graves en mono) y Sweep (phaser o flanger), además de la distorsión y el compresor de bus. Cada uno solo gasta procesador mientras está activo.
+
+Macros: en el bloque de combinaciones, pulsa **Learn**, elige un slot y mueve los knobs del máster que quieras que se muevan juntos: cada uno recuerda dónde empezó y dónde lo dejaste. Pulsa **Learn** otra vez para terminar (los knobs vuelven al principio). Después, el pad del slot la enciende y el crossfader (knob 8 del programa amarillo del LPD8) los lleva a la vez de un punto a otro. **Clear** vacía un slot. Las combinaciones guardadas con **Save** siguen funcionando como antes.

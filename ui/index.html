@@ -242,6 +242,7 @@ function connect() {
     else if (op === "files") { FILES = JSON.parse(rest); if (ready) buildLive(); }
     else if (op === "state") { ST = JSON.parse(rest); ready = true; build(); }
     else if (op === "set") { const [k, v] = rest.split(" "); ST[k] = Number(v); onRemote(k); }
+    else if (op === "cblearn") { ui.cbLearn = Number(rest); if (typeof buildMaster === "function") buildMaster(); }
     else if (op === "sset") { const i = rest.indexOf(" "), k = i < 0 ? rest : rest.slice(0, i); ST[k] = i < 0 ? "" : rest.slice(i + 1); onRemote(k); }
     else if (op === "lvl") meters(rest.split(" "));
     else if (op === "live") liveStatus(rest.split(" "));
@@ -802,26 +803,42 @@ function buildMaster() {
   const bus = el("div", { class: "blk" }, el("span", { class: "label" }, "Bus compressor"), selK("m.bcRatio", [[0, "2:1"], [1, "4:1"], [2, "10:1"]], "Ratio"), bk, mixUI.bcRead);
   // 8 combinaciones: guardar y disparar
   const FXN = { "m.filt": "Filter", "m.rep": "Repeat", "m.gate": "Gater", "m.riser": "Riser", "m.space": "Space", "m.throw": "Throw", "m.tape": "Tape", "m.comb": "Comb", "m.sweep": "Sweep", "m.drive": "Dist", "m.chorus": "Chorus", "m.width": "Spatializer", "m.lofi": "Lo-Fi" };
-  const cbName = (n) => Object.keys(FXN).filter(k => Math.abs(ST[`cb.${n}.${k}`] || 0) > 0.005).map(k => FXN[k]).join(" + ");
+  // nombre de un slot: los efectos que usa; si es una macro aprendida, sus parámetros
+  const pname = (k) => { const m = MFX.find(f => f.a === k || f.b === k || (f.more || []).some(x => x[0] === k)); if (!m) return k.slice(2); if (m.a === k) return m.n; if (m.b === k) return `${m.n} ${m.bl}`; const x = m.more.find(x => x[0] === k); return `${m.n} ${x[1]}`; };
+  const cbName = (n) => { const ks = String(ST[`cb.${n}.keys`] || "").split(",").filter(Boolean); if (ks.length) return ks.map(pname).join(" + ");
+    return Object.keys(FXN).filter(k => Math.abs(ST[`cb.${n}.${k}`] || 0) > 0.005).map(k => FXN[k]).join(" + "); };
   const cbRow = el("div", { class: "scrow" });
   for (let n = 0; n < 8; n++) {
     const on = ST[`cb.${n}.on`] >= 0.5, nm = on ? `${n + 1} · ${cbName(n)}` : `${n + 1} · empty`;
     const b = holdKey(nm, () => {
       if (ui.cbSaving) { sendRaw(`combo save ${n}`); ui.cbSaving = false; topMsg("Combos", `saved to ${n + 1}`); setTimeout(buildMaster, 200); return; }
+      if (ui.cbPick === "learn") { ui.cbPick = ""; sendRaw(`combo learn ${n}`); topMsg(`Learning ${n + 1}`, "move the master knobs you want; press Learn again when done"); return; }
+      if (ui.cbPick === "clear") { ui.cbPick = ""; sendRaw(`combo clear ${n}`); topMsg("Combos", `${n + 1} cleared`); setTimeout(buildMaster, 200); return; }
       if (!on) { topMsg(`Combo ${n + 1} is empty`, "set the effects, press Save, then this slot"); return; }
       sendRaw(`combo down ${n}`);
     }, () => { if (on) sendRaw(`combo up ${n}`); }, "slot" + (on ? "" : " empty"));
     const lit = () => b.setAttribute("aria-pressed", String(ST[`cb.${n}.act`] >= 0.5)); lit(); regDraw(`cb.${n}.act`, lit);
     // al editar una combinación en vivo, el botón muestra sus efectos actuales
     Object.keys(FXN).forEach(k => regDraw(`cb.${n}.${k}`, () => { const t = cbName(n); if (ST[`cb.${n}.on`] >= 0.5 && t) b.textContent = `${n + 1} · ${t}`; }));
+    regDraw(`cb.${n}.keys`, () => { const t = cbName(n); b.textContent = t ? `${n + 1} · ${t}` : `${n + 1} · empty`; b.classList.toggle("empty", !t); });
+    if (ui.cbLearn === n) b.style.outline = "2px solid var(--led)";
     cbRow.append(b);
   }
+  // Learn: como las macros de Live. Learn → slot → mueve los knobs del máster que quieras (cada uno guarda de dónde a dónde) → Learn otra vez
+  const cbLn = keyBtn(ui.cbLearn >= 0 ? `Learning ${ui.cbLearn + 1} · done` : "Learn", "", () => {
+    if (ui.cbLearn >= 0) { sendRaw("combo learn -1"); return; }
+    ui.cbPick = ui.cbPick === "learn" ? "" : "learn"; cbLn.setAttribute("aria-pressed", String(ui.cbPick === "learn"));
+    if (ui.cbPick) topMsg("Learn", "which slot?");
+  });
+  cbLn.setAttribute("aria-pressed", String(ui.cbLearn >= 0 || ui.cbPick === "learn"));
+  const cbCl = keyBtn("Clear", "", () => { ui.cbPick = ui.cbPick === "clear" ? "" : "clear"; cbCl.setAttribute("aria-pressed", String(ui.cbPick === "clear")); if (ui.cbPick) topMsg("Clear", "which slot?"); });
   const cbSv = keyBtn("Save", "save", () => { ui.cbSaving = !ui.cbSaving; cbSv.setAttribute("aria-pressed", String(ui.cbSaving)); if (ui.cbSaving) topMsg("Save combo", "the effects that are on, into which slot?"); });
   cbSv.setAttribute("aria-pressed", String(!!ui.cbSaving));
   const xf = el("input", { type: "range", min: 0, max: 1, step: 0.005, "aria-label": "Combo dry to wet", style: "width:150px" }); xf.value = ST["cb.amt"];
   xf.addEventListener("input", () => send("cb.amt", Number(xf.value))); regDraw("cb.amt", () => { xf.value = ST["cb.amt"]; });
   const combos = el("div", { class: "blk scenes" }, el("span", { class: "label" }, "Combos: tap to latch, hold for momentary. While one is on, what you change is stored in it"), cbRow,
-    el("div", { class: "scrow" }, cbSv, el("span", { class: "label" }, "Dry"), xf, el("span", { class: "label" }, "Wet")));
+    el("div", { class: "scrow" }, cbLn, cbCl, cbSv, el("span", { class: "label" }, "Dry"), xf, el("span", { class: "label" }, "Wet")),
+    el("p", { class: "hint" }, "Learn → a slot → move the master knobs you want: each one remembers where it started and where you left it. Press Learn again to finish (the knobs go back to their start). Then the slot's pad turns it on and the crossfader (LPD8 knob 8) moves them all together."));
   box.append(el("div", { class: "blk" }, el("span", { class: "label" }, "Effect"), sel), main, dist, bus, combos);
 }
 function buildTempo() {

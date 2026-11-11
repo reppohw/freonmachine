@@ -882,7 +882,7 @@ struct Control {
         for (int n = 0; n < 8; ++n) st["ms." + std::to_string(n) + ".on"] = 0;
         st["brk.on"] = 0; st["gran.on"] = 0; st["gran.frz"] = 0; st["voz.on"] = 0; ss["brk.name"] = "fab:0";
         st["d.kit"] = 0;
-        st["cb.amt"] = 1; st["cb.sel"] = -1; for (int n = 0; n < kCombos; ++n) { st["cb." + std::to_string(n) + ".on"] = 0; st["cb." + std::to_string(n) + ".act"] = 0; }   // combinaciones de efectos
+        st["cb.amt"] = 1; st["cb.sel"] = -1; for (int n = 0; n < kCombos; ++n) { st["cb." + std::to_string(n) + ".on"] = 0; st["cb." + std::to_string(n) + ".act"] = 0; ss["cb." + std::to_string(n) + ".keys"] = ""; }   // combinaciones de efectos (keys: macro aprendida)
         st["solo.mode"] = 0;   // solos: 0 = se suman (latch), 1 = exclusivo (X-OR)
         st["midi.mixch"] = 16; st["midi.knob"] = 1; st["midi.fb"] = 1; ss["midi.skip"] = "oxi,mc-24";   // canal del mezclador, modo de knobs, devolver valores, a quién no
         const int N[8] = {36, 38, 39, 37, 45, 42, 46, 56};
@@ -1104,15 +1104,16 @@ struct Control {
             {"m.sweep", {"m.swRate", "m.swDepth", "m.swFb", "m.swMode"}}, {"m.drive", {"m.dtype", "m.dtone", "m.dmix"}}, {"m.chorus", {"m.chRate", "m.chDepth"}}, {"m.width", {"m.wBass"}}, {"m.lofi", {"m.lfSrr", "m.lfBits", "m.lfAm"}}};
         return F;
     }
-    struct CbItem { std::string k; float base, to; bool amt; };
+    struct CbItem { std::string k; float base, to; bool amt; float from = 0; bool fixed = false; };   // fixed: macro aprendida (va de «from» a «to»)
+    int learn_ = -1;   // slot que está aprendiendo (-1: ninguno)
     std::vector<CbItem> cbLive_; int cbCur_ = -1; bool cbDirty = false; std::map<int, std::chrono::steady_clock::time_point> cbHeld_; std::chrono::steady_clock::time_point lastCb{};
     void cbPublish(const std::string& k, float v) { st[k] = v; srv.broadcast("set " + k + " " + jnum(v)); }
     void comboSave(int n) {
         if (n < 0 || n >= kCombos) return;
         // se copia lo que suena ahora, también si hay otra combinación puesta; después se apaga
         std::map<std::string, float> now; for (const auto& f : cbFx()) { now[f.amt] = st[f.amt]; for (const char* p : f.params) now[p] = st[p]; }
-        comboOff();
-        const std::string P = "cb." + std::to_string(n) + "."; bool any = false;
+        comboOff(); if (learn_ == n) learnStop();
+        const std::string P = "cb." + std::to_string(n) + "."; bool any = false; sset(P + "keys", "", -1);
         for (const auto& f : cbFx()) {
             const bool used = std::fabs(now[f.amt]) > 0.005f; any |= used;
             cbPublish(P + f.amt, used ? now[f.amt] : 0.0f);
@@ -1125,8 +1126,8 @@ struct Control {
         const std::string P = "cb." + std::to_string(cbCur_) + ".";
         for (auto& i : cbLive_) {
             if (i.k != k) continue;
-            const float x = st["cb.amt"];
-            i.to = x > 0.02f ? i.base + (v - i.base) / x : v;   // con el crossfader a medias, lo guardado es el valor a tope
+            const float x = st["cb.amt"], b0 = i.fixed ? i.from : i.base;
+            i.to = x > 0.02f ? b0 + (v - b0) / x : v;   // con el crossfader a medias, lo guardado es el valor a tope
             float lo, hi; rangeOf(k, lo, hi); i.to = std::clamp(i.to, lo, hi);
             cbPublish(P + k, i.to); return;
         }
@@ -1147,7 +1148,9 @@ struct Control {
         comboOff();
         const std::string P = "cb." + std::to_string(n) + ".";
         if (n < 0 || n >= kCombos || st[P + "on"] < 0.5f) return;
-        for (const auto& f : cbFx()) {
+        const auto keys = macroKeys(n);
+        if (!keys.empty()) for (const auto& k : keys) cbLive_.push_back({k, st[k], st[P + k], false, st[P + "from." + k], true});
+        else for (const auto& f : cbFx()) {
             const auto a = st.find(P + f.amt); if (a == st.end() || std::fabs(a->second) <= 0.005f) continue;
             cbLive_.push_back({f.amt, st[f.amt], a->second, true});
             for (const char* p : f.params) { const auto o = st.find(P + p); if (o != st.end()) cbLive_.push_back({p, st[p], o->second, false}); }
@@ -1157,11 +1160,52 @@ struct Control {
     void comboApply() {
         cbDirty = false; if (cbCur_ < 0) return;
         const float x = st["cb.amt"];
-        for (const auto& i : cbLive_) { const float v = i.base + (i.to - i.base) * x; if (st[i.k] != v) set(i.k, v, -1); }   // todos los knobs siguen al fader
+        for (const auto& i : cbLive_) { const float b0 = i.fixed ? i.from : i.base, v = b0 + (i.to - b0) * x; if (st[i.k] != v) set(i.k, v, -1); }   // todos los knobs siguen al fader
+    }
+    // --- macros al estilo Live: se elige un slot, se pulsa Aprender y los knobs del máster que se mueven quedan en él,
+    // cada uno con su punto de partida (el valor antes de tocarlo) y de llegada (donde lo dejas). El crossfader los lleva juntos.
+    static bool macroable(const std::string& k) {
+        if (k.rfind("m.", 0) != 0) return false;
+        for (const char* x : {"m.vol", "m.lim", "m.clip", "m.bpm", "m.clock", "m.cueMode", "m.cueLvl", "m.sum"}) if (k == x) return false;
+        return true;
+    }
+    std::vector<std::string> macroKeys(int n) {
+        std::vector<std::string> v; std::stringstream ss2(ss["cb." + std::to_string(n) + ".keys"]); std::string k;
+        while (std::getline(ss2, k, ',')) if (macroable(k) && st.count(k)) v.push_back(k);
+        return v;
+    }
+    void learnStart(int n) {
+        if (n < 0 || n >= kCombos) return;
+        if (learn_ >= 0) learnStop();
+        comboOff(); learn_ = n; srv.broadcast("cblearn " + std::to_string(n));
+    }
+    void learnStop() {
+        if (learn_ < 0) return;
+        const std::string P = "cb." + std::to_string(learn_) + ".";
+        for (const auto& k : macroKeys(learn_)) set(k, st[P + "from." + k], -1);   // vuelve al punto de partida: la macro empieza en 0
+        learn_ = -1; srv.broadcast("cblearn -1");
+    }
+    void learnTouch(const std::string& k, float old, float v) {
+        const std::string P = "cb." + std::to_string(learn_) + ".";
+        auto keys = macroKeys(learn_);
+        if (std::find(keys.begin(), keys.end(), k) == keys.end()) {
+            if (keys.size() >= 24) return;   // tope por slot
+            keys.push_back(k); std::string j; for (const auto& x : keys) j += (j.empty() ? "" : ",") + x; sset(P + "keys", j, -1);
+            cbPublish(P + "from." + k, old);
+        }
+        cbPublish(P + k, v); if (st[P + "on"] < 0.5f) set(P + "on", 1, -1);
+    }
+    void comboClear(int n) {
+        if (n < 0 || n >= kCombos) return;
+        if (learn_ == n) learn_ = -1; if (cbCur_ == n) comboOff();
+        const std::string P = "cb." + std::to_string(n) + "."; sset(P + "keys", "", -1);
+        for (const auto& f : cbFx()) { cbPublish(P + f.amt, 0); }
+        set(P + "on", 0, -1);
     }
     // mismo gesto que los mutes: pulsar y soltar enseguida = se queda; mantener = solo mientras se mantiene
     void comboPress(int n, bool down) {
         const auto now = std::chrono::steady_clock::now();
+        if (down && learn_ >= 0) learnStop();   // tocar un slot termina el aprendizaje
         if (down) { if (cbCur_ == n) comboOff(); else { comboOn(n); if (cbCur_ == n) cbHeld_[n] = now; } return; }
         const auto it = cbHeld_.find(n); if (it == cbHeld_.end()) return;
         if (now - it->second > std::chrono::milliseconds(400) && cbCur_ == n) comboOff();
@@ -1261,7 +1305,8 @@ struct Control {
         if ((k.size() > 3 && (k.compare(k.size() - 3, 3, ".ch") == 0 || k.compare(k.size() - 4, 4, ".eng") == 0)) || k == "d.kit" || k == "samp.sel" || k == "midi.mixch" || k == "midi.fb") mapDirty = true;
         if (k == "midi.mixch") gMixCh = mixCh();
         if (k == "cb.amt") cbDirty = true;
-        if (from != -1 && cbCur_ >= 0 && k.rfind("m.", 0) == 0) comboEdit(k, old, v);
+        if (from != -1 && learn_ >= 0 && macroable(k)) learnTouch(k, old, v);
+        else if (from != -1 && cbCur_ >= 0 && k.rfind("m.", 0) == 0) comboEdit(k, old, v);
     }
     void pushAll() {
         // voz simplificada: entrada, ganancia, corte de graves, puerta, pitch y formant. Lo demás queda neutro
@@ -1299,7 +1344,7 @@ struct Control {
         else if (op == "sysroute") { std::string rest; std::getline(is, rest); if (sysRoute) sysRoute(rest); }
         else if (op == "sysapply") { std::string rest; std::getline(is, rest); if (sysApply) sysApply(rest); }
         else if (op == "sysact") { std::string w; if (is >> w && sysAction) sysAction(w); }
-        else if (op == "combo") { std::string w; int n; if (is >> w >> n) { if (w == "save") comboSave(n); else if (w == "down") comboPress(n, true); else if (w == "up") comboPress(n, false); else if (w == "off") comboOff(); } }
+        else if (op == "combo") { std::string w; int n; if (is >> w >> n) { if (w == "save") comboSave(n); else if (w == "down") comboPress(n, true); else if (w == "up") comboPress(n, false); else if (w == "off") comboOff(); else if (w == "learn") { if (n < 0 || n == learn_) learnStop(); else learnStart(n); } else if (w == "clear") comboClear(n); } }
         else if (op == "msnap") { std::string w; int n; if (is >> w >> n) { if (w == "save") snapSave(n); else if (w == "load") snapLoad(n); } }
         else if (op == "sset") { std::string k; if (is >> k) { std::string v; std::getline(is, v); if (!v.empty() && v[0] == ' ') v.erase(0, 1); sset(k, v, client); } }
         else if (op == "files") srv.send(client, "files " + filesJson());
