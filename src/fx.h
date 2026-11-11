@@ -502,6 +502,7 @@ struct MasterFx {
     float sweep = 0, swRate = 2, swDepth = 0.7f, swFb = 0.4f, swMode = 0;  // sweep: phaser o flanger a tempo
     float chorus = 0, chRate = 0.4f, chDepth = 0.5f;   // chorus: 3 voces por lado; velocidad 0,1-5 Hz
     float width = 0, wBass = 0.5f;                     // spatializer: anchura; los graves (60-300 Hz) quedan en mono
+    float lofi = 0, lfSrr = 0.4f, lfBits = 0.4f, lfAm = 0;   // lo-fi: mezcla; frecuencia de muestreo (÷1..÷40), bits (16..2), AM (0..1500 Hz)
     bool thFreeze = false;                             // echo freeze: el throw repite para siempre lo que tenía, sin entrada nueva
 
     void prepare(float s) {
@@ -528,6 +529,7 @@ struct MasterFx {
         const float sm = std::min(1.0f, n / (0.02f * sr));
         processComb(L, R, n, sm);
         processSweep(L, R, n, sm, spb, pos);
+        processLoFi(L, R, n, sm);
         processChorus(L, R, n, sm);
         // --- riser: paso alto que sube, ruido y algo de reverb
         riserS_ += (riser - riserS_) * sm;
@@ -639,6 +641,20 @@ private:
             L[i] = L[i] * dry + yl * (wet / 3.0f); R[i] = R[i] * dry + yr * (wet / 3.0f);
         }
     }
+    // --- lo-fi (como el de la Octatrack): baja la frecuencia de muestreo (retiene muestras), los bits y modula en amplitud (AM)
+    void processLoFi(float* L, float* R, int n, float sm) {
+        lofiS_ += (lofi - lofiS_) * sm;
+        if (lofiS_ < 0.001f) return;
+        const float hold = 1.0f + std::pow(std::clamp(lfSrr, 0.0f, 1.0f), 2.0f) * 39.0f;
+        const float bits = 16.0f - 14.0f * std::clamp(lfBits, 0.0f, 1.0f), q = std::exp2(bits - 1.0f), iq = 1.0f / q;
+        const float amHz = 1500.0f * lfAm * lfAm, amInc = amHz / sr;
+        for (int i = 0; i < n; ++i) {
+            lfCnt_ += 1.0f; if (lfCnt_ >= hold) { lfCnt_ -= hold; lfHL_ = L[i]; lfHR_ = R[i]; }
+            float yl = std::round(lfHL_ * q) * iq, yr = std::round(lfHR_ * q) * iq;
+            if (amHz > 0.5f) { lfPh_ += amInc; if (lfPh_ >= 1.0f) lfPh_ -= 1.0f; const float m = fsin(lfPh_); yl *= m; yr *= m; }
+            L[i] += (yl - L[i]) * lofiS_; R[i] += (yr - R[i]) * lofiS_;
+        }
+    }
     // --- spatializer: más lados (L−R) para abrir la imagen; por debajo de wBass los lados se quitan (graves en mono, pegados)
     void processWidth(float* L, float* R, int n, float sm) {
         widthS_ += (width - widthS_) * sm;
@@ -698,6 +714,7 @@ private:
     }
     std::vector<float> rep_[2], tape_[2]; int repState_ = 0, repI_ = 0, repBand_ = -1; long tw_ = 0; double tr_ = 0, repPos_ = 0; float tapeRate_ = 1, repGain_ = 1, repMix_ = 0, repRate_ = 1;
     float gateLvl_ = 1, gateLvlR_ = 1, riserS_ = 0, spaceSend_ = 0, spaceTail_ = 0, throwSend_ = 0, throwTail_ = 0, thDsm_ = 0, thToneK_ = -1;
+    float lofiS_ = 0, lfCnt_ = 0, lfHL_ = 0, lfHR_ = 0, lfPh_ = 0;
     float chorusS_ = 0, chPh_ = 0, widthS_ = 0, wLp_ = 0; DelayLine chL_, chR_;
     float combS_ = 0, combTail_ = 0, cbD_ = 0, cbDampK_ = -1, sweepS_ = 0, apA_[2] = {}, apS_[2][6] = {}, swFbL_ = 0, swFbR_ = 0;
     BQ hpR_[2], nbp_; Noise noise_; FDN spaceRv_; DelayLine thL_, thR_, cbL_, cbR_, flL_, flR_; OnePoleLP thLp_, cbLpL_, cbLpR_; OnePoleHP thHp_;

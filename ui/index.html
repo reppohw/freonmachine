@@ -772,6 +772,7 @@ const MFX = [
   { n: "Tape stop", a: "m.tape", af: PCT, b: "m.tapeSm", bl: "Inertia", bmin: 0, bmax: 1, bstep: 0.01, bf: PCT, bdef: 0.5 },
   { n: "Comb", a: "m.comb", af: PCT, b: "m.cbPitch", bl: "Pitch", bmin: 24, bmax: 96, bstep: 1, bf: (v) => String(Math.round(v)), bdef: 48, more: [["m.cbFb", "Feedback", 0, 1, 0.01, PCT, 0.8], ["m.cbDamp", "Damp", 0, 1, 0.01, PCT, 0.3]] },
   { n: "Chorus", a: "m.chorus", af: PCT, b: "m.chRate", bl: "Rate", bmin: 0, bmax: 1, bstep: 0.01, bf: (v) => (0.1 * Math.pow(50, v)).toFixed(2) + " Hz", bdef: 0.4, more: [["m.chDepth", "Depth", 0, 1, 0.01, PCT, 0.5]] },
+  { n: "Lo-Fi", a: "m.lofi", af: PCT, b: "m.lfSrr", bl: "Rate", bmin: 0, bmax: 1, bstep: 0.01, bf: (v) => "÷" + (1 + v * v * 39).toFixed(1), bdef: 0.4, more: [["m.lfBits", "Bits", 0, 1, 0.01, (v) => (16 - 14 * v).toFixed(1), 0.4], ["m.lfAm", "AM", 0, 1, 0.01, (v) => (v < 0.02 ? "Off" : Math.round(1500 * v * v) + " Hz"), 0]] },
   { n: "Spatializer", a: "m.width", af: PCT, b: "m.wBass", bl: "Mono bass", bmin: 0, bmax: 1, bstep: 0.01, bf: (v) => Math.round(60 * Math.pow(5, v)) + " Hz", bdef: 0.5 },
   { n: "Sweep", a: "m.sweep", af: PCT, b: "m.swRate", bl: "Rate", bmin: 0, bmax: 5, bstep: 1, bf: (v) => ["1/4", "1/2", "1 bar", "2 bars", "4 bars", "8 bars"][Math.round(v)], bdef: 2, more: [["m.swDepth", "Depth", 0, 1, 0.01, PCT, 0.7], ["m.swFb", "Feedback", 0, 0.9, 0.01, PCT, 0.4]], tog: ["m.swMode", "Flanger"] }];
 function buildMaster() {
@@ -800,7 +801,7 @@ function buildMaster() {
   mixUI.bcRead = el("span", { class: "hint" }, "No reduction");
   const bus = el("div", { class: "blk" }, el("span", { class: "label" }, "Bus compressor"), selK("m.bcRatio", [[0, "2:1"], [1, "4:1"], [2, "10:1"]], "Ratio"), bk, mixUI.bcRead);
   // 8 combinaciones: guardar y disparar
-  const FXN = { "m.filt": "Filter", "m.rep": "Repeat", "m.gate": "Gater", "m.riser": "Riser", "m.space": "Space", "m.throw": "Throw", "m.tape": "Tape", "m.comb": "Comb", "m.sweep": "Sweep", "m.drive": "Dist", "m.chorus": "Chorus", "m.width": "Spatializer" };
+  const FXN = { "m.filt": "Filter", "m.rep": "Repeat", "m.gate": "Gater", "m.riser": "Riser", "m.space": "Space", "m.throw": "Throw", "m.tape": "Tape", "m.comb": "Comb", "m.sweep": "Sweep", "m.drive": "Dist", "m.chorus": "Chorus", "m.width": "Spatializer", "m.lofi": "Lo-Fi" };
   const cbName = (n) => Object.keys(FXN).filter(k => Math.abs(ST[`cb.${n}.${k}`] || 0) > 0.005).map(k => FXN[k]).join(" + ");
   const cbRow = el("div", { class: "scrow" });
   for (let n = 0; n < 8; n++) {
