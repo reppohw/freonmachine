@@ -207,7 +207,7 @@ private:
 // ratio, index, idec, fb y noise solo los usa el kit FM.
 // tone: el TONE de la 808/909. color, shape, contour: macros del kit FM (como en el Model:Cycles).
 struct DrumLane {
-    float tune = 0, decay = 0.5f, snap = 0.5f, filt = 0, reso = 0.2f, sweep = 0.5f, level = 0.8f, pan = 0.0f, vel = 0.8f;
+    float tune = 0, decay = 0.5f, snap = 0.5f, filt = 0, reso = 0.2f, sweep = 0.5f, level = 0.75f, pan = 0.0f, vel = 0.8f;
     float tone = 0.5f, color = 0.5f, shape = 0.5f, contour = 0.5f;
     float drive = 0.0f;   // ya no se toca desde fuera
     bool mute = false; int note = 36, out = 0;
@@ -396,8 +396,12 @@ inline const int kLaneOut[8] = {0, 1, 1, 2, 2, 2, 2, 2};
 // Igualación medida con --niveles: dB por kit y sonido (bombo, caja, clap, rim, tom, HH cerrado, HH abierto, perc)
 inline float kitTrim(int kit, int l) {
     static const float D[5][8] = {{1.9f, -2.4f, 0.0f, 6.2f, -2.3f, -0.6f, -3.1f, -0.5f}, {1.6f, -1.0f, -1.9f, -3.6f, 0.7f, 1.1f, 0.8f, 1.5f}, {-3.2f, -0.1f, -2.6f, -10.2f, -6.3f, -3.9f, -4.1f, -13.0f}, {-9.3f, -10.8f, -8.5f, -3.4f, -11.0f, -9.0f, -10.9f, -14.5f}, {3.8f, 11.2f, 5.1f, 3.7f, -1.9f, -1.3f, 6.0f, 3.7f}};
+    // Punto de partida con los Level al 75 % (mezcla de Jorge, 13-11-2026): 808 con su equilibrio entre sonidos
+    // (el perc subido, lo tenía demasiado bajo; el clap, +1,7 dB en la mezcla rehecha); los demás kits suenan como antes con Level 0,8 (la caja, 0,52)
+    static const float M[2][8] = {{0.56f, 0.56f, 4.18f, 2.5f, 2.5f, 1.39f, 0.6f, 2.5f}, {0.56f, -3.18f, 0.56f, 0.56f, 0.56f, 0.56f, 0.56f, 0.56f}};
     const int k = kit == KIT_P808 ? 0 : kit == KIT_P909 ? 1 : kit == KIT_CYC ? 2 : kit == KIT_GB ? 3 : kit == KIT_EXP ? 4 : -1;
-    return k < 0 ? 1.0f : std::pow(10.0f, D[k][std::clamp(l, 0, 7)] / 20.0f);
+    const int c = std::clamp(l, 0, 7);
+    return k < 0 ? 1.0f : std::pow(10.0f, (D[k][c] + M[k == 0 ? 0 : 1][c]) / 20.0f);   // k < 0: recetas antiguas (sonidos de serie del sampler)
 }
 
 class DrumMachine {
@@ -521,7 +525,10 @@ private:
         for (int off = 0; off < n; off += 256) {
             const int k = std::min(256, n - off);
             // bombos y toms: Snap = golpe de ataque, Sweep = barrido de tono. Cajas: Snap = snappy. Hihats: Snap = ruido.
-            pv_[l].render(buf, k, sr_, hz, L.tone, std::clamp(L.decay * ps.decMul, 0.0f, 1.0f), L.snap, L.sweep);
+            // bombo 808: Tone es el click (cuánto impulso de ataque pasa). Medido: de 0,5 a 0,3 el click baja 9 dB y el cuerpo
+            // 0,3 dB. Curva para que el knob a la mitad dé 0,3 (Jorge: tenía demasiado click) y a tope siga llegando a 1
+            const float tn = l == 0 && kit != KIT_P909 ? std::pow(L.tone, 1.737f) : L.tone;
+            pv_[l].render(buf, k, sr_, hz, tn, std::clamp(L.decay * ps.decMul, 0.0f, 1.0f), L.snap, L.sweep);
             for (int i = 0; i < k; ++i) {
                 float x = buf[i] * pg_[l];
                 if (l == 6 && pchoke_) { pcg_ *= 0.995f; x *= pcg_; }

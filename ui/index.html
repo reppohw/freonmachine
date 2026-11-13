@@ -500,7 +500,7 @@ function buildInst() {
   }
   // Sub: módulo aparte con su canal MIDI (en el Oxi, la nota grave del secuenciador de acordes a este canal)
   const sc = el("section", { class: "card" }), sk = el("div", { class: "knobs" });
-  [["oct", { l: "Octave", min: -3, max: 0, step: 1, def: -2, fmt: "i", names: "oct" }, 16], ["tone", { l: "Tone", min: 0, max: 1, step: 0.01, def: 0.2, fmt: "p" }, 17], ["glide", { l: "Glide", min: 0.005, max: 0.3, step: 0, def: 0.03, fmt: "s", log: true }, 18], ["vol", { l: "Volume", min: 0, max: 1, step: 0.01, def: 1, fmt: "p" }, 19]]
+  [["oct", { l: "Octave", min: -3, max: 0, step: 1, def: -2, fmt: "i", names: "oct" }, 16], ["tone", { l: "Tone", min: 0, max: 1, step: 0.01, def: 0.2, fmt: "p" }, 17], ["glide", { l: "Glide", min: 0.005, max: 0.3, step: 0, def: 0.03, fmt: "s", log: true }, 18], ["vol", { l: "Volume", min: 0, max: 1, step: 0.01, def: 0.75, fmt: "p" }, 19]]
     .forEach(([f, q, c]) => { const w = el("div", { class: "kslot" }); specKnob(w, "sub." + f, q, (a, b) => topMsg("Sub · " + a, b), "sm"); w.append(el("i", {}, `CC ${c}`)); sk.append(w); });
   sc.append(el("div", { class: "chead" }, el("div", { class: "cname" }, el("b", {}, "Sub"), el("span", {}, ST["sub.mode"] >= 0.5 ? `plays the lowest note held on T${(ST["sub.src"] || 1) + 1}` : `MIDI channel ${ST["sub.ch"] || "off"} · plays the notes it gets on its channel`)),
     toggleKey("sub.on", "Sub on · CC 110", (v) => topMsg("Sub", v ? "on" : "off"))), sk,
@@ -700,20 +700,13 @@ function stripEl(id, title, sub, grp, cls) {
   kn(a, P + "pan", "Pan", -1, 1, 0.02, panf, 0, "sm"); s.append(a);
   s.append(el("div", { class: "sec" }, "Dynamics"));
   a = sk(); kn(a, P + "lim", "Limiter", -24, 0, 0.5, limf, 0, "sm");
-  // Volume del instrumento: es el mismo parámetro que el knob de Instruments, junto al limitador para no alargar la tira
+  // Gain de la tira (±24 dB): batería, Sub, sintes y sampler. El Volume de los instrumentos se queda en Instruments
+  // (al 75 % = la mezcla de partida); los lives usan su propio Level como ganancia
   const chI = /^c(\d+)$/.exec(id) ? Number(id.slice(1)) : -1;
-  if (chI >= 0 && chI <= 2) kn(a, P + "trim", "Trim", -24, 12, 0.5, dbf, 0, "sm");
-  else if (chI === 3) kn(a, "sub.vol", "Volume", 0, 1, 0.01, PCT, 1, "sm");
-  else if (chI >= 4 && chI <= 6) {
-    const T = chI - 2, e = SPEC.engines[ST[`t${T}.eng`]], vi = e.params.findIndex(q => q.l === "Volume" || q.l === "Level");   // la Game Boy lo llama Level
-    if (vi >= 0) specKnob(a, `t${T}.${e.key}.${vi}`, e.params[vi], (x, y) => topMsg(`${title} · ${x}`, y), "sm");
-  }
-  // lives: su Level como ganancia de la tira (el sampler, que tiene nivel por pad, usa el Trim de la tira)
+  if ((chI >= 0 && chI <= 6) || chI === 8 || (chI >= 11 && chI <= 14)) kn(a, P + "trim", "Gain", -24, 24, 0.5, dbf, 0, "sm");
   else if (chI === 7) kn(a, "gran.10", "Gain", 0, 1.5, 0.01, PCT, 0.9, "sm");
-  else if (chI === 8) kn(a, P + "trim", "Gain", -24, 12, 0.5, dbf, 0, "sm");
   else if (chI === 9) kn(a, "brk.10", "Gain", 0, 1.5, 0.01, PCT, 0.9, "sm");
   else if (chI === 10) kn(a, "voz.23", "Gain", 0, 1.5, 0.01, PCT, 0.9, "sm");
-  else if (chI >= 11 && chI <= 14) kn(a, P + "trim", "Gain", -24, 24, 0.5, dbf, 0, "sm");   // entradas externas
   s.append(a, selK(P + "sc", scPairs, "Sidechain"));
   a = sk(); kn(a, P + "scAmt", "SC amount", 0, 1, 0.01, PCT, 0.5, "sm"); kn(a, P + "scRel", "SC release", 0.02, 1, 0.01, (v) => Math.round(v * 1000) + " ms", 0.25, "sm"); s.append(a);
   s.append(el("div", { class: "sec" }, "Sends"));

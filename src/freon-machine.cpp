@@ -87,6 +87,22 @@ constexpr int NT = 4, BLK = 256, NCH = 15, NGRP = 2, NSEND = 4, NDIR = 7, NBUS =
 // Canales: 0 Bombo, 1 Caja, 2 Resto bat, 3 Sub, 4-6 pistas 2-4, 7-10 directo (fase 3), 11-14 entradas de audio
 constexpr int CH_SUB = 3, CH_T0 = 4, CH_GRAN = 7, CH_SAMP = 8, CH_BRK = 9, CH_VOZ = 10, CH_IN = 11;
 const char* kChNames[NCH] = {"Kick", "Snare", "Drums rest", "Sub", "Track 2", "Track 3", "Track 4", "Granular", "Sampler", "Breaks", "Voice", "Input 1", "Input 2", "Input 3", "Input 4"};
+// Punto de partida (mezcla de Jorge, 13-11-2026, rehecha la misma noche): con los knobs de volumen al 75 %, los faders
+// a 0 dB y los Gain a 0 suena su mezcla. Lo que ponían el Gain y el fader de cada canal va aquí, por dentro.
+// Los instrumentos del directo (granular, sampler, breaks, voz) y las entradas, sin tocar por ahora.
+constexpr float kChBaseDb[NCH] = {-8.5f, -7.5f, -16.5f, -6.3f, -3.0f, -3.0f, -3.0f, 0, 0, 0, 0, 0, 0, 0, 0};
+// y cada motor en cada pista (dB). Las pistas 2-4 con lo que tocaban en la mezcla (Juno +5,5 dB de Gain, 303 +2,5,
+// Moog +8,5, sobre su Volume de antes); el resto de motores, con su Volume de antes (0,8, o el ajustado a oído el 7-11-2026).
+// El Volume actúa al cuadrado: 40·log10(valor / 0,75)
+//                                         Juno    DX7     Moog    303     GB  Wavet.  Supers. Modal
+constexpr float kTrkEngDb[3][8] = {{5.03f, -3.88f, 1.12f, 1.12f, 0, 1.34f, 2.17f, 1.12f},     // pista 2
+                                   {1.12f, 1.12f, 1.12f, 1.79f, 0, 1.12f, 1.12f, 1.12f},       // pista 3
+                                   {1.12f, -3.03f, 4.62f, 1.12f, 0, 1.12f, 1.12f, 1.12f}};     // pista 4
+inline float chBaseGain(int ch, int eng) {
+    float db = ch >= 0 && ch < NCH ? kChBaseDb[ch] : 0.0f;
+    if (ch >= CH_T0 && ch < CH_T0 + 3 && eng >= 0 && eng < 8) db += kTrkEngDb[ch - CH_T0][eng];
+    return std::pow(10.0f, db / 20.0f);
+}
 constexpr int kNLane = 16;
 const char* kLaneKeys[kNLane] = {"tune", "decay", "snap", "filt", "reso", "sweep", "level", "pan", "vel", "tone", "color", "shape", "contour", "mute", "note", "out"};
 // Los 8 knobs de cada sonido según el kit (el 9.º va en la fila extra, junto al pan). Mismo orden en la web y en la controladora.
@@ -146,6 +162,7 @@ struct SubVoice {
 struct Strip {
     float p[SP_COUNT] = {1.0f, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, -1, 0.5f, 0.25f, 0, 0, 0, 0, 0, 1.4f, 0};
     float trimG = 1;   // trim de entrada del canal
+    float baseG = 1;   // ganancia interna del punto de partida (kChBaseDb): no se ve en la web
     Dist dist; Shelf lo[2], mi[2], hi[2]; bool eqDirty = true; Follower fol; Limiter lim; DJFilter dj;
     float L[BLK], R[BLK], pre[2][BLK], g[BLK];
     float sr = 48000;
@@ -159,7 +176,7 @@ struct Strip {
     // distorsión + EQ (o filtro en los grupos). Lo que sale aquí es la señal que alimenta los sidechains
     bool silent = false;
     void stageA(int n, bool group) {
-        if (trimG != 1.0f) for (int i = 0; i < n; ++i) { L[i] *= trimG; R[i] *= trimG; }
+        if (const float g = trimG * baseG; g != 1.0f) for (int i = 0; i < n; ++i) { L[i] *= g; R[i] *= g; }
         // canal en silencio: nada que procesar (los filtros no tienen cola audible)
         float pkIn = 0, acc = 0; for (int i = 0; i < n; ++i) { pkIn = std::max(pkIn, std::fabs(L[i]) + std::fabs(R[i])); acc += L[i] + R[i]; }
         if (!std::isfinite(acc) || !(pkIn < 128.0f)) { std::fill(L, L + n, 0.0f); std::fill(R, R + n, 0.0f); pkIn = 0; }   // un motor averiado (o un filtro desbocado, +36 dB) no contagia al resto de la mezcla
@@ -248,6 +265,7 @@ struct Audio {
         for (auto& a : dact) a = 0;
         for (auto& a : sact) a = 0;
         mel[1].select(E_JUNO); mel[2].select(E_ACID); mel[3].select(E_MOOG);
+        for (int c = 0; c < NCH; ++c) st[c].baseG = chBaseGain(c, c >= CH_T0 && c < CH_T0 + 3 ? (c == CH_T0 ? E_JUNO : c == CH_T0 + 1 ? E_ACID : E_MOOG) : -1);
         samp.prepare(sr); brk.prepare(sr); gran.prepare(sr); voz.prepare(sr);
         recL.assign(static_cast<size_t>(sr * 30), 0.0f); recR.assign(static_cast<size_t>(sr * 30), 0.0f);
     }
@@ -320,7 +338,7 @@ struct Audio {
     void apply(const Cmd& c) {
         switch (c.k) {
             case K_ENGP: if (c.a >= 1 && c.a < NT && c.b >= 0 && c.b < E_COUNT && std::isfinite(c.v)) { const auto& E = kEng[c.b]; mel[c.a].set(c.b, c.c, c.c >= 0 && c.c < E.np ? std::clamp(c.v, E.p[c.c].min, E.p[c.c].max) : std::clamp(c.v, 0.0f, 1.0f)); } break;
-            case K_ENG: if (c.a >= 1 && c.a < NT) { mel[c.a].select(static_cast<int>(c.v)); held[c.a].clear(); } break;
+            case K_ENG: if (c.a >= 1 && c.a < NT) { mel[c.a].select(static_cast<int>(c.v)); held[c.a].clear(); st[CH_T0 + c.a - 1].baseG = chBaseGain(CH_T0 + c.a - 1, static_cast<int>(c.v)); } break;
             case K_CHN: if (c.a >= 0 && c.a < NT) ch[c.a] = static_cast<int>(c.v); break;
             case K_STRIP: if (c.a >= 0 && c.a < NCH && c.b >= 0 && c.b < SP_COUNT) st[c.a].set(c.b, c.v); break;
             case K_GRP: if (c.a >= 0 && c.a < NGRP && c.b >= 0 && c.b < SP_COUNT) grp[c.a].set(c.b, c.v); break;
@@ -889,18 +907,15 @@ struct Control {
         const int N[8] = {36, 38, 39, 37, 45, 42, 46, 56};
         for (int l = 0; l < 8; ++l) {
             const std::string L = "d.l" + std::to_string(l) + ".";
-            st[L + "tune"] = 0; st[L + "decay"] = 0.5f; st[L + "snap"] = 0.5f; st[L + "filt"] = 0; st[L + "reso"] = 0.2f; st[L + "sweep"] = 0.5f; st[L + "level"] = 0.8f; st[L + "pan"] = 0; st[L + "vel"] = 0.8f;
+            st[L + "tune"] = 0; st[L + "decay"] = 0.5f; st[L + "snap"] = 0.5f; st[L + "filt"] = 0; st[L + "reso"] = 0.2f; st[L + "sweep"] = 0.5f; st[L + "level"] = 0.75f; st[L + "pan"] = 0; st[L + "vel"] = 0.8f;
             st[L + "tone"] = 0.5f; st[L + "color"] = kCycColor[l]; st[L + "shape"] = kCycShape[l]; st[L + "contour"] = kCycContour[l];
             st[L + "mute"] = 0; st[L + "note"] = static_cast<float>(N[l]); st[L + "out"] = static_cast<float>(kLaneOut[l]);
         }
-        st["sub.ch"] = 9; st["sub.on"] = 1; st["sub.oct"] = -2; st["sub.tone"] = 0.2f; st["sub.glide"] = 0.03f; st["sub.vol"] = 1; st["sub.mode"] = 1; st["sub.src"] = 1;
+        st["sub.ch"] = 9; st["sub.on"] = 1; st["sub.oct"] = -2; st["sub.tone"] = 0.2f; st["sub.glide"] = 0.03f; st["sub.vol"] = 0.75f; st["sub.mode"] = 1; st["sub.src"] = 1;
         // canales
         for (int i = 0; i < NCH; ++i) { Strip s; for (int p = 0; p < SP_COUNT; ++p) st["c" + std::to_string(i) + "." + kSP[p]] = s.p[p]; }
         // punto de partida limpio (lo pidió Jorge): envíos bajados, sin grupos, todo al máster, sin distorsión, EQ ni sidechain
-        // faders a 0 dB: el equilibrio va en el Volume de cada instrumento (mezcla de Jorge, 7-11-2026)
-        st["d.l1.level"] = 0.52f; st["c2.trim"] = -7.5f;
-        // Volume por pista y motor, ajustado a oído por Jorge (una misma pista pesa distinto según lo que toque)
-        st["t2.dx.7"] = 0.6f; st["t2.wt.21"] = 0.81f; st["t2.saw.20"] = 0.85f; st["t3.wt.21"] = 0.8f; st["t4.dx.7"] = 0.63f;
+        // faders a 0 dB, trims a 0 y knobs de volumen al 75 %: el equilibrio de la mezcla va por dentro (kChBaseDb, kTrkEngDb, kitTrim)
         for (int q = 0; q < 4; ++q) st["c" + std::to_string(CH_IN + q) + ".mute"] = 1;   // entradas en silencio hasta que las abras: evita acoples
         for (int g = 0; g < NGRP; ++g) { Strip s; for (int p = 0; p < SP_COUNT; ++p) st["g" + std::to_string(g) + "." + kSP[p]] = s.p[p]; st["g" + std::to_string(g) + ".lvl"] = 1.0f; }
         const int fxDef[NSEND] = {FX_HALL, FX_TAPE, FX_DARK, FX_PING};
@@ -911,7 +926,7 @@ struct Control {
         }
         for (int i = 0; i < MP_COUNT; ++i) st[std::string("m.") + kMP[i]] = kMpDef[i];
     }
-    static constexpr float kStateVer = 14;
+    static constexpr float kStateVer = 16;
     static std::string presetKey(int e, int s) { return std::string("pre.") + kEng[e].key + "." + std::to_string(s) + "."; }
     static std::vector<int> engIdx(int e) { std::vector<int> v; for (int i = 0; i < kEng[e].np; ++i) v.push_back(i); for (int i = 0; i < kEng[e].nb; ++i) v.push_back(kBtn0 + i); return v; }
     static bool isEngParam(const std::string& k) {
@@ -1046,6 +1061,25 @@ struct Control {
         if (ver > 0 && ver < 14) for (int e = 0; e < E_COUNT; ++e) for (int sl = 0; sl < 8; ++sl) {   // presets de fábrica igualados de nivel; los tuyos no se tocan
             const std::string P = presetKey(e, sl); if (st[P + "user"] >= 0.5f) continue;
             for (int i : engIdx(e)) { const auto d = defs.find(P + std::to_string(i)); if (d != defs.end()) st[P + std::to_string(i)] = d->second; }
+        }
+        if (ver > 0 && ver < 15) {   // la mezcla de Jorge (13-11-2026) pasa a ser el punto de partida y va por dentro:
+            // faders a 0 dB, trims a 0 y knobs de volumen al 75 % (batería, Sub y pistas 2-4) suenan como su mezcla
+            for (int c = 0; c < 7; ++c) { st["c" + std::to_string(c) + ".lvl"] = 1; st["c" + std::to_string(c) + ".trim"] = 0; }
+            for (int l = 0; l < 8; ++l) st["d.l" + std::to_string(l) + ".level"] = 0.75f;
+            st["sub.vol"] = 0.75f;
+            for (int e = 0; e < E_COUNT; ++e) {
+                const int vi = kEngVol[e]; if (vi < 0) continue;
+                for (int t = 2; t <= NT; ++t) st["t" + std::to_string(t) + "." + kEng[e].key + "." + std::to_string(vi)] = 0.75f;
+                for (int sl = 0; sl < 8; ++sl) {   // presets: los de fábrica, a sus valores nuevos; los tuyos, con el Volume a la misma escala (0,8 → 0,75)
+                    const std::string P = presetKey(e, sl);
+                    if (st[P + "user"] < 0.5f) { const auto d = defs.find(P + std::to_string(vi)); if (d != defs.end()) st[P + std::to_string(vi)] = d->second; }
+                    else { auto it = st.find(P + std::to_string(vi)); if (it != st.end()) it->second *= 0.75f / 0.8f; }
+                }
+            }
+        }
+        if (ver > 0 && ver < 16) {   // la mezcla rehecha (Gain de batería y sintes, clap más alto) pasa también por dentro
+            for (int c = 0; c < 7; ++c) st["c" + std::to_string(c) + ".trim"] = 0;
+            st["d.l2.level"] = 0.75f;
         }
         if (ver < 12) for (int f = 0; f < NSEND; ++f) {   // envíos con knobs nuevos: valores de partida
             const std::string F = "fx" + std::to_string(f) + "."; const int t = std::clamp(static_cast<int>(st[F + "type"]), 0, FX_COUNT - 1);
@@ -1589,7 +1623,7 @@ struct Control {
         auto cc = [&](int ch, int c, int v) { if (ch >= 0) onCtl({static_cast<unsigned char>(0xB0 | ch), static_cast<unsigned char>(c), static_cast<unsigned char>(v), port}); };
         auto note = [&](int ch, int n) { if (ch >= 0) au.midi.push({static_cast<unsigned char>((down ? 0x90 : 0x80) | ch), static_cast<unsigned char>(n), static_cast<unsigned char>(down ? std::max(1, static_cast<int>(m.d2)) : 0), monoNow()}); };
         static const int kSamp[8] = {SA_TUNE, SA_START, SA_END, SA_ATT, SA_REL, SA_FILT, SA_RES, SA_LVL};
-        static const int kBrk[8] = {-1, BK_TUNE, BK_GATE, BK_RAND, BK_STUT, BK_FILT, BK_RES, BK_RSIZE};   // knob 1: qué break
+        static const int kBrk[8] = {-1, BK_TUNE, BK_GATE, BK_RAND, BK_STUT, BK_FILT, BK_RES, BK_LVL};   // knob 1: qué break; knob 8: nivel (Jorge, 13-11-2026)
         static const int kGr[8] = {GR_POS, GR_SIZE, GR_DENS, GR_PITCH, GR_SPRAY, GR_SPREAD, GR_FB, GR_LVL};
         static const int kGrNote[6] = {60, 62, 63, 65, 67, 72};
         static const int kMst[5] = {108, 102, 103, 105, 106};   // filtro, repeat, gater, space, throw
