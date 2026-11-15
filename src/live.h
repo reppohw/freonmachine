@@ -262,7 +262,30 @@ inline BreakCuts* makeCuts(const Sample& s, int n) {
     const double bias = beat[0];
     for (int q = 0; q <= Q; ++q) beat[static_cast<size_t>(q)] = std::clamp(beat[static_cast<size_t>(q)] - bias, 0.0, static_cast<double>(N));
     for (int q = 1; q <= Q; ++q) if (beat[static_cast<size_t>(q)] <= beat[static_cast<size_t>(q) - 1] + 64) return c;   // algo raro: rejilla recta
-    for (int k = 0; k <= n; ++k) { const int q = std::min(Q - 1, k / 4); c->pos[static_cast<size_t>(k)] = beat[static_cast<size_t>(q)] + (k - 4 * q) / 4.0 * (beat[static_cast<size_t>(q) + 1] - beat[static_cast<size_t>(q)]); }
+    std::vector<double> cp(static_cast<size_t>(n) + 1);
+    for (int k = 0; k <= n; ++k) { const int q = std::min(Q - 1, k / 4); cp[static_cast<size_t>(k)] = beat[static_cast<size_t>(q)] + (k - 4 * q) / 4.0 * (beat[static_cast<size_t>(q) + 1] - beat[static_cast<size_t>(q)]); }
+    // ataque: los golpes claros deben sonar ~3 ms después del inicio de su semicorchea (lo justo para no comerse el ataque).
+    // Se mide dónde cae de verdad (envolvente de 0,5 ms: primer cruce del 50 % tras el valle) y se mueven todos los cortes lo mismo.
+    // Medido antes de esto: de 12 a 25 ms tarde según el break (el Amen, el que más: sonaba por detrás de la batería)
+    {
+        std::vector<float> e(N); float acc = 0, gpk = 0; const float co = 1.0f - std::exp(-1.0f / (0.0005f * s.sr));
+        for (size_t i = 0; i < N; ++i) { acc += (std::fabs(s.L[i]) + std::fabs(s.R[i]) - acc) * co; e[i] = acc; gpk = std::max(gpk, acc); }
+        const double sl = static_cast<double>(N) / n; std::vector<double> d;
+        for (int k = 0; k < n; ++k) {
+            const long lo = std::max(0L, static_cast<long>(cp[static_cast<size_t>(k)] - 0.003 * s.sr)), hi = std::min(static_cast<long>(N) - 1, static_cast<long>(cp[static_cast<size_t>(k)] + 0.4 * sl));
+            float mx = 0; long at = lo; for (long j = lo; j <= hi; ++j) if (e[static_cast<size_t>(j)] > mx) { mx = e[static_cast<size_t>(j)]; at = j; }
+            if (mx < 0.35f * gpk) continue;
+            long vj = at; float vm = mx; for (long j = at; j >= lo; --j) if (e[static_cast<size_t>(j)] < vm) { vm = e[static_cast<size_t>(j)]; vj = j; }
+            long t = vj; for (long j = vj; j <= at; ++j) if (e[static_cast<size_t>(j)] >= vm + 0.5f * (mx - vm)) { t = j; break; }
+            d.push_back(static_cast<double>(t) - cp[static_cast<size_t>(k)]);
+        }
+        if (d.size() >= 4) {
+            std::sort(d.begin(), d.end()); const double shift = d[d.size() / 2] - 0.003 * s.sr;
+            for (double& x : cp) x = std::clamp(x + shift, 0.0, static_cast<double>(N - 1));
+        }
+    }
+    for (int k = 1; k <= n; ++k) if (cp[static_cast<size_t>(k)] <= cp[static_cast<size_t>(k) - 1]) return c;   // algo raro: rejilla recta
+    c->pos = cp;
     return c;
 }
 
