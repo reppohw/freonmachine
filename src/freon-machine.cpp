@@ -103,8 +103,8 @@ inline float chBaseGain(int ch, int eng) {
     if (ch >= CH_T0 && ch < CH_T0 + 3 && eng >= 0 && eng < 8) db += kTrkEngDb[ch - CH_T0][eng];
     return std::pow(10.0f, db / 20.0f);
 }
-constexpr int kNLane = 17;
-const char* kLaneKeys[kNLane] = {"tune", "decay", "snap", "filt", "reso", "sweep", "level", "pan", "vel", "tone", "color", "shape", "contour", "mute", "note", "out", "drive"};
+constexpr int kNLane = 24;
+const char* kLaneKeys[kNLane] = {"tune", "decay", "snap", "filt", "reso", "sweep", "level", "pan", "vel", "tone", "color", "shape", "contour", "mute", "note", "out", "drive", "k0", "k1", "k2", "k3", "k4", "k5", "k6"};   // k0-k6: los 7 mandos de la DRM
 // Los 8 knobs de cada sonido según el kit (el 9.º va en la fila extra, junto al pan). Mismo orden en la web y en la controladora.
 inline const char* const* drumSlots(int uiKit, const char*& extra) {
     // Misma posición, misma función en todos los kits: nivel, afinación, duración, timbre, golpe, barrido, filtro, resonancia.
@@ -112,6 +112,9 @@ inline const char* const* drumSlots(int uiKit, const char*& extra) {
     static const char* kPl[8] = {"level", "tune", "decay", "tone", "snap", "sweep", "filt", "reso"};
     static const char* kCy[8] = {"level", "tune", "decay", "color", "shape", "sweep", "filt", "reso"};
     static const char* kRc[8] = {"level", "tune", "decay", "vel", "snap", "sweep", "filt", "reso"};
+    // DRM: los 7 mandos del panel de cada canal (en su orden) y VOLUME; nada más, para valorarla como la de verdad
+    static const char* kDr[8] = {"k0", "k1", "k2", "k3", "k4", "k5", "k6", "level"};
+    if (uiKit == 5) { extra = nullptr; return kDr; }
     if (uiKit <= 1) { extra = "vel"; return kPl; }
     if (uiKit == 2) { extra = "contour"; return kCy; }
     extra = nullptr; return kRc;
@@ -127,7 +130,7 @@ const float kMpDef[MP_COUNT] = {0.85f, -1.5f, 0.8f, 0, 0, 0, 1, 1, 0, 1.4f, 0, 2
 const int kDistMap[2] = {D_FUZZ, D_BITS};
 inline int distType(float v) { return kDistMap[std::clamp(static_cast<int>(v), 0, 1)]; }
 // Kits: 808, Chip FM, Game Boy y Experimental (el tipo DRM queda solo para los breaks de serie)
-const int kKitMap[5] = {KIT_P808, KIT_P909, KIT_CYC, KIT_GB, KIT_EXP};   // 808, 909, FM (Cycles), Chip, Experimental
+const int kKitMap[6] = {KIT_P808, KIT_P909, KIT_CYC, KIT_GB, KIT_EXP, KIT_DRM1};   // 808, 909, FM (Cycles), Chip, Experimental, DRM (Vermona DRM1)
 const float kRepDivs[4] = {4, 2, 1, 0.5f};    // 1/4, 1/8, 1/16, 1/32 en semicorcheas (gater)
 
 // Notas pulsadas de una pista, sin reservar memoria en el audio
@@ -361,12 +364,12 @@ struct Audio {
             case K_GRP: if (c.a >= 0 && c.a < NGRP && c.b >= 0 && c.b < SP_COUNT) grp[c.a].set(c.b, c.v); break;
             case K_FX: if (c.a >= 0 && c.a < NSEND) { auto& f = fx[c.a]; if (c.b == 5) { const int t = std::clamp(static_cast<int>(c.v), 0, FX_COUNT - 1); if (f.type != t) { f.type = t; f.startClear(); } } else if (c.b == 6) f.ret = c.v; else if (c.b >= 0 && c.b < 5) f.p[c.b] = c.v; } break;
             case K_MST: if (c.b >= 0 && c.b < MP_COUNT) master(c.b, c.v); break;
-            case K_KIT: drums.kit = kKitMap[std::clamp(static_cast<int>(c.v), 0, 4)]; break;
+            case K_KIT: drums.kit = kKitMap[std::clamp(static_cast<int>(c.v), 0, 5)]; break;
             case K_LANE: { if (c.a < 0 || c.a > 7) break; auto& L = drums.lane[static_cast<size_t>(c.a)];
                 switch (c.b) { case 0: L.tune = c.v; break; case 1: L.decay = c.v; break; case 2: L.snap = c.v; break; case 3: L.filt = std::clamp(c.v, -1.0f, 1.0f); break; case 4: L.reso = c.v; break;
                                case 5: L.sweep = c.v; break; case 6: L.level = c.v; break; case 7: L.pan = c.v; break; case 8: L.vel = c.v; break; case 9: L.tone = c.v; break; case 10: L.color = c.v; break;
                                case 11: L.shape = c.v; break; case 12: L.contour = c.v; break; case 13: L.mute = c.v >= 0.5f; break; case 14: L.note = std::clamp(static_cast<int>(c.v), 0, 127); break;
-                               case 15: L.out = std::clamp(static_cast<int>(c.v), 0, 2); break; case 16: L.drive = std::clamp(c.v, 0.0f, 1.0f); break; }
+                               case 15: L.out = std::clamp(static_cast<int>(c.v), 0, 2); break; case 16: L.drive = std::clamp(c.v, 0.0f, 1.0f); break; default: if (c.b >= 17 && c.b < 24) L.k[c.b - 17] = std::clamp(c.v, 0.0f, 1.0f); break; }
                 break; }
             case K_SUB: switch (c.b) { case 0: subCh = static_cast<int>(c.v); subHeld.clear(); subUpdate(); break; case 1: subOn = c.v >= 0.5f; subUpdate(); break; case 2: subOct = c.v; subUpdate(); break;
                                        case 3: subTone = c.v; break; case 4: subGlide = c.v; break; case 5: subVol = c.v; break; case 6: subMode = c.v >= 0.5f ? 1 : 0; subHeld.clear(); subUpdate(); break; case 7: subSrc = std::clamp(static_cast<int>(c.v), 1, NT - 1); subHeld.clear(); subUpdate(); break; } break;
@@ -985,6 +988,11 @@ struct Control {
             st[L + "tune"] = 0; st[L + "decay"] = 0.5f; st[L + "snap"] = 0.5f; st[L + "filt"] = 0; st[L + "reso"] = 0.2f; st[L + "sweep"] = 0.5f; st[L + "level"] = 0.75f; st[L + "pan"] = 0; st[L + "vel"] = 0.8f;
             st[L + "tone"] = 0.5f; st[L + "color"] = kCycColor[l]; st[L + "shape"] = kCycShape[l]; st[L + "contour"] = kCycContour[l];
             st[L + "mute"] = 0; st[L + "note"] = static_cast<float>(N[l]); st[L + "out"] = static_cast<float>(kLaneOut[l]); st[L + "drive"] = 0;
+            // DRM: valores de partida de cada canal (los de la emulación de Fable): Kick, Snare, Clap, MULTI, DRUM 1, HH 1, HH 2, DRUM 2
+            static const float kDrm[8][7] = {{0.35f, 0.25f, 0.45f, 0.3f, 0.3f, 0.25f, 0.35f}, {0.3f, 0.3f, 0.4f, 0.6f, 0.6f, 0.55f, 0.35f}, {0.35f, 0.4f, 0.4f, 0.45f, 0.5f, 0.55f, 0.3f},
+                {0.4f, 0.63f, 0.5f, 0.3f, 0.61f, 0.0f, 0.3f}, {0.45f, 0.35f, 0.68f, 0.3f, 0.0f, 0.3f, 0.2f}, {0.35f, 0.6f, 0.5f, 0.3f, 0.3f, 0.5f, 0.5f}, {0.55f, 0.6f, 0.5f, 0.3f, 0.3f, 0.5f, 0.5f},
+                {0.45f, 0.5f, 0.68f, 0.3f, 0.0f, 0.3f, 0.2f}};
+            for (int j = 0; j < 7; ++j) st[L + "k" + std::to_string(j)] = kDrm[l][j];
         }
         st["sub.ch"] = 9; st["sub.on"] = 1; st["sub.oct"] = -2; st["sub.tone"] = 0.2f; st["sub.glide"] = 0.03f; st["sub.vol"] = 0.75f; st["sub.mode"] = 1; st["sub.src"] = 1;
         // canales
@@ -1043,7 +1051,7 @@ struct Control {
             const auto it = R.find(f); if (it != R.end()) { lo = it->second.first; hi = it->second.second; } else { lo = 0; hi = 1; }
             return true;
         }
-        if (k == "d.kit") { lo = 0; hi = 4; return true; }
+        if (k == "d.kit") { lo = 0; hi = 5; return true; }
         if (k.size() > 3 && k.compare(k.size() - 3, 3, ".ch") == 0) { lo = 0; hi = 16; return true; }
         auto spec = [&](const PSpec* ps, int n, int j) { if (j >= 0 && j < n) { lo = ps[j].min; hi = ps[j].max; } else { lo = 0; hi = 1; } return true; };
         auto tail = [&](size_t from) { return std::atoi(k.c_str() + from); };
@@ -2166,11 +2174,11 @@ int levelsTest() {
         std::printf("%-10s MEDIA: %.1f dB\n\n", kEng[e].name, sum / std::max(cnt, 1));
     }
     // batería: un golpe a velocidad 110, ventana de 100 ms
-    static const char* KN[5] = {"808", "909", "FM", "Chip", "Exp"}; static const int KI[5] = {KIT_P808, KIT_P909, KIT_CYC, KIT_GB, KIT_EXP}; static const char* SN[8] = {"Bombo", "Caja", "Clap", "Rim", "Tom", "HH cer", "HH abi", "Perc"};
+    static const char* KN[6] = {"808", "909", "FM", "Chip", "Exp", "DRM"}; static const int KI[6] = {KIT_P808, KIT_P909, KIT_CYC, KIT_GB, KIT_EXP, KIT_DRM1}; static const char* SN[8] = {"Bombo", "Caja", "Clap", "Rim", "Tom", "HH cer", "HH abi", "Perc"};
     std::printf("%-6s", ""); for (auto* n : KN) std::printf("%14s", n); std::printf("\n");
     for (int l = 0; l < 8; ++l) {
         std::printf("%-6s", SN[l]);
-        for (int k = 0; k < 5; ++k) {
+        for (int k = 0; k < 6; ++k) {
             DrumMachine d; d.prepare(sr); d.kit = KI[k]; d.hit(l, 110);
             float b[8][256]; float* o[8]; for (int i = 0; i < 8; ++i) o[i] = b[i];
             Shelf sh; BQ hp; sh.set(1, 1500, 4, 0.7f, sr); hp.set(1, 60, 0.7f, sr);

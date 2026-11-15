@@ -469,6 +469,14 @@ const DSLOTS = { pl: ["level", "tune", "decay", "tone", "snap", "sweep", "filt",
 const FMLBL = { color: "FM", shape: "Ratio", contour: "FM decay", snap: "Noise" };
 const DROWS_FOR = (kit) => { const s = kit <= 1 ? DSLOTS.pl : kit === 2 ? DSLOTS.cy : DSLOTS.rc, x = kit <= 1 ? ["vel", "pan", "drive"] : kit === 2 ? ["contour", "snap", "vel", "pan", "drive"] : ["pan", "drive"]; return [...s, ...x].map(f => { const r = [f, ...DR[f]]; if (kit === 2 && FMLBL[f]) r[1] = FMLBL[f]; return r; }); };
 const DORDER = [0, 1, 5, 6, 2, 3, 4, 7];
+// kit DRM (Vermona DRM1): cada sonido es un canal de la DRM con sus 7 mandos, con los nombres del panel
+const DRM_NAME = ["KICK", "SNARE", "CLAP", "MULTI", "DRUM 1", "HI HAT 1", "HI HAT 2", "DRUM 2"];
+const DRM_LBL = [["DECAY", "PITCH", "BEND", "TIME", "WAVE", "NOISE", "ATTACK"], ["DECAY R", "REVERB", "DECAY N", "NOISE", "ATTACK", "RESO", "FILTER"],
+  ["DECAY R", "REVERB", "NOISE", "RESO", "CLAP", "FILTER", "HIGH PASS"], ["DECAY", "PITCH", "BEND", "ATTACK", "PITCH 2", "PITCH 3", "HIGH PASS"],
+  ["DECAY", "PITCH", "BEND", "ATTACK", "FM INT", "FM FREQ", "WAVE"], ["DECAY", "FILTER", "BEND", "ATTACK", "RESO", "MIX", "PITCH"],
+  ["DECAY", "FILTER", "BEND", "ATTACK", "RESO", "MIX", "PITCH"], ["DECAY", "PITCH", "BEND", "ATTACK", "FM INT", "FM FREQ", "WAVE"]];
+const DRM_DEF = [[0.35, 0.25, 0.45, 0.3, 0.3, 0.25, 0.35], [0.3, 0.3, 0.4, 0.6, 0.6, 0.55, 0.35], [0.35, 0.4, 0.4, 0.45, 0.5, 0.55, 0.3], [0.4, 0.63, 0.5, 0.3, 0.61, 0, 0.3],
+  [0.45, 0.35, 0.68, 0.3, 0, 0.3, 0.2], [0.35, 0.6, 0.5, 0.3, 0.3, 0.5, 0.5], [0.55, 0.6, 0.5, 0.3, 0.3, 0.5, 0.5], [0.45, 0.5, 0.68, 0.3, 0, 0.3, 0.2]];
 function flash(b, cls, ms) { if (!b) return; b.classList.add(cls); clearTimeout(b._ft); b._ft = setTimeout(() => b.classList.remove(cls), ms); }
 function buildInst() {
   const box = $("#instCards"); box.textContent = ""; P.length = 0;
@@ -486,7 +494,18 @@ function buildInst() {
       const g = el("div", { class: "dgrid" });
       g.append(el("span", { class: "rl" }, "Sound"));
       p.lanes = [];
-      DORDER.forEach(l => { const b = keyBtn(SPEC.lanes[l], "lh", () => { sendRaw(`kb 0 ${ST[`d.l${l}.note`]} 110`); flash(b, "on", 120); oled(0, SPEC.lanes[l], "test hit"); }); p.lanes[l] = b; g.append(b); });
+      const drm = ST["d.kit"] === 5, lname = (l) => drm ? DRM_NAME[l] : SPEC.lanes[l];
+      DORDER.forEach(l => { const b = keyBtn(lname(l), "lh", () => { sendRaw(`kb 0 ${ST[`d.l${l}.note`]} 110`); flash(b, "on", 120); oled(0, lname(l), "test hit"); }); p.lanes[l] = b; g.append(b); });
+      if (drm) {   // DRM: los 7 mandos de cada canal con su nombre del panel, VOLUME y PAN (nada más)
+        for (let r = 0; r < 7; r++) {
+          g.append(el("span", { class: "rl" }, String(r + 1)));
+          DORDER.forEach(l => specKnob(g, `d.l${l}.k${r}`, { l: DRM_LBL[l][r], min: 0, max: 1, step: 0.01, def: DRM_DEF[l][r], fmt: "p" }, (a, b) => oled(0, `${DRM_NAME[l]} · ${DRM_LBL[l][r]}`, b), "sm"));
+        }
+        [["level", "Volume", 0, 1, 0.01, "p", 0.75], ["pan", "Pan", -1, 1, 0.02, "o", 0]].forEach(([f, rl, mi, ma, st, fm, def]) => {
+          g.append(el("span", { class: "rl" }, rl));
+          DORDER.forEach(l => specKnob(g, `d.l${l}.${f}`, { l: rl, min: mi, max: ma, step: st, def, fmt: fm }, (a, b) => oled(0, `${DRM_NAME[l]} · ${rl}`, b), "sm nolab"));
+        });
+      } else
       DROWS_FOR(ST["d.kit"]).forEach(([f, rl, mi, ma, st, fm, def]) => {
         g.append(el("span", { class: "rl" }, rl));
         DORDER.forEach(l => specKnob(g, `d.l${l}.${f}`, { l: rl, min: mi, max: ma, step: st, def, fmt: fm }, (a, b) => oled(0, `${SPEC.lanes[l]} · ${rl}`, b), "sm nolab"));
@@ -496,6 +515,7 @@ function buildInst() {
       g.append(el("span", { class: "rl" }, "Channel"));
       DORDER.forEach(l => g.append(selK(`d.l${l}.out`, [[0, "Kick"], [1, "Snare"], [2, "Rest"]], `Mixer channel for ${SPEC.lanes[l]}`)));
       card.append(g, el("p", { class: "hint" }, "Same position, same job on every kit: Level, Pitch, Decay, timbre, attack, Sweep, Filter, Reso. 808 and 909: Tone = the TONE knob, or brightness on hats and clap; Snap = attack on kick, tom and rim, snappy on the snare, noise on the hats, number of hands on the clap; Sweep = pitch sweep on kick and tom, falling filter on hats, spacing between hands on the clap. FM kit: FM = amount of modulation, Ratio = modulator ratio, Sweep = pitch sweep (filter on hats), FM decay = how long the FM lasts, Noise = noise on top (from the middle upwards, except on the snare). On the FM clap: FM = tone, Ratio = hands, FM decay = spacing. Filter: left = low-pass, right = high-pass. Velocity: how much hit strength changes volume and brightness. Drive: soft saturation per sound (more harmonics, it cuts through small speakers). 909 with your own samples: put ch.wav, oh.wav and ride.wav in the samples/909 folder and the 909 plays them instead of its synthesized cymbals."));
+      if (drm) card.append(el("p", { class: "hint" }, "DRM (Vermona DRM1 MKIII emulation): each sound is a DRM channel with its own panel controls. Hi-hats have two notes, like the DRM: HI HAT 1 = its note closed, note + 2 open; HI HAT 2 = its note open, note + 2 closed. Velocity has no effect (the DRM's TRIG plays at 75 %)."));
     } else {
       const ei = ST[T + ".eng"], e = SPEC.engines[ei], ek = `${T}.${e.key}`;
       const pre = el("div", { class: "presets" + (ui.saving === ti ? " saving" : "") });

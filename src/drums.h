@@ -11,10 +11,11 @@
 #include <vector>
 #include "dsp.h"
 #include "plaits_glue.h"
+#include "drm1.h"   // kit DRM: emulación de la Vermona DRM1 MKIII (de Fable, ver drm1.h)
 
 namespace gb {
 
-enum DrumKit { KIT_808 = 0, KIT_DRM, KIT_CHIP, KIT_GB, KIT_EXP, KIT_P808, KIT_P909, KIT_CYC, KIT_COUNT };
+enum DrumKit { KIT_808 = 0, KIT_DRM, KIT_CHIP, KIT_GB, KIT_EXP, KIT_P808, KIT_P909, KIT_CYC, KIT_DRM1, KIT_COUNT };   // KIT_DRM: recetas antiguas; KIT_DRM1: la DRM1 de verdad
 
 struct DrumRecipe {
     // cuerpo: oscilador con barrido de tono. wave 0 seno, 1 triángulo, 2 cuadrada, 3 pulso estrecho
@@ -212,6 +213,7 @@ struct DrumLane {
     float tune = 0, decay = 0.5f, snap = 0.5f, filt = 0, reso = 0.2f, sweep = 0.5f, level = 0.75f, pan = 0.0f, vel = 0.8f;
     float tone = 0.5f, color = 0.5f, shape = 0.5f, contour = 0.5f;
     float drive = 0.0f;   // ya no se toca desde fuera
+    float k[7] = {0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.5f};   // kit DRM: los 7 mandos del canal, en el orden del panel de la DRM1
     bool mute = false; int note = 36, out = 0;
 };
 // Valores de partida del kit FM por sonido (bombo, caja, clap, rim, tom, HH cerrado, HH abierto, perc)
@@ -402,11 +404,11 @@ struct CycVoice {
 inline const int kLaneOut[8] = {0, 1, 1, 2, 2, 2, 2, 2};
 // Igualación medida con --niveles: dB por kit y sonido (bombo, caja, clap, rim, tom, HH cerrado, HH abierto, perc)
 inline float kitTrim(int kit, int l) {
-    static const float D[5][8] = {{1.9f, -2.4f, 0.0f, 6.2f, -2.3f, -0.6f, -3.1f, -0.5f}, {1.6f, -1.0f, -1.9f, -3.6f, 0.7f, 1.1f, 0.8f, 1.5f}, {-3.2f, -0.1f, -2.6f, -10.2f, -6.3f, -3.9f, -4.1f, -13.0f}, {-9.3f, -10.8f, -8.5f, -3.4f, -11.0f, -9.0f, -10.9f, -14.5f}, {3.8f, 11.2f, 5.1f, 3.7f, -1.9f, -1.3f, 6.0f, 3.7f}};
+    static const float D[6][8] = {{1.9f, -2.4f, 0.0f, 6.2f, -2.3f, -0.6f, -3.1f, -0.5f}, {1.6f, -1.0f, -1.9f, -3.6f, 0.7f, 1.1f, 0.8f, 1.5f}, {-3.2f, -0.1f, -2.6f, -10.2f, -6.3f, -3.9f, -4.1f, -13.0f}, {-9.3f, -10.8f, -8.5f, -3.4f, -11.0f, -9.0f, -10.9f, -14.5f}, {3.8f, 11.2f, 5.1f, 3.7f, -1.9f, -1.3f, 6.0f, 3.7f}, {-7.0f, -2.6f, 0.0f, -10.1f, -7.7f, -1.3f, -4.6f, -7.7f}};   // DRM: igualada al 909 (DRUM 2 como un tom)
     // Punto de partida con los Level al 75 % (mezcla de Jorge, 13-11-2026): 808 con su equilibrio entre sonidos
     // (el perc subido, lo tenía demasiado bajo; el clap, +1,7 dB en la mezcla rehecha); los demás kits suenan como antes con Level 0,8 (la caja, 0,52)
     static const float M[2][8] = {{0.56f, 0.56f, 4.18f, 2.5f, 2.5f, 1.39f, 0.6f, 2.5f}, {0.56f, -3.18f, 0.56f, 0.56f, 0.56f, 0.56f, 0.56f, 0.56f}};
-    const int k = kit == KIT_P808 ? 0 : kit == KIT_P909 ? 1 : kit == KIT_CYC ? 2 : kit == KIT_GB ? 3 : kit == KIT_EXP ? 4 : -1;
+    const int k = kit == KIT_P808 ? 0 : kit == KIT_P909 ? 1 : kit == KIT_CYC ? 2 : kit == KIT_GB ? 3 : kit == KIT_EXP ? 4 : kit == KIT_DRM1 ? 5 : -1;
     const int c = std::clamp(l, 0, 7);
     return k < 0 ? 1.0f : std::pow(10.0f, (D[k][c] + M[k == 0 ? 0 : 1][c]) / 20.0f);   // k < 0: recetas antiguas (sonidos de serie del sampler)
 }
@@ -436,13 +438,40 @@ public:
         for (int i = 0; i < 8; ++i) { auto& L = lane[static_cast<size_t>(i)]; L.note = N[i]; L.out = kLaneOut[i];
             L.color = kCycColor[i]; L.shape = kCycShape[i]; L.sweep = 0.5f; L.contour = kCycContour[i]; }
     }
-    void prepare(float sr) { sr_ = sr; for (auto& v : v_) v.prepare(sr); for (auto& c : cy_) c.sr = sr; for (auto& c : cl_) c.sr = sr; for (auto& c : cb_) c.sr = sr; for (auto& h : ht_) h.sr = sr; }
+    void prepare(float sr) { sr_ = sr; for (auto* c : dch_) c->prepare(sr); for (auto& v : v_) v.prepare(sr); for (auto& c : cy_) c.sr = sr; for (auto& c : cl_) c.sr = sr; for (auto& c : cb_) c.sr = sr; for (auto& h : ht_) h.sr = sr; }
     // devuelve el carril que suena con esa nota (o -1)
     int noteOn(int note, int vel) {
         for (int l = 0; l < 8; ++l) if (lane[static_cast<size_t>(l)].note == note) { hit(l, vel); return l; }
+        // DRM: cada hi-hat tiene dos notas, como la DRM1 (HI HAT 1: su nota cerrado, +2 abierto; HI HAT 2: su nota abierto, +2 cerrado)
+        if (kit == KIT_DRM1) {
+            if (note == lane[5].note + 2) { hitDrm(5, vel, 1); return 5; }
+            if (note == lane[6].note + 2) { hitDrm(6, vel, 0); return 6; }
+        }
         return -1;
     }
+    // kit DRM: sonido → canal de la DRM1 (Kick, Snare, Clap, Rim = MULTI, Tom = DRUM 1, HH cerrado = HI HAT 1, HH abierto = HI HAT 2,
+    // Perc = DRUM 2) y sus 7 mandos en el orden del panel
+    void drmApply(int l) {
+        const float* q = lane[static_cast<size_t>(l)].k;
+        switch (l) {
+            case 0: { auto& c = dKick_; c.decay = q[0]; c.pitch = q[1]; c.bend = q[2]; c.time = q[3]; c.wave = q[4]; c.noise = q[5]; c.attack = q[6]; break; }
+            case 1: { auto& c = dSnare_; c.decayR = q[0]; c.reverb = q[1]; c.decayN = q[2]; c.noise = q[3]; c.attack = q[4]; c.reso = q[5]; c.filter = q[6]; break; }
+            case 2: { auto& c = dClap_; c.decayR = q[0]; c.reverb = q[1]; c.noise = q[2]; c.reso = q[3]; c.clap = q[4]; c.filter = q[5]; c.highpass = q[6]; break; }
+            case 3: { auto& c = dMulti_; c.decay = q[0]; c.pitch = q[1]; c.bend = q[2]; c.attack = q[3]; c.pitch2 = q[4]; c.pitch3 = q[5]; c.highpass = q[6]; break; }
+            case 4: case 7: { auto& c = l == 4 ? dDrum1_ : dDrum2_; c.decay = q[0]; c.pitch = q[1]; c.bend = q[2]; c.attack = q[3]; c.fmInt = q[4]; c.fmFreq = q[5]; c.wave = q[6]; break; }
+            default: { auto& c = l == 5 ? dHH1_ : dHH2_; c.decay = q[0]; c.filter = q[1]; c.bend = q[2]; c.attack = q[3]; c.reso = q[4]; c.mix = q[5]; c.pitch = q[6]; break; }
+        }
+    }
+    void hitDrm(int l, int vel, int mode) {
+        const DrumLane& L = lane[static_cast<size_t>(l)];
+        const float v01 = std::clamp(vel, 1, 127) / 127.0f, vs = std::clamp(L.vel, 0.0f, 1.0f);
+        drmApply(l); drm1::Channel* c = dch_[l];
+        c->volume = L.level * kitTrim(kit, l); c->pan = 0.5f;   // el paneo lo hace la mezcla de Freon
+        c->trigger((1.0f - vs) * 0.75f + vs * v01, mode);     // sin sensibilidad, como el TRIG de la DRM (75 %)
+        lastVel_[l] = v01;
+    }
     void hit(int l, int vel) {
+        if (kit == KIT_DRM1) { hitDrm(l, vel, l == 6 ? 1 : 0); return; }
         const DrumLane& L = lane[static_cast<size_t>(l)];
         const float v01 = std::clamp(vel, 1, 127) / 127.0f, vs = std::clamp(L.vel, 0.0f, 1.0f);
         const float g = (1.0f - vs + vs * std::pow(v01, 1.6f)) * L.level * kitTrim(kit, l);   // velocidad → volumen
@@ -490,6 +519,9 @@ public:
             if (cl_[l].active()) { any = true; for (int i = 0; i < n; ++i) o[i] += cl_[l].process(); }
             if (cb_[l].active()) { any = true; for (int i = 0; i < n; ++i) o[i] += cb_[l].process(); }
             if (sv_[l].on) { any = true; for (int i = 0; i < n; ++i) o[i] += sv_[l].process(); }
+            if (kit == KIT_DRM1 && (dch_[l]->active() || l == 4 || l == 7)) {   // los DRUM siguen moviendo su LFO aunque callen (como la DRM)
+                drmApply(l); any = true; for (int i = 0; i < n; ++i) o[i] += dch_[l]->process();
+            }
             if (!any) continue;
             // filtro por sonido: paso bajo (a la izquierda) o paso alto (a la derecha), con resonancia;
             // con velocidad, el paso bajo se abre más al tocar fuerte
@@ -586,6 +618,8 @@ private:
     std::array<DrumVoice, 8> v_; float sr_ = 48000, lastVel_[8] = {0.8f, 0.8f, 0.8f, 0.8f, 0.8f, 0.8f, 0.8f, 0.8f}, fs_[8][2] = {};
     pd::Drum pv_[8]; float pg_[8] = {}; int plife_[8] = {}; bool pchoke_ = false, pchoke6_ = false; float pcg_ = 1.0f;
     CycVoice cy_[8]; ClapVoice cl_[8]; CowbellVoice cb_[8]; HatVoice ht_[8]; SmpVoice sv_[8];
+    drm1::Kick dKick_; drm1::Snare dSnare_; drm1::Clap dClap_; drm1::Multi dMulti_; drm1::Drum dDrum1_, dDrum2_; drm1::HiHat dHH1_, dHH2_;
+    drm1::Channel* dch_[8] = {&dKick_, &dSnare_, &dClap_, &dMulti_, &dDrum1_, &dHH1_, &dHH2_, &dDrum2_};
 };
 
 }  // namespace gb

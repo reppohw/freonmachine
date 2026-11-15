@@ -351,7 +351,7 @@ inline std::string specJson() {
         for (size_t k = 0; k < 8; ++k) { if (k) o += ","; o += jstr(k < fp.size() ? fp[k].name : ""); }
         o += "]}";
     }
-    o += "],\"kits\":[\"808\",\"909\",\"FM\",\"Chip\",\"Experimental\"],\"lanes\":[\"Kick\",\"Snare\",\"Clap\",\"Rim\",\"Tom\",\"Closed HH\",\"Open HH\",\"Perc\"]}";
+    o += "],\"kits\":[\"808\",\"909\",\"FM\",\"Chip\",\"Experimental\",\"DRM\"],\"lanes\":[\"Kick\",\"Snare\",\"Clap\",\"Rim\",\"Tom\",\"Closed HH\",\"Open HH\",\"Perc\"]}";
     return o;
 }
 
