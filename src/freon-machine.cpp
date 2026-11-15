@@ -1526,6 +1526,17 @@ struct Control {
         }
         else if (op == "rec") { int on; if (is >> on) { if (on) { au.cmds.push({K_REC, 0, static_cast<int16_t>(st["rec.src"]), 0, 1}); srv.broadcast("rec 1"); } else au.cmds.push({K_REC, 0, 0, 0, 0}); } }
         else if (op == "preset") { std::string w; int t, s; if (is >> w >> t >> s) { if (w == "load") presetLoad(t, s, client); else if (w == "save") presetSave(t, s); } }
+        else if (op == "lpdprog") {   // graba en el LPD8 los 4 programas de controladoras/lpd8-freon.syx.txt (en otro hilo: entre uno y otro, una pausa)
+            std::thread([this, f = base + "/controladoras/lpd8-freon.syx.txt"]() {
+                std::ifstream in(f); std::string line; int n = 0;
+                while (std::getline(in, line)) {
+                    std::vector<unsigned char> m; std::istringstream hs(line); std::string h;
+                    while (hs >> h) m.push_back(static_cast<unsigned char>(std::strtol(h.c_str(), nullptr, 16)));
+                    if (m.size() < 8 || m.front() != 0xF0 || m.back() != 0xF7) continue;
+                    if (lpdOut) lpdOut(m); ++n; std::this_thread::sleep_for(std::chrono::milliseconds(400));
+                }
+                lpdReprog_ = true; srv.broadcast("note LPD8|" + (n ? std::to_string(n) + " programs written" : std::string("nothing written: is it connected?")));
+            }).detach(); }
         else if (op == "lhold") { std::string w; int i, on; if (is >> w >> i >> on && w == "brk" && i >= 0 && i < 8) brkHold(i, on != 0); }
     }
     // ============================================================== control por MIDI (sin pantalla)
@@ -1695,7 +1706,7 @@ struct Control {
     //   canal 14 Máster: pads = las 8 combinaciones · knobs: LPF, HPF, Repeat, tamaño del repeat, Comb, Space, Riser, crossfader
     std::vector<std::string> lpdBrk_; std::chrono::steady_clock::time_point lpdBrkAt_{};
     std::function<void(const std::vector<unsigned char>&)> lpdOut; std::function<bool()> lpdNew;
-    int lpdProg_ = -1, lpdBank_ = 0, lpdBrkSel_ = -1; bool brkHold_[8] = {}; float dubSaved_ = 0;
+    int lpdProg_ = -1, lpdBank_ = 0, lpdBrkSel_ = -1; bool brkHold_[8] = {}; float dubSaved_ = 0; std::atomic<bool> lpdReprog_{false};
     std::vector<unsigned char> lpdLast_; std::chrono::steady_clock::time_point lpdAt_{}, lpdRefresh_{};
     // la lista de breaks del LPD8: tus WAV de breaks/ (como mucho 8, en orden); si no hay ninguno, los de fábrica
     const std::vector<std::string>& lpdBreaks() {
@@ -1727,7 +1738,8 @@ struct Control {
     void lpdTick() {
         if (!lpdOut) return;
         const auto now = std::chrono::steady_clock::now();
-        if (lpdNew && lpdNew()) { lpdLast_.clear(); }
+        const bool fresh = lpdNew && lpdNew(), reprog = lpdReprog_.exchange(false);   // LPD8 recién conectado o reprogramado: sus luces otra vez
+        if (fresh || reprog) lpdLast_.clear();
         if (lpdProg_ < 0) return;
         struct C { int r, g, b; }; C c[8] = {};
         const C kOrange{255, 90, 0}, kGreen{0, 255, 60}, kBlue{0, 90, 255}, kCyan{0, 220, 220}, kPurple{170, 0, 255}, kYellow{255, 190, 0}, kWhite{150, 150, 150};

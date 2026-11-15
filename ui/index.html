@@ -1055,6 +1055,7 @@ function buildSet() {
   const skip = el("input", { type: "text", value: ST["midi.skip"] || "", "aria-label": "Don't send to (comma separated)", placeholder: "oxi" });
   skip.addEventListener("change", () => sendRaw(`sset midi.skip ${skip.value.trim()}`));
   ctlRow.append(el("label", { class: "field" }, el("span", { class: "label" }, "Don’t send to"), skip));
+  ctlRow.append(el("label", { class: "field" }, el("span", { class: "label" }, "Akai LPD8"), confirmKey("Program LPD8", "Sure?", () => { sendRaw("lpdprog"); topMsg("LPD8", "writing its 4 programs…"); })));
   box.append(
     card("MIDI channels", "set the same ones you use on the Oxi", chRow),
     card("Drum notes", "the note the Oxi sends for each sound", notes),
