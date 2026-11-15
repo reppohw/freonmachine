@@ -106,13 +106,16 @@ inline const PSpec kSampSpec[SA_COUNT] = {
     {"Level", 0, 1.5f, 0.01f, 0.8f, 'p', false, nullptr, "Output"}, {"Pan", -1, 1, 0.02f, 0, 'o', false, nullptr, "Output"},
     {"Choke", 0, 4, 1, 0, 'n', false, "Off|A|B|C|D", "Output"}, {"Velocity", 0, 1, 0.01f, 0.6f, 'p', false, nullptr, "Output"}};
 
-enum BrkP { BK_BARS, BK_TUNE, BK_GATE, BK_RAND, BK_REV, BK_STUT, BK_FILT, BK_RES, BK_DRIVE, BK_BITS, BK_LVL, BK_RSIZE, BK_COUNT };
+enum BrkP { BK_BARS, BK_TUNE, BK_GATE, BK_RAND, BK_REV, BK_STUT, BK_FILT, BK_RES, BK_DRIVE, BK_BITS, BK_LVL, BK_RSIZE, BK_LOOP, BK_COUNT };
 inline const PSpec kBrkSpec[BK_COUNT] = {
     {"Bars", 0, 3, 1, 1, 'n', false, "1|2|4|8", "Break"}, {"Tune", -12, 12, 0, 0, 't', false, nullptr, "Break"}, {"Length", 0.1f, 1, 0.01f, 1, 'p', false, nullptr, "Break"},
     {"Random", 0, 1, 0.01f, 0, 'p', false, nullptr, "Chaos"}, {"Reverse", 0, 1, 0.01f, 0, 'p', false, nullptr, "Chaos"}, {"Stutter", 0, 1, 0.01f, 0, 'p', false, nullptr, "Chaos"},
     {"Filter", -1, 1, 0.01f, 0, 'd', false, nullptr, "Color"}, {"Resonance", 0, 1, 0.01f, 0.2f, 'p', false, nullptr, "Color"}, {"Drive", 0, 1, 0.01f, 0, 'p', false, nullptr, "Color"},
     {"Bits", 2, 16, 0, 16, 'f', false, "bits", "Color"}, {"Level", 0, 1.5f, 0.01f, 0.9f, 'p', false, nullptr, "Color"},
-    {"Repeat size", 0, 5, 1, 1, 'n', false, "1/32|1/16|1/8|1/4|1/2|1 bar", "Repeat"}};
+    {"Repeat size", 0, 5, 1, 1, 'n', false, "1/32|1/16|1/8|1/4|1/2|1 bar", "Repeat"},
+    // qué parte del archivo se repite: como CHOPPAH con estos mismos breaks, los 2 primeros compases (en los 3.º y 4.º de las
+    // grabaciones suele haber variaciones y el tempo del batería más suelto); «Whole» = el archivo entero
+    {"Loop", 0, 2, 1, 2, 'n', false, "Whole|First bar|First 2 bars", "Break"}};
 // efectos mientras se mantienen (pads 1-8 del LPD8, programa Breaks). Ideas de CHOPPAH (firmware de troceo de breaks):
 // todo entra en la siguiente semicorchea. Dub throw lo hace el control (manda el break al envío B, el delay, y los ecos siguen)
 inline const char* kBrkHolds[8] = {"Repeat", "Reverse", "Half speed", "Tape stop", "Gate", "Random", "Freeze", "Dub throw"};
@@ -215,7 +218,8 @@ private:
 // ------------------------------------------------------------------ breaks: un loop cortado en semicorcheas que sigue el tempo
 // Cortes de un break ajustados a sus golpes: un baterista de verdad no toca a tempo perfecto (en el Amen los golpes van
 // de +17 ms a −15 ms de la rejilla según el compás, medido), así que la rejilla igual se desincroniza al final. Cada corte
-// se lleva al golpe más fuerte que tenga cerca (como mucho un 40 % de semicorchea); sin golpe claro, se queda en la rejilla
+// se lleva al golpe claro que tenga muy cerca (como mucho un 25 % de semicorchea, para no robarle el golpe al corte vecino);
+// sin golpe claro, se queda en la rejilla
 struct BreakCuts { const Sample* s = nullptr; int n = 0; std::vector<double> pos; };
 inline BreakCuts* makeCuts(const Sample& s, int n) {
     auto* c = new BreakCuts; c->s = &s; c->n = n; const size_t N = s.size(); const int H = 128;
@@ -225,9 +229,9 @@ inline BreakCuts* makeCuts(const Sample& s, int n) {
     std::vector<float> O(E.size(), 0.0f); float mx = 0;
     for (size_t i = 1; i < E.size(); ++i) { O[i] = std::max(0.0f, E[i] - E[i - 1]); mx = std::max(mx, O[i]); }
     for (int k = 0; k <= n; ++k) {
-        const double g = k * sl; double best = g; float bo = 0.35f * mx;
+        const double g = k * sl; double best = g; float bo = 0.5f * mx;
         if (k > 0 && k < n) {
-            const long lo = static_cast<long>((g - 0.4 * sl) / H), hi = static_cast<long>((g + 0.4 * sl) / H);
+            const long lo = static_cast<long>((g - 0.25 * sl) / H), hi = static_cast<long>((g + 0.25 * sl) / H);
             for (long f = std::max(1L, lo); f <= hi && f < static_cast<long>(O.size()); ++f) if (O[static_cast<size_t>(f)] > bo) { bo = O[static_cast<size_t>(f)]; best = static_cast<double>((f - 1) * H + 1); }
         }
         c->pos[static_cast<size_t>(k)] = std::clamp(best, k ? c->pos[static_cast<size_t>(k - 1)] + 1.0 : 0.0, static_cast<double>(N - 1));
@@ -243,13 +247,14 @@ public:
     std::atomic<int> lastSlice{-1};
     Breaks() { for (int j = 0; j < BK_COUNT; ++j) p[j] = kBrkSpec[j].def; }
     void prepare(float sr) { sr_ = sr; }
-    int bars() const { static const int b[4] = {1, 2, 4, 8}; return b[std::clamp(static_cast<int>(p[BK_BARS]), 0, 3)]; }
+    int bars() const { static const int b[4] = {1, 2, 4, 8}; return b[std::clamp(static_cast<int>(p[BK_BARS]), 0, 3)]; }   // compases del archivo
+    int loopBars() const { const int l = static_cast<int>(p[BK_LOOP] + 0.5f), fb = bars(); return l == 1 ? 1 : l == 2 ? std::min(2, fb) : fb; }   // compases que se repiten
     void setHold(int k, bool v) { hold[k] = v; if (v && (k == 0 || k == 6)) repIdx_ = -1; if (v && k == 2) halfStart_ = -1; }
     // nota MIDI: salta a ese corte (y lo toca si el break no está en marcha)
     bool startPending_ = false;
     void jump(int k16, float bpm, bool playing) {
         const Sample* s = smp.load(); if (!s) return;
-        const int n = bars() * 16, target = (k16 * n / 16) % n;
+        const int n = loopBars() * 16, target = (k16 * n / 16) % n;
         jumpTo_ = target;
         if (!playing) { const double spb = sr_ * 60.0 / bpm / 4.0; startSlice(*s, target, spb, bpm, 1, false); }
     }
@@ -267,7 +272,7 @@ public:
                 lastStep_ = st;
                 if (startPending_) {
                     if (((st % 16) + 16) % 16 != 0) continue;   // aún no es el 1 del compás (4/4: 16 semicorcheas)
-                    const int nb = bars() * 16; offset_ = static_cast<int>(((-st) % nb + nb) % nb); jumpTo_ = -1; startPending_ = false;
+                    const int nb = loopBars() * 16; offset_ = static_cast<int>(((-st) % nb + nb) % nb); jumpTo_ = -1; startPending_ = false;
                 }
                 step(*s, st, spb, bpm, i);
             }
@@ -307,7 +312,7 @@ public:
 private:
     struct V { bool on = false; double pos = 0, inc = 1; long left = 0, age = 0; int delay = 0; };
     void step(const Sample& s, long st, double spb, float bpm, int at) {
-        const int n = bars() * 16;
+        const int n = loopBars() * 16;
         if (jumpTo_ >= 0) { offset_ = static_cast<int>(((jumpTo_ - st) % n + n) % n); jumpTo_ = -1; }
         int idx = static_cast<int>(((st + offset_) % n + n) % n);
         double rate = 1, len = 1; int reps = 1; bool rev = false;
@@ -335,7 +340,7 @@ private:
         for (int r = 0; r < reps; ++r) startSlice(s, idx, spb, bpm, len / reps * p[BK_GATE], rev, at + static_cast<int>(r * spb / reps), rate);
     }
     void startSlice(const Sample& s, int idx, double spb, float bpm, double lenSteps, bool rev, int delay = 0, double rate = 1) {
-        const int n = bars() * 16; const double N = static_cast<double>(s.size()), sl = N / n;
+        const int n = bars() * 16; const double N = static_cast<double>(s.size()), sl = N / n;   // los cortes son del archivo entero
         const double srcBpm = bars() * 4 * 60.0 / (N / s.sr);
         const BreakCuts* c = cuts.load(std::memory_order_acquire); const bool cut = c && c->s == &s && c->n == n;   // cortes en los golpes reales
         const double a = cut ? c->pos[static_cast<size_t>(idx)] : idx * sl, b = cut ? c->pos[static_cast<size_t>(idx) + 1] : (idx + 1) * sl;
