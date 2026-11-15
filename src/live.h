@@ -213,8 +213,31 @@ private:
 };
 
 // ------------------------------------------------------------------ breaks: un loop cortado en semicorcheas que sigue el tempo
+// Cortes de un break ajustados a sus golpes: un baterista de verdad no toca a tempo perfecto (en el Amen los golpes van
+// de +17 ms a −15 ms de la rejilla según el compás, medido), así que la rejilla igual se desincroniza al final. Cada corte
+// se lleva al golpe más fuerte que tenga cerca (como mucho un 40 % de semicorchea); sin golpe claro, se queda en la rejilla
+struct BreakCuts { const Sample* s = nullptr; int n = 0; std::vector<double> pos; };
+inline BreakCuts* makeCuts(const Sample& s, int n) {
+    auto* c = new BreakCuts; c->s = &s; c->n = n; const size_t N = s.size(); const int H = 128;
+    const double sl = static_cast<double>(N) / n; c->pos.resize(static_cast<size_t>(n) + 1);
+    std::vector<float> E; E.reserve(N / H + 1);
+    for (size_t f = 1; f + H < N; f += H) { double e = 0; for (size_t i = f; i < f + H; ++i) { const float d = (s.L[i] + s.R[i]) - (s.L[i - 1] + s.R[i - 1]); e += d * d; } E.push_back(static_cast<float>(std::log10(e + 1e-9))); }
+    std::vector<float> O(E.size(), 0.0f); float mx = 0;
+    for (size_t i = 1; i < E.size(); ++i) { O[i] = std::max(0.0f, E[i] - E[i - 1]); mx = std::max(mx, O[i]); }
+    for (int k = 0; k <= n; ++k) {
+        const double g = k * sl; double best = g; float bo = 0.35f * mx;
+        if (k > 0 && k < n) {
+            const long lo = static_cast<long>((g - 0.4 * sl) / H), hi = static_cast<long>((g + 0.4 * sl) / H);
+            for (long f = std::max(1L, lo); f <= hi && f < static_cast<long>(O.size()); ++f) if (O[static_cast<size_t>(f)] > bo) { bo = O[static_cast<size_t>(f)]; best = static_cast<double>((f - 1) * H + 1); }
+        }
+        c->pos[static_cast<size_t>(k)] = std::clamp(best, k ? c->pos[static_cast<size_t>(k - 1)] + 1.0 : 0.0, static_cast<double>(N - 1));
+    }
+    return c;
+}
+
 class Breaks {
 public:
+    std::atomic<const BreakCuts*> cuts{nullptr};
     float p[BK_COUNT]; bool hold[8] = {}; bool on = false;
     std::atomic<const Sample*> smp{nullptr};
     std::atomic<int> lastSlice{-1};
@@ -314,10 +337,12 @@ private:
     void startSlice(const Sample& s, int idx, double spb, float bpm, double lenSteps, bool rev, int delay = 0, double rate = 1) {
         const int n = bars() * 16; const double N = static_cast<double>(s.size()), sl = N / n;
         const double srcBpm = bars() * 4 * 60.0 / (N / s.sr);
+        const BreakCuts* c = cuts.load(std::memory_order_acquire); const bool cut = c && c->s == &s && c->n == n;   // cortes en los golpes reales
+        const double a = cut ? c->pos[static_cast<size_t>(idx)] : idx * sl, b = cut ? c->pos[static_cast<size_t>(idx) + 1] : (idx + 1) * sl;
         const double inc = (bpm / srcBpm) * (s.sr / sr_) * rate * std::exp2(p[BK_TUNE] / 12.0);
         V* v = nullptr; for (auto& x : v_) if (!x.on) { v = &x; break; } if (!v) v = &v_[0];
         v->on = true; v->delay = delay; v->age = 0; v->left = static_cast<long>(lenSteps * spb);
-        v->inc = rev ? -inc : inc; v->pos = rev ? (idx + 1) * sl - 1 : idx * sl;
+        v->inc = rev ? -inc : inc; v->pos = rev ? b - 1 : a;
     }
     float rnd() { seed_ = seed_ * 1664525u + 1013904223u; return (seed_ >> 8) * (1.0f / 16777216.0f); }
     V v_[6]; float sr_ = 48000, tape_ = 1; long lastStep_ = -1000000, halfStart_ = -1, repStart_ = 0; int offset_ = 0, jumpTo_ = -1, repIdx_ = -1, halfIdx_ = 0, lastIdx_ = -1; uint32_t seed_ = 12345;

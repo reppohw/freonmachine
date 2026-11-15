@@ -269,6 +269,7 @@ function connect() {
     if (op === "spec") SPEC = JSON.parse(rest);
     else if (op === "files") { FILES = JSON.parse(rest); if (ready) buildLive(); }
     else if (op === "memlist") { MEMS = JSON.parse(rest); if (ready && $("#memCard")) { const c = $("#memCard"), b = el("div"); buildMem(b); c.replaceWith(b.firstChild); } }
+    else if (op === "brkhold") { const [i, on] = rest.split(" ").map(Number); const b = LV.holds && LV.holds[i]; if (b) b.classList.toggle("on", !!on); }
     else if (op === "note") { const i = rest.indexOf("|"); topMsg(i < 0 ? rest : rest.slice(0, i), i < 0 ? "" : rest.slice(i + 1)); }
     else if (op === "memmsg") { const [w, ...n] = rest.split(" "); topMsg("Memories", `${w} ${n.join(" ")}`); }
     else if (op === "state") { ST = JSON.parse(rest); ready = true; build(); }
@@ -598,7 +599,7 @@ function buildLive() {
     for (let i = 0; i < 16; i++) { const b = el("button", { class: "slice" + (i % 4 === 0 ? " beat" : ""), "aria-label": `Jump to slice ${i + 1}` }, String(i + 1)); b.addEventListener("pointerdown", (e) => { e.preventDefault(); sendRaw(`kb 11 ${36 + i} 100`); }); sl.append(b); LV.slices.push(b); }
     const cv = el("canvas", { class: "wave tall" }); LV.brkCv = cv;
     const holds = el("div", { class: "keys" });
-    SPEC.live.brkHolds.forEach((h, i) => holds.append(holdKey(h, () => { sendRaw(`lhold brk ${i} 1`); c.msg("Hold", h); }, () => sendRaw(`lhold brk ${i} 0`))));
+    LV.holds = []; SPEC.live.brkHolds.forEach((h, i) => { const b = holdKey(h, () => { sendRaw(`lhold brk ${i} 1`); c.msg("Hold", h); }, () => sendRaw(`lhold brk ${i} 0`)); LV.holds.push(b); holds.append(b); });
     c.card.append(cv, sl, holds, groupedKnobs(L.brk, (i) => `brk.${i}`, (a, b) => c.msg(a, b)),
       el("p", { class: "hint" }, "Copy WAV loops into the breaks/ folder. When you choose one, the number of bars is estimated; fix it with the Bars knob if needed."));
     box.append(c.card);

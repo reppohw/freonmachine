@@ -883,6 +883,15 @@ struct Control {
         Sample* s = breakSample(ss["brk.name"]); if (!s && !facB.empty()) s = facB[0];
         au.brk.smp.store(s);
         if (guess && s) { const std::string nm = ss["brk.name"]; set("brk.0", nm.rfind("fab:", 0) == 0 ? 1.0f : static_cast<float>(guessBars(*s)), -1); }
+        brkCuts();
+    }
+    // cortes ajustados a los golpes del break elegido, con sus compases (se calculan aquí, una vez; el audio solo los lee)
+    std::vector<std::unique_ptr<BreakCuts>> cutsKeep_;   // los anteriores siguen vivos: el audio podría estar leyéndolos
+    void brkCuts() {
+        const Sample* s = au.brk.smp.load(); if (!s || s->size() < 1000) return;
+        static const int B[4] = {1, 2, 4, 8}; const int n = B[std::clamp(static_cast<int>(st["brk.0"]), 0, 3)] * 16;
+        for (auto& c : cutsKeep_) if (c->s == s && c->n == n) { au.brk.cuts.store(c.get(), std::memory_order_release); return; }
+        cutsKeep_.emplace_back(makeCuts(*s, n)); au.brk.cuts.store(cutsKeep_.back().get(), std::memory_order_release);
     }
     std::string filesJson() {
         std::string o = "{\"samples\":[";
@@ -1459,6 +1468,7 @@ struct Control {
         const float old = st[k];
         st[k] = v; Cmd c; if (toCmd(k, v, c)) au.cmds.push(c);
         if (k == "d.kit" && static_cast<int>(v) == 1) drum909Load();
+        if (k == "brk.0") brkCuts();   // otros compases: otros cortes
         dirty = true; dirtyAt = std::chrono::steady_clock::now();
         // lo que llega por MIDI puede venir a cientos por segundo (un LFO del Oxi): a la web se le manda solo el último valor
         if (from == kMidiSrc) webPend_[k] = v; else srv.broadcast("set " + k + " " + jnum(v), from);
@@ -1724,6 +1734,7 @@ struct Control {
     void brkHold(int i, bool on) {
         if (i < 0 || i > 7 || brkHold_[i] == on) return;
         brkHold_[i] = on; au.cmds.push({K_LIVE, LM_BRK, 0, static_cast<int16_t>(kBrkHold0 + i), on ? 1.0f : 0.0f});
+        srv.broadcast("brkhold " + std::to_string(i) + " " + (on ? "1" : "0"));   // la web enciende su botón (también si viene del LPD8)
         if (i == 7) { const std::string k = "c" + std::to_string(CH_BRK) + ".s1"; if (on) { dubSaved_ = st[k]; set(k, 1, -1); } else set(k, dubSaved_, -1); }
         lpdRefresh_ = {};
     }
@@ -1732,6 +1743,12 @@ struct Control {
         for (int i = 0; i < 8; ++i) brkHold(i, false);
         for (int j : {BK_TUNE, BK_GATE, BK_RAND, BK_REV, BK_STUT, BK_FILT, BK_RES, BK_DRIVE, BK_BITS, BK_RSIZE}) set("brk." + std::to_string(j), kBrkSpec[j].def, kMidiSrc);
         topNote("Breaks", "effects reset");
+    }
+    // todos los efectos del máster a cero y la combinación activa fuera (como «All off» en la web)
+    void masterAllOff() {
+        if (learn_ >= 0) learnStop(); comboOff();
+        for (const char* k : {"m.filt", "m.rep", "m.gate", "m.riser", "m.space", "m.throw", "m.tape", "m.comb", "m.sweep", "m.chorus", "m.width", "m.lofi", "m.spFrz", "m.thFrz", "m.lpf", "m.hpf"}) if (st[k] != 0) set(k, 0, -1);
+        topNote("Master effects", "all off");
     }
     void topNote(const std::string& a, const std::string& b) { srv.broadcast("note " + a + "|" + b); }
     // luces de los pads del programa en uso: 8 colores RGB (0-255) en un SysEx «Pad LED Color Update» del LPD8 mk2
@@ -1826,7 +1843,11 @@ struct Control {
             else cc(chOf("gran.ch"), 16 + (knob < 3 && st["gran." + std::to_string(GR_TIME)] >= 0.5f ? kGrS[knob] : kGr[knob]), m.d2);
             break; }
         default: {   // Máster
-            if (pad >= 0) { if (bank == 0) onMixNote(mixCh(), 64 + pad, down ? 127 : 0); break; }
+            if (pad >= 0) {
+                if (bank == 0) onMixNote(mixCh(), 64 + pad, down ? 127 : 0);
+                else if (bank == 2 && pad == 0 && down) masterAllOff();   // CC + pad 1: todos los efectos del máster fuera
+                break;
+            }
             switch (knob) {
                 case 0: put("m.lpf", v); break; case 1: put("m.hpf", v); break; case 2: put("m.rep", v); break;
                 case 3: put("m.rSize", std::round(5.0f * v)); break; case 4: put("m.comb", v); break; case 5: put("m.space", v); break;
