@@ -7,6 +7,8 @@
 // Carriles: 0 bombo, 1 caja, 2 clap, 3 rim, 4 tom, 5 HH cerrado, 6 HH abierto, 7 perc.
 #pragma once
 #include <array>
+#include <atomic>
+#include <vector>
 #include "dsp.h"
 #include "plaits_glue.h"
 
@@ -247,10 +249,11 @@ struct ClapVoice {
 
 // ---------------------------------------------------------------- hi-hats 808/909 (propio, sobre el circuito publicado)
 // 808: las seis cuadradas del original, con sus frecuencias, sin aliasing, por dos bandas y el VCA asimétrico.
-// 909: el original es una muestra de 6 bits; aquí, tres parejas en anillo (como Plaits) y ruido blanco de verdad.
+// 909: el original es una muestra de 6 bits que pasa por el VCA; aquí, tres parejas en anillo (como Plaits) y ruido, reducidos
+// a 6 bits y a unos 32 kHz ANTES de la envolvente (como su DAC): de ahí sale su grano metálico.
 // Tone = brillo, Snap = ruido, Sweep = el filtro cae, Decay = duración.
 struct HatVoice {
-    float sr = 48000, ph[6] = {}, inc[6] = {}, e = 0, k = 0, kF = 0, gain = 0, nm = 0, fc = 8000, sw = 0, eS = 0, kS = 0; bool on = false, k9 = false; int cnt = 0; float bqQ = 1;
+    float sr = 48000, ph[6] = {}, inc[6] = {}, e = 0, k = 0, kF = 0, gain = 0, nm = 0, fc = 8000, sw = 0, eS = 0, kS = 0; bool on = false, k9 = false; int cnt = 0; float bqQ = 1, shPh = 0, shV = 0;
     BQ bp, bp2, hp; Noise nz;
     void trigger(bool is909, float g, float accent, float tuneRatio, float tau, float tone, float snap, float sweep, float fMul) {
         k9 = is909; on = true; gain = g; e = 0.55f + 0.45f * accent; cnt = 0;
@@ -270,7 +273,11 @@ struct HatVoice {
         float m;
         if (k9) m = blepPulse(ph[0], inc[0], 0.5f) * blepSaw(ph[1], inc[1]) + blepPulse(ph[2], inc[2], 0.5f) * blepSaw(ph[3], inc[3]) + blepPulse(ph[4], inc[4], 0.5f) * blepSaw(ph[5], inc[5]);
         else { m = 0; for (int i = 0; i < 6; ++i) m += blepPulse(ph[i], inc[i], 0.5f); m *= 0.5f; }
-        const float x = m * (1.0f - nm) + nz.next() * 2.0f * nm;
+        float x = m * (1.0f - nm) + nz.next() * 2.0f * nm;
+        if (k9) {   // DAC del 909: 6 bits (64 niveles) y muestreo a ~32 kHz, sostenido entre muestras
+            shPh += 32000.0f / sr; if (shPh >= 1.0f) { shPh -= 1.0f; shV = std::round(std::clamp(x * 0.5f, -1.0f, 1.0f) * 31.0f) / 31.0f * 2.0f; }
+            x = shV;
+        }
         if (sw > 0.01f && (++cnt & 31) == 0) { eS *= std::pow(kS, 32.0f); bp.set(2, fc * (1.0f + sw * eS * 0.8f) / (1.0f + sw * 0.8f), bqQ, sr); }
         float y = bp.process(x);
         if (k9) { y *= e; e *= e > 0.4f ? kF : k; }
@@ -404,8 +411,24 @@ inline float kitTrim(int kit, int l) {
     return k < 0 ? 1.0f : std::pow(10.0f, (D[k][c] + M[k == 0 ? 0 : 1][c]) / 20.0f);   // k < 0: recetas antiguas (sonidos de serie del sampler)
 }
 
+// Muestra propia para un sonido del kit (la 909 puede usar las tuyas en samples/909/). Se reparte de un hilo a otro por puntero
+// y nunca se libera mientras Freon corre (pesa poco)
+struct DrumSmp { std::vector<float> L; float sr = 48000; };
+struct SmpVoice {
+    const DrumSmp* s = nullptr; double pos = 0, inc = 1; float g = 0, e = 1, k = 1; bool on = false;
+    void trigger(const DrumSmp* smp, float gain, float ratio, float tau, float sr) { s = smp; pos = 0; inc = ratio * smp->sr / sr; g = gain; e = 1; k = std::exp(-1.0f / (tau * sr)); on = true; }
+    void choke(float sr) { if (on) k = std::min(k, std::exp(-1.0f / (0.004f * sr))); }
+    float process() {
+        if (!on) return 0.0f;
+        const size_t i = static_cast<size_t>(pos); if (i + 1 >= s->L.size() || e < 1e-4f) { on = false; return 0.0f; }
+        const float fr = static_cast<float>(pos - static_cast<double>(i)), y = (s->L[i] + (s->L[i + 1] - s->L[i]) * fr) * g * e;
+        pos += inc; e *= k; return y;
+    }
+};
+
 class DrumMachine {
 public:
+    std::atomic<const DrumSmp*> smp909[8] = {};   // HH cerrado (5), HH abierto (6), ride (7): si hay, la 909 los usa
     int kit = KIT_P808;
     std::array<DrumLane, 8> lane;
     DrumMachine() {
@@ -424,7 +447,7 @@ public:
         const float v01 = std::clamp(vel, 1, 127) / 127.0f, vs = std::clamp(L.vel, 0.0f, 1.0f);
         const float g = (1.0f - vs + vs * std::pow(v01, 1.6f)) * L.level * kitTrim(kit, l);   // velocidad → volumen
         lastVel_[l] = v01;
-        if (l == 5) { v_[6].choke(); pchoke_ = true; cy_[6].on = false; ht_[6].choke(); }   // el HH cerrado corta el abierto
+        if (l == 5) { v_[6].choke(); pchoke_ = true; cy_[6].on = false; ht_[6].choke(); sv_[6].choke(sr_); }   // el HH cerrado corta el abierto
         if (kit == KIT_P808 || kit == KIT_P909) { hitPlaits(l, L, v01, vs, g); return; }
         if (kit == KIT_CYC) { hitCycles(l, L, v01, vs, g); return; }
         DrumRecipe r = drumRecipe(kit, l, L.tune, L.decay, 0.5f);
@@ -466,6 +489,7 @@ public:
             if (ht_[l].active()) { any = true; for (int i = 0; i < n; ++i) o[i] += ht_[l].process(); }
             if (cl_[l].active()) { any = true; for (int i = 0; i < n; ++i) o[i] += cl_[l].process(); }
             if (cb_[l].active()) { any = true; for (int i = 0; i < n; ++i) o[i] += cb_[l].process(); }
+            if (sv_[l].on) { any = true; for (int i = 0; i < n; ++i) o[i] += sv_[l].process(); }
             if (!any) continue;
             // filtro por sonido: paso bajo (a la izquierda) o paso alto (a la derecha), con resonancia;
             // con velocidad, el paso bajo se abre más al tocar fuerte
@@ -506,6 +530,9 @@ private:
         if (l == 2) { cl_[l].trigger(g * (k9 ? 0.63f : 0.7f), L.decay, L.tone, L.snap, L.sweep, k9); return; }
         if (l == 5 || l == 6 || (l == 7 && k9)) {   // hats y ride con voz propia: Decay es tiempo real
             const float d2 = L.decay * L.decay, tau = l == 5 ? 0.005f + d2 * 0.07f : l == 6 ? 0.03f + d2 * 0.5f : 0.2f + d2 * 3.0f;
+            if (k9) if (const DrumSmp* s = smp909[l].load(std::memory_order_acquire)) {   // tu muestra: Pitch y Decay como siempre (Decay alto = la muestra entera)
+                sv_[l].trigger(s, g * (0.6f + 0.4f * std::clamp((1.0f - vs) * 0.6f + vs * v01, 0.0f, 1.0f)), semi(L.tune), L.decay > 0.95f ? 1e4f : tau * 3.0f, sr_); return;
+            }
             ht_[l].trigger(k9, g * (l == 7 ? 0.8f : 1.0f), std::clamp((1.0f - vs) * 0.6f + vs * v01, 0.0f, 1.0f), semi(L.tune) * (l == 7 ? 1.3f : 1.0f), tau, L.tone, L.snap, L.sweep, l == 7 ? 0.8f : 1.0f);
             return;
         }
@@ -513,7 +540,15 @@ private:
         const PSpec ps = plaitsSpec(kit, l);
         pv_[l].setModel(ps.model);
         pv_[l].trigger(std::clamp((1.0f - vs) * 0.6f + vs * v01, 0.0f, 1.0f));   // velocidad → acento de Plaits (más golpe y brillo)
-        pg_[l] = g * ps.gain; pchoke6_ = l == 6 ? false : pchoke6_;
+        // 808: el Snap (FM de ataque de Plaits) también cambiaba el volumen: el bombo de −11,6 dB (Snap 0) a +3,7 dB (Snap 1)
+        // y el tom de −3,6 a +3,8, frente a Snap 0,5 (medido, ponderación K). Se compensa con lo medido: ahora Snap es golpe, no volumen
+        float sc = 1.0f;
+        if (!k9 && (l == 0 || l == 4)) {
+            static const float kB[11] = {-11.6f, -8.1f, -5.3f, -3.1f, -1.4f, 0, 1.1f, 2.0f, 2.8f, 3.3f, 3.7f}, kT[11] = {-3.6f, -3.0f, -2.9f, -2.6f, -1.6f, 0, 1.5f, 2.7f, 3.4f, 3.7f, 3.8f};
+            const float* t = l == 0 ? kB : kT; const float x = std::clamp(L.snap, 0.0f, 1.0f) * 10.0f; const int i = std::min(9, static_cast<int>(x));
+            sc = std::pow(10.0f, -(t[i] + (t[i + 1] - t[i]) * (x - i)) / 20.0f);
+        }
+        pg_[l] = g * ps.gain * sc; pchoke6_ = l == 6 ? false : pchoke6_;
         plife_[l] = static_cast<int>(sr_ * (0.15f + 6.0f * L.decay * ps.decMul));
         if (l == 6) { pchoke_ = false; pcg_ = 1.0f; }
     }
@@ -550,7 +585,7 @@ private:
     }
     std::array<DrumVoice, 8> v_; float sr_ = 48000, lastVel_[8] = {0.8f, 0.8f, 0.8f, 0.8f, 0.8f, 0.8f, 0.8f, 0.8f}, fs_[8][2] = {};
     pd::Drum pv_[8]; float pg_[8] = {}; int plife_[8] = {}; bool pchoke_ = false, pchoke6_ = false; float pcg_ = 1.0f;
-    CycVoice cy_[8]; ClapVoice cl_[8]; CowbellVoice cb_[8]; HatVoice ht_[8];
+    CycVoice cy_[8]; ClapVoice cl_[8]; CowbellVoice cb_[8]; HatVoice ht_[8]; SmpVoice sv_[8];
 };
 
 }  // namespace gb

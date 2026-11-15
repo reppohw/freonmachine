@@ -176,9 +176,26 @@ struct Follower {
 struct BusComp {
     // ratio: 0 = 2:1, 1 = 4:1, 2 = 10:1. air: realce de agudos tras comprimir, estilo «glue» (0..+10 dB desde 7 kHz, con un pequeño pico). makeup: ganancia extra en dB
     float amount = 0, ratio = 1, attack = 10, release = 0.3f, mix = 1, air = 0, makeup = 0, lastGrDb = 0;
-    void prepare(float s) { sr = s; airSet = -1; }
-    void reset() { env = 0; gDb = 0; gLin = 1; mkLin = 1; airSet = -1; for (auto& h : hs) h.z1 = h.z2 = 0; }
+    bool on = true;   // apagado: ni compresión, ni Air, ni Makeup (fundido de 20 ms para no dar saltos)
+    // Bass through: el detector no oye por debajo de ~100 Hz (paso alto de 12 dB/oct solo en lo que «escucha»; el audio pasa entero).
+    // El bombo y el bajo dejan de disparar la compresión, así que el grave no se hunde con cada golpe
+    bool bassThru = false;
+    void prepare(float s) { sr = s; airSet = -1; for (auto& d : det) { d.set(1, 100.0f, 0.707f, s); d.reset(); } }
+    void reset() { env = 0; gDb = 0; gLin = 1; mkLin = 1; airSet = -1; for (auto& h : hs) h.z1 = h.z2 = 0; for (auto& d : det) d.reset(); }
     void process(float* L, float* R, int n) {
+        if (!on && onG <= 0.0f) { lastGrDb = 0; return; }
+        if (on && onG >= 1.0f) { run(L, R, n); return; }
+        if (on && onG <= 0.0f) reset();   // vuelve a encenderse: sin restos de antes
+        const float step = (on ? 1.0f : -1.0f) / (0.02f * sr);
+        for (int o = 0; o < n; o += 256) {
+            const int k = std::min(256, n - o); float dL[256], dR[256];
+            std::copy(L + o, L + o + k, dL); std::copy(R + o, R + o + k, dR); run(L + o, R + o, k);
+            for (int i = 0; i < k; ++i) { onG = std::clamp(onG + step, 0.0f, 1.0f); L[o + i] = dL[i] + (L[o + i] - dL[i]) * onG; R[o + i] = dR[i] + (R[o + i] - dR[i]) * onG; }
+        }
+    }
+private:
+    float onG = 1;
+    void run(float* L, float* R, int n) {
         // un valor imposible (infinito o NaN) se quedaría para siempre en el detector y el máster sonaría mudo: se reinicia
         if (!std::isfinite(env) || !std::isfinite(gDb) || !std::isfinite(gLin) || !std::isfinite(hs[0].z1 + hs[0].z2 + hs[1].z1 + hs[1].z2)) reset();
         if (amount >= 0.005f) compress(L, R, n); else { lastGrDb = 0; gDb = 0; gLin = 1; env = 0; }
@@ -192,7 +209,6 @@ struct BusComp {
             for (int i = 0; i < n; ++i) { a += d; L[i] *= a; R[i] *= a; } mkLin = mk;
         }
     }
-private:
     void compress(float* L, float* R, int n) {
         static const float kR[3] = {2, 4, 10};
         const float r = kR[std::clamp(static_cast<int>(ratio + 0.5f), 0, 2)], thr = -amount * 24.0f, knee = 6.0f, slope = 1.0f - 1.0f / r;
@@ -200,7 +216,7 @@ private:
         const float kE = 1.0f - std::exp(-1.0f / (0.005f * sr)); float minG = 0;
         for (int o = 0; o < n; o += 8) {
             const int k = std::min(8, n - o);
-            for (int i = o; i < o + k; ++i) { const float x = std::max(std::fabs(L[i]), std::fabs(R[i])); env += (x * x - env) * kE; }
+            for (int i = o; i < o + k; ++i) { const float a = det[0].process(L[i]), b = det[1].process(R[i]); const float x = bassThru ? std::max(std::fabs(a), std::fabs(b)) : std::max(std::fabs(L[i]), std::fabs(R[i])); env += (x * x - env) * kE; }
             const float lv = 10.0f * std::log10(env + 1e-12f), over = lv - thr;
             const float t = over <= -knee * 0.5f ? 0.0f : over >= knee * 0.5f ? -over * slope : -slope * (over + knee * 0.5f) * (over + knee * 0.5f) / (2.0f * knee);
             gDb += (t - gDb) * (t < gDb ? ca : cr); minG = std::min(minG, gDb);
@@ -210,33 +226,42 @@ private:
         lastGrDb = minG;
     }
     float sr = 48000, env = 0, gDb = 0, gLin = 1, airSet = -1, mkLin = 1;
-    Shelf hs[2];
+    Shelf hs[2]; BQ det[2];
 };
 
 // ------------------------------------------------------------------ filtro DJ (LP a la izquierda, HP a la derecha)
 struct DJFilter {
-    float f = 0, res = 1.4f, sr = 48000; int side_ = 0;
-    Biquad lp[2], hp[2];
-    void reset() { for (auto& b : lp) b.z1 = b.z2 = 0; for (auto& b : hp) b.z1 = b.z2 = 0; }
+    // Filtro de estado variable (TPT, de Zavalishin/Simper): aguanta barridos rápidos sin clics. La frecuencia se suaviza
+    // (~15 ms) y se recalcula cada 16 muestras; un crossfader que vuelve de golpe a seco ya no da el salto que daba el biquad.
+    // Cerca del centro el filtro es casi transparente (paso bajo a ~17 kHz, paso alto a ~12 Hz): cambiar de lado o apagarse no se oye
+    float f = 0, res = 1.4f, sr = 48000;
+    void reset() { for (auto& c : ic) c[0] = c[1] = 0; fs = f; wet = 0; }
     void process(float* L, float* R, int n) {
-        if (std::fabs(f) < 0.02f) { side_ = 0; return; }
-        // al pasar de paso bajo a paso alto (o al revés) el filtro nuevo empieza limpio: sin el estado viejo, sin clic
-        const int side = f < 0 ? -1 : 1;
-        if (side != side_) { for (auto& b : lp) b.z1 = b.z2 = 0; for (auto& b : hp) b.z1 = b.z2 = 0; side_ = side; }
-        const float q = 0.5f + res * 0.6f;
-        float* ch[2] = {L, R};
-        for (int c = 0; c < 2; ++c) {
-            if (f < 0) lp[c].lowpass(20000.0f * std::exp2(f * 9.5f), q, sr);
-            else hpSet(hp[c], 10.0f * std::exp2(f * 11.0f), q);
-            for (int i = 0; i < n; ++i) ch[c][i] = f < 0 ? lp[c].process(ch[c][i]) : hp[c].process(ch[c][i]);
+        if (std::fabs(f) < 0.005f && std::fabs(fs) < 0.005f && wet <= 0.0f) { fs = f; for (auto& c : ic) c[0] = c[1] = 0; return; }
+        const float q = 0.5f + res * 0.6f, k = 1.0f / q, cs = 1.0f - std::exp(-16.0f / (0.015f * sr));
+        for (int o = 0; o < n; o += 16) {
+            const int m = std::min(16, n - o);
+            fs += (f - fs) * cs; if (std::fabs(f - fs) < 1e-4f) fs = f;
+            // cerca del centro el filtro se funde con la señal original: al apagarse o cambiar de lado no queda ningún escalón
+            const float w1 = std::clamp((std::fabs(fs) - 0.005f) / 0.06f, 0.0f, 1.0f), dw = (w1 - wet) / m;
+            const bool lp = fs < 0;
+            const float fc = std::clamp(lp ? 20000.0f * std::exp2(fs * 9.5f) : 10.0f * std::exp2(fs * 11.0f), 10.0f, 0.45f * sr);
+            const float g = std::tan(kPi * fc / sr), a1 = 1.0f / (1.0f + g * (g + k)), a2 = g * a1, a3 = g * a2;
+            float* ch[2] = {L + o, R + o};
+            for (int c = 0; c < 2; ++c) {
+                float& c1 = ic[c][0]; float& c2 = ic[c][1]; float w = wet;
+                for (int i = 0; i < m; ++i) {
+                    const float x = ch[c][i], v3 = x - c2, v1 = a1 * c1 + a2 * v3, v2 = c2 + a2 * c1 + a3 * v3;
+                    c1 = 2.0f * v1 - c1; c2 = 2.0f * v2 - c2;
+                    w += dw; ch[c][i] = x + ((lp ? v2 : x - k * v1 - v2) - x) * w;
+                }
+            }
+            wet = w1;
         }
+        if (!std::isfinite(ic[0][0] + ic[0][1] + ic[1][0] + ic[1][1])) reset();
     }
 private:
-    void hpSet(Biquad& b, float fc, float q) {
-        fc = std::clamp(fc, 10.0f, 0.45f * sr);
-        const float w = 2.0f * kPi * fc / sr, c = std::cos(w), al = std::sin(w) / (2.0f * q), a0 = 1.0f + al;
-        b.b0 = (1.0f + c) * 0.5f / a0; b.b1 = -(1.0f + c) / a0; b.b2 = b.b0; b.a1 = -2.0f * c / a0; b.a2 = (1.0f - al) / a0;
-    }
+    float fs = 0, ic[2][2] = {}, wet = 0;
 };
 
 // ------------------------------------------------------------------ línea de retardo con lectura fraccional
@@ -653,19 +678,22 @@ struct MasterFx {
         }
         if (throwSend_ > 0.001f || throwTail_ > 0 || thFreeze) {
             throwTail_ = throwSend_ > 0.001f || thFreeze ? 15.0f : throwTail_ - n / sr;
+            // tiempo del delay: al cambiar (división o tempo) no se desliza como una cinta (las repeticiones cambiaban de tono:
+            // «suena a buffer»), sino que se pasa de la lectura vieja a la nueva con un fundido de 40 ms, sin cambiar el tono
             const float dT = kDivs[std::clamp(static_cast<int>(throwDiv + 0.5f), 0, 9)] * s16 * sr;
-            if (thDsm_ <= 0) thDsm_ = dT;
-            thDsm_ += (dT - thDsm_) * std::min(1.0f, n / (0.2f * sr));
+            if (thDsm_ <= 0) { thDsm_ = dT; thOld_ = dT; thX_ = 1; }
+            if (std::fabs(dT - thDsm_) > 2.0f && thX_ >= 1.0f) { thOld_ = thDsm_; thDsm_ = dT; thX_ = 0; }
+            const float thStep = 1.0f / (0.04f * sr);
             if (thToneK_ != thTone) { thToneK_ = thTone; thLp_.set(300.0f * std::pow(40.0f, thTone), sr); thHp_.set(250, sr); }
             const float fb = std::min(throwFb, 1.0f);
             const float tdg = 1.0f - throwSend_ * throwSend_, twb = 1.0f + kWetBoost * throwSend_ * throwSend_;   // al subir el delay se va el seco: al 100 % solo quedan las repeticiones
             if (thFreeze) {   // echo freeze: el bucle se cierra (sin entrada, sin filtros, realimentación 1) y repite tal cual
-                for (int i = 0; i < n; ++i) { const float y = thL_.read(thDsm_), yr = thR_.read(thDsm_ * 1.5f); thL_.push(y); thR_.push(yr);
+                for (int i = 0; i < n; ++i) { const float y = thRead(thL_, 1.0f), yr = thRead(thR_, 1.5f); thX_ = std::min(1.0f, thX_ + thStep); thL_.push(y); thR_.push(yr);
                     L[i] = L[i] * tdg + y * 0.9f * twb; R[i] = R[i] * tdg + (0.5f * y + 0.5f * yr) * 0.9f * twb; }
             } else
             for (int i = 0; i < n; ++i) {
-                const float y = softClip(thHp_.process(thLp_.process(thL_.read(thDsm_))));
-                const float yr = thR_.read(thDsm_ * 1.5f);
+                const float y = softClip(thHp_.process(thLp_.process(thRead(thL_, 1.0f))));
+                const float yr = thRead(thR_, 1.5f); thX_ = std::min(1.0f, thX_ + thStep);
                 thL_.push(0.5f * (L[i] + R[i]) * throwSend_ + y * fb); thR_.push(y * 0.8f);
                 L[i] = L[i] * tdg + y * 0.9f * twb; R[i] = R[i] * tdg + (0.5f * y + 0.5f * yr) * 0.9f * twb;
             }
@@ -776,11 +804,13 @@ private:
     }
     double xfPos_ = 0; int xfN_ = 0, xfI_ = 0, repCap_ = 0, repLen_ = 64; double xfLen_ = 64; float repW_ = 0, gS_ = 0, repTriK_ = 1;
     std::vector<float> rep_[2], tape_[2]; int repState_ = 0, repI_ = 0, repBand_ = -1; long tw_ = 0; double tr_ = 0, repPos_ = 0; float tapeRate_ = 1, repGain_ = 1, repMix_ = 0, repRate_ = 1;
-    float gateLvl_ = 1, gateLvlR_ = 1, riserS_ = 0, spaceSend_ = 0, spaceTail_ = 0, throwSend_ = 0, throwTail_ = 0, thDsm_ = 0, thToneK_ = -1;
+    float gateLvl_ = 1, gateLvlR_ = 1, riserS_ = 0, spaceSend_ = 0, spaceTail_ = 0, throwSend_ = 0, throwTail_ = 0, thDsm_ = 0, thOld_ = 0, thX_ = 1, thToneK_ = -1;
     float spDry_ = 0; static constexpr float kWetBoost = 1.6f;   // al 100 % el efecto sube ~8 dB: sin seco, suena tan fuerte como la mezcla (medido)
     float lofiS_ = 0, lfCnt_ = 0, lfHL_ = 0, lfHR_ = 0, lfPh_ = 0;
     float chorusS_ = 0, chPh_ = 0, widthS_ = 0, wLp_ = 0; DelayLine chL_, chR_;
     float combS_ = 0, combTail_ = 0, cbD_ = 0, cbDampK_ = -1, sweepS_ = 0, apA_[2] = {}, apS_[2][6] = {}, swFbL_ = 0, swFbR_ = 0;
+    // lectura del delay con el fundido entre el tiempo viejo y el nuevo (m: 1 = izquierda, 1,5 = derecha)
+    float thRead(DelayLine& d, float m) { const float a = d.read(thDsm_ * m); if (thX_ >= 1.0f) return a; const float b = d.read(thOld_ * m), g = thX_ * thX_ * (3.0f - 2.0f * thX_); return b + (a - b) * g; }
     BQ hpR_[2], nbp_; Noise noise_; FDN spaceRv_; Plate plate_; Spring spring_; int spTypeK_ = 0; DelayLine thL_, thR_, cbL_, cbR_, flL_, flR_; OnePoleLP thLp_, cbLpL_, cbLpR_; OnePoleHP thHp_;
 };
 

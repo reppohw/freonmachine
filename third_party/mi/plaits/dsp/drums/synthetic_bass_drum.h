@@ -102,6 +102,8 @@ class SyntheticBassDrum {
     fm_lp_ = 0.0f;
     body_env_lp_ = 0.0f;
     body_env_ = 0.0f;
+    transient_env_ = 0.0f;     // Freon Machine: Plaits no las ponía a 0; con basura en memoria el bombo 909 se disparaba
+    transient_env_lp_ = 0.0f;
     body_env_pulse_width_ = 0;
     fm_pulse_width_ = 0;
     tone_lp_ = 0.0f;

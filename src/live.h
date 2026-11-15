@@ -113,16 +113,21 @@ inline const PSpec kBrkSpec[BK_COUNT] = {
     {"Filter", -1, 1, 0.01f, 0, 'd', false, nullptr, "Color"}, {"Resonance", 0, 1, 0.01f, 0.2f, 'p', false, nullptr, "Color"}, {"Drive", 0, 1, 0.01f, 0, 'p', false, nullptr, "Color"},
     {"Bits", 2, 16, 0, 16, 'f', false, "bits", "Color"}, {"Level", 0, 1.5f, 0.01f, 0.9f, 'p', false, nullptr, "Color"},
     {"Repeat size", 0, 5, 1, 1, 'n', false, "1/32|1/16|1/8|1/4|1/2|1 bar", "Repeat"}};
-inline const char* kBrkHolds[8] = {"Repeat", "Repeat 1/32", "Reverse", "Half time", "Random", "Octave down", "Chop", "Backwards"};
+// efectos mientras se mantienen (pads 1-8 del LPD8, programa Breaks). Ideas de CHOPPAH (firmware de troceo de breaks):
+// todo entra en la siguiente semicorchea. Dub throw lo hace el control (manda el break al envío B, el delay, y los ecos siguen)
+inline const char* kBrkHolds[8] = {"Repeat", "Reverse", "Half speed", "Tape stop", "Gate", "Random", "Freeze", "Dub throw"};
 constexpr int kBrkHold0 = 20, kOnIdx = 30, kFrzIdx = 31;
 
-enum GrP { GR_SRC, GR_MODE, GR_POS, GR_SIZE, GR_DENS, GR_PITCH, GR_SPRAY, GR_SPREAD, GR_REV, GR_FB, GR_LVL, GR_COUNT };
+enum GrP { GR_SRC, GR_MODE, GR_POS, GR_SIZE, GR_DENS, GR_PITCH, GR_SPRAY, GR_SPREAD, GR_REV, GR_FB, GR_LVL, GR_TIME, GR_SPOS, GR_SSIZE, GR_SRATE, GR_COUNT };
 inline const char* kGrSrcNames = "Mix|In 1|In 2|In 3|In 4|Drums|Track 2|Track 3|Track 4|Sampler|Breaks|Voice";
 inline const PSpec kGrSpec[GR_COUNT] = {
     {"Source", 0, 11, 1, 0, 'n', false, kGrSrcNames, "Source"}, {"Mode", 0, 1, 1, 0, 'n', false, "Free|MIDI notes", "Source"},
     {"Position", 0, 1, 0.01f, 0.3f, 'p', false, nullptr, "Grains"}, {"Size", 0.01f, 0.6f, 0, 0.12f, 's', true, nullptr, "Grains"}, {"Density", 1, 80, 0, 18, 'f', true, "/s", "Grains"},
     {"Tune", -24, 24, 0, 0, 't', false, nullptr, "Grains"}, {"Spray", 0, 1, 0.01f, 0.3f, 'p', false, nullptr, "Grains"}, {"Stereo", 0, 1, 0.01f, 0.6f, 'p', false, nullptr, "Grains"},
-    {"Reverse", 0, 1, 0.01f, 0, 'p', false, nullptr, "Grains"}, {"Feedback", 0, 0.9f, 0.01f, 0, 'p', false, nullptr, "Output"}, {"Level", 0, 1.5f, 0.01f, 0.9f, 'p', false, nullptr, "Output"}};
+    {"Reverse", 0, 1, 0.01f, 0, 'p', false, nullptr, "Grains"}, {"Feedback", 0, 0.9f, 0.01f, 0, 'p', false, nullptr, "Output"}, {"Level", 0, 1.5f, 0.01f, 0.9f, 'p', false, nullptr, "Output"},
+    // modo Sync (Time): los granos van a tempo del Oxi. Back = cuánto atrás leen, Size = su largo, Rate = cada cuánto nace uno (justo en la rejilla)
+    {"Time", 0, 1, 1, 0, 'n', false, "ms|Sync", "Source"}, {"Back", 0, 6, 1, 2, 'n', false, "1/16|1/8|1/4|1/2|1 bar|2 bars|4 bars", "Grains"},
+    {"Size", 0, 7, 1, 3, 'n', false, "1/64|1/32|1/16T|1/16|1/8T|1/8|1/4|1/2", "Grains"}, {"Rate", 0, 4, 1, 1, 'n', false, "1/32|1/16|1/8T|1/8|1/4", "Grains"}};
 
 
 
@@ -216,7 +221,7 @@ public:
     Breaks() { for (int j = 0; j < BK_COUNT; ++j) p[j] = kBrkSpec[j].def; }
     void prepare(float sr) { sr_ = sr; }
     int bars() const { static const int b[4] = {1, 2, 4, 8}; return b[std::clamp(static_cast<int>(p[BK_BARS]), 0, 3)]; }
-    void setHold(int k, bool v) { hold[k] = v; if (v && (k == 0 || k == 1)) repIdx_ = -1; if (v && k == 3) halfStart_ = -1; }
+    void setHold(int k, bool v) { hold[k] = v; if (v && (k == 0 || k == 6)) repIdx_ = -1; if (v && k == 2) halfStart_ = -1; }
     // nota MIDI: salta a ese corte (y lo toca si el break no está en marcha)
     bool startPending_ = false;
     void jump(int k16, float bpm, bool playing) {
@@ -248,11 +253,15 @@ public:
         float g, k; Svf::coefs(p[BK_FILT], p[BK_RES], sr_, g, k);
         const bool filt = std::fabs(p[BK_FILT]) > 0.02f, hp = p[BK_FILT] > 0;
         const float dg = 1.0f + p[BK_DRIVE] * 8.0f, dn = 1.0f / std::tanh(dg), lvl = p[BK_LVL];
+        // Tape stop: la velocidad cae a 0 en medio compás mientras se mantiene y vuelve en una corchea al soltar
+        const float tapeTo = hold[3] ? 0.0f : 1.0f, tapeK = 1.0f / static_cast<float>(spb * (hold[3] ? 8.0 : 2.0));
+        const float tape0 = tape_; tape_ = tape_ < tapeTo ? std::min(tapeTo, tape_ + tapeK * n) : std::max(tapeTo, tape_ - tapeK * n);
         for (auto& v : v_) {
             if (!v.on) continue;
             if (v.delay >= n) { v.delay -= n; continue; }
             const size_t N = s->size();
             for (int i = std::max(0, v.delay); i < n; ++i) {
+                const float tp = tape0 + (tape_ - tape0) * (static_cast<float>(i) / n);
                 if (v.left <= 0) { v.on = false; break; }
                 const float fe = std::min({1.0f, v.age / 96.0f, v.left / 96.0f});
                 const long ix = static_cast<long>(std::floor(v.pos));
@@ -261,7 +270,7 @@ public:
                     L[i] += (s->L[ix] + (s->L[ix + 1] - s->L[ix]) * fr) * fe;
                     R[i] += (s->R[ix] + (s->R[ix + 1] - s->R[ix]) * fr) * fe;
                 }
-                v.pos += v.inc; ++v.age; --v.left;
+                v.pos += v.inc * tp; ++v.age; --v.left;
             }
             v.delay = 0;
         }
@@ -279,25 +288,26 @@ private:
         if (jumpTo_ >= 0) { offset_ = static_cast<int>(((jumpTo_ - st) % n + n) % n); jumpTo_ = -1; }
         int idx = static_cast<int>(((st + offset_) % n + n) % n);
         double rate = 1, len = 1; int reps = 1; bool rev = false;
-        if (hold[7]) idx = n - 1 - idx;
-        if (hold[4] || rnd() < p[BK_RAND]) idx = static_cast<int>(rnd() * n) % n;
-        if (hold[3]) {
+        if (hold[5] || rnd() < p[BK_RAND]) idx = static_cast<int>(rnd() * n) % n;
+        if (hold[2]) {
             if (halfStart_ < 0) { halfStart_ = st; halfIdx_ = idx; }
             const long k = st - halfStart_; if (k % 2) return;
             idx = static_cast<int>((halfIdx_ + k / 2) % n); rate *= 0.5; len = 2;
         }
-        if (hold[0] || hold[1]) {
-            // repetir: vuelve una y otra vez sobre un trozo del tamaño elegido (o 1/32 con el segundo botón)
+        if (hold[6]) {   // Freeze: el corte en el que estaba, repetido a 1/64: se queda congelado zumbando
+            if (repIdx_ < 0) { repIdx_ = idx; repStart_ = st; }
+            idx = repIdx_; reps = 4;
+        } else if (hold[0]) {
+            // Repeat: vuelve una y otra vez sobre un trozo del tamaño del knob (1/32 = cada corte dos veces)
             static const int SZ[6] = {0, 1, 2, 4, 8, 16};
-            const int sz = hold[1] ? 0 : SZ[std::clamp(static_cast<int>(p[BK_RSIZE]), 0, 5)];
+            const int sz = SZ[std::clamp(static_cast<int>(p[BK_RSIZE]), 0, 5)];
             if (repIdx_ < 0) { repIdx_ = idx; repStart_ = st; }
             if (sz == 0) { idx = repIdx_; reps = 2; }
             else idx = static_cast<int>((repIdx_ + ((st - repStart_) % sz)) % n);
         }
         else if (rnd() < p[BK_STUT]) { idx = lastIdx_ >= 0 ? lastIdx_ : idx; reps = rnd() < 0.5f ? 2 : 1; }
-        if (hold[5]) rate *= 0.5;
-        if (hold[6]) len *= 0.35;
-        rev = hold[2] || rnd() < p[BK_REV];
+        if (hold[4]) len *= 0.35;   // Gate: cada corte suena solo un tercio
+        rev = hold[1] || rnd() < p[BK_REV];
         lastIdx_ = idx; lastSlice = idx % 16;
         for (int r = 0; r < reps; ++r) startSlice(s, idx, spb, bpm, len / reps * p[BK_GATE], rev, at + static_cast<int>(r * spb / reps), rate);
     }
@@ -310,7 +320,7 @@ private:
         v->inc = rev ? -inc : inc; v->pos = rev ? (idx + 1) * sl - 1 : idx * sl;
     }
     float rnd() { seed_ = seed_ * 1664525u + 1013904223u; return (seed_ >> 8) * (1.0f / 16777216.0f); }
-    V v_[6]; float sr_ = 48000; long lastStep_ = -1000000, halfStart_ = -1, repStart_ = 0; int offset_ = 0, jumpTo_ = -1, repIdx_ = -1, halfIdx_ = 0, lastIdx_ = -1; uint32_t seed_ = 12345;
+    V v_[6]; float sr_ = 48000, tape_ = 1; long lastStep_ = -1000000, halfStart_ = -1, repStart_ = 0; int offset_ = 0, jumpTo_ = -1, repIdx_ = -1, halfIdx_ = 0, lastIdx_ = -1; uint32_t seed_ = 12345;
     Svf fl_, fr_;
 };
 
@@ -338,25 +348,38 @@ public:
         }
         headFrac = static_cast<float>(w_) / N_;
     }
-    void render(float* L, float* R, int n) {
+    // p0: posición del reloj al empezar el bloque (en semicorcheas), dp: cuánto avanza por muestra, bpm: tempo (modo Sync)
+    void render(float* L, float* R, int n, double p0 = 0, double dp = 0, float bpm = 120) {
         for (int i = 0; i < n; ++i) { L[i] = R[i] = 0.0f; fbBuf_[i] = 0.0f; }
         if (!on) { g_.clear(); ngr = 0; return; }
         bool gate = true; float semi = 0;
         if (p[GR_MODE] >= 0.5f) { gate = !notes_.empty(); if (gate) semi = static_cast<float>(notes_.back() - 60); }
-        const int size = std::max(64, static_cast<int>(p[GR_SIZE] * sr_));
-        const float rate = std::min(8.0f, std::exp2((p[GR_PITCH] + semi) / 12.0f)), dens = p[GR_DENS];
-        const float norm = 1.5f / std::sqrt(std::max(1.0f, dens * p[GR_SIZE]));
-        if (gate) {
+        const bool sync = p[GR_TIME] >= 0.5f;
+        const double s16 = sr_ * 60.0 / std::clamp(bpm, 40.0f, 300.0f) / 4.0;   // muestras por semicorchea
+        static const float kSz[8] = {0.25f, 0.5f, 2.0f / 3.0f, 1, 4.0f / 3.0f, 2, 4, 8}, kRt[5] = {0.5f, 1, 4.0f / 3.0f, 2, 4}, kBk[7] = {1, 2, 4, 8, 16, 32, 64};
+        const auto pick = [&](const float* t, int nt, int j) { return t[std::clamp(static_cast<int>(p[j] + 0.5f), 0, nt - 1)]; };
+        const int size = std::max(64, sync ? std::min(N_ / 2, static_cast<int>(pick(kSz, 8, GR_SSIZE) * s16)) : static_cast<int>(p[GR_SIZE] * sr_));
+        const float rate = std::min(8.0f, std::exp2((p[GR_PITCH] + semi) / 12.0f));
+        const float div = pick(kRt, 5, GR_SRATE), dens = sync ? static_cast<float>(sr_ / (div * s16)) : p[GR_DENS];
+        const float norm = 1.5f / std::sqrt(std::max(1.0f, dens * size / sr_));
+        const auto spawn = [&](int delay) {
+            const float spray = rnd() * p[GR_SPRAY] * sr_ * 1.5f;
+            // Sync: leen justo lo que sonó hace «Back» (como mucho lo que cabe en los 8 s del anillo)
+            const float back = sync ? std::min(static_cast<float>(N_ - 2 * size) - spray, static_cast<float>(pick(kBk, 7, GR_SPOS) * s16) + size * std::max(rate, 1.0f)) + spray
+                                    : (0.05f + p[GR_POS] * 7.0f) * sr_ + size * std::max(rate, 1.0f) + spray;
+            G g; g.pos = std::fmod(w_ - static_cast<double>(back), static_cast<double>(N_)); if (g.pos < 0) g.pos += N_; g.len = size; g.age = 0;
+            g.inc = rnd() < p[GR_REV] ? -rate : rate;
+            const float pan = 0.5f + (rnd() - 0.5f) * p[GR_SPREAD]; g.gl = std::cos(pan * kPi * 0.5f); g.gr = std::sin(pan * kPi * 0.5f);
+            g.delay = delay; g_.push_back(g);
+        };
+        if (gate && sync && dp > 0) {
+            // un grano en cada paso de la rejilla que cae dentro de este bloque, en su muestra exacta
+            const double a = std::floor(p0 / div), b = std::floor((p0 + dp * n) / div);
+            for (double m = a + 1; m <= b && static_cast<int>(g_.size()) < kMaxG; m += 1) spawn(std::clamp(static_cast<int>((m * div - p0) / dp), 0, n - 1));
+            acc_ = 0;
+        } else if (gate && !sync) {
             acc_ += dens * n / sr_;
-            while (acc_ >= 1 && static_cast<int>(g_.size()) < kMaxG) {
-                acc_ -= 1;
-                const float back = (0.05f + p[GR_POS] * 7.0f) * sr_ + size * std::max(rate, 1.0f) + rnd() * p[GR_SPRAY] * sr_ * 1.5f;
-                G g; g.pos = std::fmod(w_ - static_cast<double>(back), static_cast<double>(N_)); if (g.pos < 0) g.pos += N_; g.len = size; g.age = 0;
-                g.inc = rnd() < p[GR_REV] ? -rate : rate;
-                const float pan = 0.5f + (rnd() - 0.5f) * p[GR_SPREAD]; g.gl = std::cos(pan * kPi * 0.5f); g.gr = std::sin(pan * kPi * 0.5f);
-                g.delay = static_cast<int>(rnd() * n);
-                g_.push_back(g);
-            }
+            while (acc_ >= 1 && static_cast<int>(g_.size()) < kMaxG) { acc_ -= 1; spawn(static_cast<int>(rnd() * n)); }
         } else acc_ = 0;
         const float lvl = p[GR_LVL];
         for (size_t k = g_.size(); k-- > 0;) {

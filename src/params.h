@@ -26,7 +26,7 @@ struct EngSpec { const char* key; const char* name; const char* desc; int np; PS
 enum Eng { E_JUNO = 0, E_DX, E_MOOG, E_ACID, E_GB, E_WT, E_SAW, E_MODAL, E_COUNT };
 
 inline const EngSpec kEng[E_COUNT] = {
-    {"juno", "Juno", "Juno-6: saw and pulse DCO with PWM and sub, IR3109 filter, continuous HPF, one ADSR, LFO with delay, BBD chorus. Engine: KR-106 (measured from real Junos)", 22,
+    {"juno", "Juno", "Juno-6: saw and pulse DCO with PWM and sub, IR3109 filter, continuous HPF, one ADSR, LFO with delay, BBD chorus. Engine: KR-106 (measured from real Junos). Vintage: more drift and more difference between the 6 voices", 23,
      {{"LFO rate", 0, 1, 0.01f, 0.45f, 'p', false, nullptr, "LFO"}, {"LFO delay", 0, 1, 0.01f, 0, 'p', false, nullptr, "LFO"},
       {"Range", -1, 1, 1, 0, 'n', false, "16'|8'|4'", "DCO"}, {"DCO LFO", 0, 1, 0.01f, 0, 'p', false, nullptr, "DCO"}, {"PWM", 0, 1, 0.01f, 0.4f, 'p', false, nullptr, "DCO"},
       {"PWM mode", 0, 2, 1, 1, 'n', false, "LFO|Manual|Env", "DCO"}, {"Sub", 0, 1, 0.01f, 0.4f, 'p', false, nullptr, "DCO"}, {"Noise", 0, 1, 0.01f, 0, 'p', false, nullptr, "DCO"},
@@ -36,7 +36,8 @@ inline const EngSpec kEng[E_COUNT] = {
       {"VCF LFO", 0, 1, 0.01f, 0, 'p', false, nullptr, "VCF"}, {"Kybd", 0, 1, 0.01f, 0.5f, 'p', false, nullptr, "VCF"},
       {"Attack", 0, 1, 0.01f, 0.05f, 'p', false, nullptr, "ENV"}, {"Decay", 0, 1, 0.01f, 0.45f, 'p', false, nullptr, "ENV"},
       {"Sustain", 0, 1, 0.01f, 0.6f, 'p', false, nullptr, "ENV"}, {"Release", 0, 1, 0.01f, 0.35f, 'p', false, nullptr, "ENV"},
-      {"Chorus", 0, 3, 1, 1, 'n', false, "Off|I|II|I+II", "Output"}, {"Velocity", 0, 1, 0.01f, 0.7f, 'p', false, nullptr, "Output"}, {"Volume", 0, 1, 0.01f, 0.75f, 'p', false, nullptr, "Output"}},
+      {"Chorus", 0, 3, 1, 1, 'n', false, "Off|I|II|I+II", "Output"}, {"Velocity", 0, 1, 0.01f, 0.7f, 'p', false, nullptr, "Output"}, {"Volume", 0, 1, 0.01f, 0.75f, 'p', false, nullptr, "Output"},
+      {"Vintage", 0, 1, 0.01f, 0, 'p', false, nullptr, "Character"}},
      4, {{"Saw", true}, {"Pulse", false}, {"Env invert", false}, {"VCA gate", false}}},
     {"dx", "DX7", "DX7: 6 operators, 32 algorithms (MSFA engine, the origin of Dexed). Plays the built-in sounds and any DX7 bank (.syx) in the dx7/ folder; the knobs reshape the loaded patch", 16,
      {{"Patch", 0, 1023, 1, 0, 'i', false, nullptr, "Sound"}, {"Brightness", -1, 1, 0.01f, 0, 'b', false, nullptr, "Sound"}, {"Mod decay", -1, 1, 0.01f, 0, 'b', false, nullptr, "Sound"},
@@ -47,7 +48,7 @@ inline const EngSpec kEng[E_COUNT] = {
       {"Velocity", -1, 1, 0.01f, 0, 'b', false, nullptr, "Envelope"},
       {"Algorithm", 0, 32, 1, 0, 'n', false, "Patch|1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16|17|18|19|20|21|22|23|24|25|26|27|28|29|30|31|32", "Envelope"}},
      0, {}},
-    {"moog", "Moog", "Mono: 3 oscillators, overdriven mixer, 24 dB ladder at 2×, filter and amp envelopes, osc 3 modulation and glide", 29,
+    {"moog", "Moog", "Mono: 3 oscillators, overdriven mixer, 24 dB ladder at 2×, filter and amp envelopes, osc 3 modulation and glide. Vintage: analog drift and note-to-note differences; Feedback: output back into the mixer for a fatter low end", 31,
      {{"Octave", -2, 2, 1, 0, 'i', false, "oct", "Oscillators"}, {"Wave 1", 0, 4, 1, 1, 'n', false, "Tri|Saw|Square|Pulse|Narrow", "Oscillators"},
       {"Wave 2", 0, 4, 1, 1, 'n', false, "Tri|Saw|Square|Pulse|Narrow", "Oscillators"}, {"Osc 2 semi", -24, 24, 1, 0, 't', false, nullptr, "Oscillators"}, {"Osc 2 fine", -100, 100, 1, 7, 'c', false, nullptr, "Oscillators"},
       {"Wave 3", 0, 4, 1, 1, 'n', false, "Tri|Saw|Square|Pulse|Narrow", "Oscillators"}, {"Osc 3 semi", -24, 24, 1, -12, 't', false, nullptr, "Oscillators"}, {"Osc 3 fine", -100, 100, 1, -3, 'c', false, nullptr, "Oscillators"},
@@ -60,7 +61,8 @@ inline const EngSpec kEng[E_COUNT] = {
       {"Attack", 0.001f, 3, 0, 0.003f, 's', true, nullptr, "Amp envelope"}, {"Decay", 0.01f, 6, 0, 0.5f, 's', true, nullptr, "Amp envelope"},
       {"Sustain", 0, 1, 0.01f, 0.8f, 'p', false, nullptr, "Amp envelope"}, {"Release", 0.01f, 8, 0, 0.2f, 's', true, nullptr, "Amp envelope"},
       {"Osc 3 mod", 0, 1, 0.01f, 0, 'p', false, nullptr, "Mod & output"}, {"Glide", 0.005f, 1, 0, 0.06f, 's', true, nullptr, "Mod & output"},
-      {"Velocity", 0, 1, 0.01f, 0.6f, 'p', false, nullptr, "Mod & output"}, {"Volume", 0, 1, 0.01f, 0.75f, 'p', false, nullptr, "Mod & output"}},
+      {"Velocity", 0, 1, 0.01f, 0.6f, 'p', false, nullptr, "Mod & output"}, {"Volume", 0, 1, 0.01f, 0.75f, 'p', false, nullptr, "Mod & output"},
+      {"Vintage", 0, 1, 0.01f, 0, 'p', false, nullptr, "Character"}, {"Feedback", 0, 1, 0.01f, 0, 'p', false, nullptr, "Character"}},
      5, {{"Glide", true}, {"Osc 3 as LFO", false}, {"Mod → filter", false}, {"Mod → pitch", false}, {"Retrigger", false}}},
     {"acid", "303", "TB-303 style mono with Devilfish extras. Accent at velocity 100+, slide with overlapping notes", 16,
      {{"Cutoff", 0, 1, 0.01f, 0.35f, 'p', false, nullptr, "303"}, {"Resonance", 0, 1, 0.01f, 0.65f, 'p', false, nullptr, "303"}, {"Env mod", 0, 1, 0.01f, 0.5f, 'p', false, nullptr, "303"},
@@ -221,11 +223,11 @@ struct MeloEngines {
     void noteOn(int n, int v) { switch (cur) { case E_JUNO: juno.noteOn(n, v); break; case E_DX: dx.noteOn(n, v); break; case E_MOOG: moog.noteOn(n, v); break; case E_ACID: acid.noteOn(n, v); break; case E_GB: gbs.noteOn(n, v); break; case E_WT: wt.noteOn(n, v); break; case E_SAW: saw.noteOn(n, v); break; case E_MODAL: modal.noteOn(n, v); break; default: modal.noteOn(n, v); } }
     void noteOff(int n) { juno.noteOff(n); dx.noteOff(n); moog.noteOff(n); acid.noteOff(n); gbs.noteOff(n); wt.noteOff(n); saw.noteOff(n); modal.noteOff(n); }
     void allOff() { juno.allNotesOff(); dx.allNotesOff(); moog.allNotesOff(); acid.allNotesOff(); gbs.allNotesOff(); wt.allNotesOff(); saw.allNotesOff(); modal.allNotesOff(); }
-    // Cambio de motor: el anterior se apaga en 10 ms y sigue procesándose en silencio unos segundos
-    // para que sus notas terminen; así no se quedan colgadas ni «resucitan» al volver a él.
+    // Cambio de motor: el anterior se apaga en 10 ms y sigue procesándose en silencio hasta que sus notas terminan
+    // (como mucho 4 s); así no se quedan colgadas ni «resucitan» al volver a él. En cuanto calla 50 ms, deja de calcularse.
     void select(int e) {
         e = std::clamp(e, 0, E_COUNT - 1); if (e == cur) return;
-        allOff(); prev_ = cur; prevG_ = 1.0f; prevN_ = static_cast<int>(sr_ * 4.0f); cur = e;
+        allOff(); prev_ = cur; prevG_ = 1.0f; prevN_ = static_cast<int>(sr_ * 4.0f); prevQ_ = 0; cur = e;
     }
     // ajuste de nivel por motor (medido): todos suenan parecido al cambiar de uno a otro con los mismos ajustes
     static float trim(int e) { static const float kDb[E_COUNT] = {-1.9f, -0.6f, -11.7f, -8.1f, -3.8f, -4.2f, -6.6f, -13.6f}; return std::exp2(kDb[std::clamp(e, 0, E_COUNT - 1)] / 6.0206f); }
@@ -239,9 +241,11 @@ struct MeloEngines {
                 renderEng(prev_, pl, pr, pm, k);
                 const float step = 1.0f / (0.01f * sr_);
                 const float tg = trim(prev_);
-                for (int i = 0; i < k; ++i) { if (prevG_ > 0) { L[o + i] += pl[i] * prevG_ * tg; R[o + i] += pr[i] * prevG_ * tg; prevG_ = std::max(0.0f, prevG_ - step); } }
+                float pk = 0;
+                for (int i = 0; i < k; ++i) { pk = std::max(pk, std::max(std::fabs(pl[i]), std::fabs(pr[i]))); if (prevG_ > 0) { L[o + i] += pl[i] * prevG_ * tg; R[o + i] += pr[i] * prevG_ * tg; prevG_ = std::max(0.0f, prevG_ - step); } }
+                prevQ_ = pk < 1e-4f ? prevQ_ + k : 0;
             }
-            prevN_ -= n; if (prevN_ <= 0) prev_ = -1;
+            prevN_ -= n; if (prevN_ <= 0 || (prevG_ <= 0 && prevQ_ > static_cast<int>(0.05f * sr_))) prev_ = -1;
         } else prev_ = -1;
     }
     void renderEng(int e, float* L, float* R, float* mono, int n) {
@@ -257,7 +261,7 @@ struct MeloEngines {
             default: modal.render(L, R, n); break;
         }
     }
-    int prev_ = -1, prevN_ = 0; float prevG_ = 0, sr_ = 48000;
+    int prev_ = -1, prevN_ = 0, prevQ_ = 0; float prevG_ = 0, sr_ = 48000;
     void set(int e, int i, float v) {
         const bool b = v >= 0.5f; const int iv = static_cast<int>(std::lround(v));
         switch (e) {
@@ -265,7 +269,7 @@ struct MeloEngines {
             switch (i) { case 0: p.lfoRate = v; break; case 1: p.lfoDelay = v; break; case 2: p.range = iv; break; case 3: p.dcoLfo = v; break; case 4: p.pwm = v; break; case 5: p.pwmMode = iv; break;
                 case 6: p.sub = v; break; case 7: p.noise = v; break; case 8: p.drift = v; break; case 9: p.hpf = v; break; case 10: p.cutoff = v; break; case 11: p.res = v; break;
                 case 12: p.env = v; break; case 13: p.vcfLfo = v; break; case 14: p.kbd = v; break; case 15: p.A = v; break; case 16: p.D = v; break; case 17: p.S = v; break; case 18: p.R = v; break;
-                case 19: p.chorus = iv; break; case 20: p.vel = v; break; case 21: p.volume = v; break;
+                case 19: p.chorus = iv; break; case 20: p.vel = v; break; case 21: p.volume = v; break; case 22: p.vintage = v; break;
                 case 32: p.saw = b; break; case 33: p.pulse = b; break; case 34: p.inv = b; break; case 35: p.gate = b; break; }
             break; }
         case E_DX: { auto& p = dx.p;
@@ -279,7 +283,7 @@ struct MeloEngines {
                 case 6: p.semi3 = v; break; case 7: p.fine3 = v; break; case 8: p.lvl1 = v; break; case 9: p.lvl2 = v; break; case 10: p.lvl3 = v; break; case 11: p.noise = v; break; case 12: p.drive = v; break;
                 case 13: p.cutoff = v; break; case 14: p.emph = v; break; case 15: p.contour = v; break; case 16: p.kbd = iv; break;
                 case 17: p.fA = v; break; case 18: p.fD = v; break; case 19: p.fS = v; break; case 20: p.fR = v; break; case 21: p.A = v; break; case 22: p.D = v; break; case 23: p.S = v; break; case 24: p.R = v; break;
-                case 25: p.mod = v; break; case 26: p.glide = v; break; case 27: p.vel = v; break; case 28: p.volume = v; break;
+                case 25: p.mod = v; break; case 26: p.glide = v; break; case 27: p.vel = v; break; case 28: p.volume = v; break; case 29: p.vintage = v; break; case 30: p.feedback = v; break;
                 case 32: p.glideOn = b; break; case 33: p.o3lfo = b; break; case 34: p.modFilt = b; break; case 35: p.modPitch = b; break; case 36: p.retrig = b; break; }
             break; }
         case E_ACID: { auto& p = acid.p;

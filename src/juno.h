@@ -30,6 +30,7 @@ struct JunoParams {
     float A = 0.05f, D = 0.45f, S = 0.6f, R = 0.35f;   // ENV
     int   chorus = 1;                                  // 0 off, 1 I, 2 II, 3 I+II
     float vel = 0.7f;                                  // sensibilidad a la velocidad (el Juno-6 no tiene: 0 = como el original)
+    float vintage = 0.0f;                              // al estilo del Prophet-5 rev4: más deriva y más diferencia entre las 6 voces
     float drift = 0.5f;                                // inestabilidad analógica entre voces
     float volume = 0.8f;
     int   range = 0;                                   // -1 = 16', 0 = 8', 1 = 4'
@@ -55,6 +56,8 @@ public:
         k.mNoiseFloorMul = 0.0f; k.mMainsMul = 0.0f;   // sin ruido de fondo ni zumbido de red
         k.SetParam(kPortaMode, 1); k.SetParam(kLfoMode, 0); k.SetParam(kVcaLevel, 0.5);
         k.SetParam(kBenderDco, 0); k.SetParam(kBenderVcf, 0); k.SetParam(kBender, 0);
+        // diferencias de fábrica entre voces (el KR-106 ya las trae, pequeñas, como un Juno afinado): base del Vintage
+        for (int v = 0; v < JUNO_VOICES; ++v) { auto* vo = k.GetVoice(v); base_[v][0] = vo->mVcfFreqOffset; base_[v][1] = vo->mVcaGainScale; base_[v][2] = vo->mPwMinOffset; base_[v][3] = vo->mPwMaxOffset; }
         dirty_ = true; apply();
         k.mMasterVolSmooth = k.mMasterVol;
     }
@@ -104,11 +107,21 @@ private:
         if (dirty_) k.SetParam(kDcoSubSw, 1);
         if (dirty_ || last_.inv != p.inv) k.SetParam(kVcfEnvInv, p.inv ? 1 : 0);
         if (dirty_ || last_.gate != p.gate) k.SetParam(kVcaMode, p.gate ? 1 : 0);
-        if (dirty_ || last_.drift != p.drift) k.SetDriftAmount(p.drift);
+        if (dirty_ || last_.drift != p.drift || last_.vintage != p.vintage) {
+            // Vintage: deriva en polifonía y cada voz se separa más de las otras (corte ±6 %, nivel ±6 %, pulso ±3 %)
+            // (el KR-106 solo aplica el Drift en unísono; en polifonía, la deriva la pone el Vintage: a tope, unos ±7 cents por voz)
+            k.mPolyDrift = 0.6f * p.vintage; k.SetDriftAmount(p.drift);
+            static const float U[8][4] = {{0.8f, -0.5f, 0.3f, -0.7f}, {-0.6f, 0.9f, -0.8f, 0.2f}, {0.2f, 0.1f, 0.9f, 0.6f}, {-0.9f, -0.3f, -0.2f, -0.9f}, {0.5f, 0.7f, -0.6f, 0.8f}, {-0.3f, -0.8f, 0.6f, -0.1f}, {0.9f, 0.4f, -0.9f, 0.4f}, {-0.1f, -0.6f, 0.1f, -0.5f}};
+            const float vt = p.vintage;
+            for (int v = 0; v < JUNO_VOICES; ++v) { auto* vo = k.GetVoice(v); const float* u = U[v % 8];
+                vo->mVcfFreqOffset = base_[v][0] + u[0] * vt * (100.0f / 1200.0f); vo->mVcaGainScale = base_[v][1] + u[1] * vt * 0.06f;
+                vo->mPwMinOffset = base_[v][2] + u[2] * vt * 0.03f; vo->mPwMaxOffset = base_[v][3] + u[3] * vt * 0.02f; }
+        }
         k.mMasterVol = p.volume * p.volume;
         last_ = p; dirty_ = false;
     }
     std::unique_ptr<::KR106DSP<float>> k_;
+    float base_[JUNO_VOICES][4] = {};
     JunoParams last_; bool dirty_ = true; int idle_ = 0, idleMax_ = 24000;
 };
 

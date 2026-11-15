@@ -10,6 +10,7 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -83,7 +84,7 @@ public:
                 int one = 1; setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &one, sizeof one);
 #endif
                 fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK);
-                if (cl_.size() >= 16) ::close(fd); else cl_.push_back({fd, false, {}, ++ids_, {}, 0, false});
+                if (cl_.size() >= 16) ::close(fd); else cl_.push_back({fd, false, {}, ++ids_, {}, 0, false, Clock::now(), Clock::now()});
             }
         }
         for (size_t i = 1; i < p.size(); ++i) {
@@ -93,11 +94,21 @@ public:
             char buf[8192]; const ssize_t n = ::recv(c->fd, buf, sizeof buf, 0);
             if (n == 0 || (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK)) { drop(c->fd); continue; }
             if (n < 0) continue;
+            c->last = Clock::now();
             c->in.append(buf, static_cast<size_t>(n));
             if (c->in.size() > (c->ws ? kMaxIn + 16 : kMaxHeader)) { drop(c->fd); continue; }   // mensaje o cabecera demasiado grandes
             if (!c->ws) handleHttp(*c); else handleFrames(*c);
         }
         for (auto& c : cl_) if (c.fd >= 0 && c.closeAfter && c.outOff >= c.out.size()) drop(c.fd);
+        // conexiones calladas: las que no piden nada en 10 s fuera; las de la pantalla reciben un ping cada 30 s (el navegador
+        // contesta solo) y, si en 90 s no ha llegado nada, fuera. Así 16 aparatos dormidos no pueden dejar la web sin huecos
+        const auto now = Clock::now();
+        for (auto& c : cl_) {
+            if (c.fd < 0) continue;
+            if (!c.ws) { if (now - c.last > std::chrono::seconds(10) && !c.closeAfter) drop(c.fd); continue; }
+            if (now - c.last > std::chrono::seconds(90)) { drop(c.fd); continue; }
+            if (now - c.pinged > std::chrono::seconds(30)) { c.pinged = now; rawSend(c, std::string("\x89\x00", 2)); }
+        }
         cl_.erase(std::remove_if(cl_.begin(), cl_.end(), [](const Client& c) { return c.fd < 0; }), cl_.end());
     }
     void send(int client, const std::string& msg) { for (auto& c : cl_) if (c.ws && c.id == client) frame(c, msg); }
@@ -105,7 +116,8 @@ public:
     bool anyClient() const { for (auto& c : cl_) if (c.ws && c.fd >= 0) return true; return false; }
 
 private:
-    struct Client { int fd; bool ws; std::string in; int id; std::string out; size_t outOff; bool closeAfter; };
+    using Clock = std::chrono::steady_clock;
+    struct Client { int fd; bool ws; std::string in; int id; std::string out; size_t outOff; bool closeAfter; Clock::time_point last, pinged; };
     Client* find(int fd) { for (auto& c : cl_) if (c.fd == fd && fd >= 0) return &c; return nullptr; }
     void drop(int fd) { for (auto& c : cl_) if (c.fd == fd && fd >= 0) { ::close(c.fd); c.fd = -1; } }
     void flush(Client& c) {

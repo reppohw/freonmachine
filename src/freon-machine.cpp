@@ -103,8 +103,8 @@ inline float chBaseGain(int ch, int eng) {
     if (ch >= CH_T0 && ch < CH_T0 + 3 && eng >= 0 && eng < 8) db += kTrkEngDb[ch - CH_T0][eng];
     return std::pow(10.0f, db / 20.0f);
 }
-constexpr int kNLane = 16;
-const char* kLaneKeys[kNLane] = {"tune", "decay", "snap", "filt", "reso", "sweep", "level", "pan", "vel", "tone", "color", "shape", "contour", "mute", "note", "out"};
+constexpr int kNLane = 17;
+const char* kLaneKeys[kNLane] = {"tune", "decay", "snap", "filt", "reso", "sweep", "level", "pan", "vel", "tone", "color", "shape", "contour", "mute", "note", "out", "drive"};
 // Los 8 knobs de cada sonido según el kit (el 9.º va en la fila extra, junto al pan). Mismo orden en la web y en la controladora.
 inline const char* const* drumSlots(int uiKit, const char*& extra) {
     // Misma posición, misma función en todos los kits: nivel, afinación, duración, timbre, golpe, barrido, filtro, resonancia.
@@ -118,11 +118,11 @@ inline const char* const* drumSlots(int uiKit, const char*& extra) {
 }
 const char* kSubKeys[8] = {"ch", "on", "oct", "tone", "glide", "vol", "mode", "src"};
 // Parámetros de canal y grupo (mismo orden en las claves y en el audio)
-enum SP { SP_LVL, SP_PAN, SP_MUTE, SP_SOLO, SP_CUE, SP_OUT, SP_DTYPE, SP_DRIVE, SP_DTONE, SP_DMIX, SP_LOW, SP_MID, SP_HIGH, SP_LIM, SP_SC, SP_SCAMT, SP_SCREL, SP_S0, SP_S1, SP_S2, SP_S3, SP_FILT, SP_RES, SP_TRIM, SP_COUNT };
-const char* kSP[SP_COUNT] = {"lvl", "pan", "mute", "solo", "cue", "out", "dtype", "drive", "dtone", "dmix", "low", "mid", "high", "lim", "sc", "scAmt", "scRel", "s0", "s1", "s2", "s3", "filt", "res", "trim"};
-enum MP { MP_VOL, MP_LIM, MP_CUELVL, MP_CUEMODE, MP_DTYPE, MP_DRIVE, MP_DTONE, MP_DMIX, MP_FILT, MP_RES, MP_REP, MP_GDIV, MP_GATE, MP_RISER, MP_SPACE, MP_SPSIZE, MP_THROW, MP_TDIV, MP_TFB, MP_TAPE, MP_BPM, MP_CLOCK, MP_RDECAY, MP_RNOISE, MP_TAPESM, MP_RSIZE, MP_FENV, MP_RPITCH, MP_GSHAPE, MP_GPAN, MP_SPDAMP, MP_SPFRZ, MP_TTONE, MP_COMB, MP_CBPITCH, MP_CBFB, MP_CBDAMP, MP_SWEEP, MP_SWRATE, MP_SWDEPTH, MP_SWFB, MP_SWMODE, MP_SUM, MP_BCOMP, MP_BCRAT, MP_BCATK, MP_BCREL, MP_BCMIX, MP_BCAIR, MP_BCMKP, MP_CLIP, MP_CHORUS, MP_CHRATE, MP_CHDEPTH, MP_WIDTH, MP_WBASS, MP_THFRZ, MP_LOFI, MP_LFSRR, MP_LFBITS, MP_LFAM, MP_SPTYPE, MP_RTRI, MP_COUNT };   // MP_SUM ya no se usa
-const char* kMP[MP_COUNT] = {"vol", "lim", "cueLvl", "cueMode", "dtype", "drive", "dtone", "dmix", "filt", "res", "rep", "gdiv", "gate", "riser", "space", "spSize", "throw", "throwDiv", "throwFb", "tape", "bpm", "clock", "rDecay", "rNoise", "tapeSm", "rSize", "fEnv", "rPitch", "gShape", "gPan", "spDamp", "spFrz", "tTone", "comb", "cbPitch", "cbFb", "cbDamp", "sweep", "swRate", "swDepth", "swFb", "swMode", "sum", "bcomp", "bcRatio", "bcAtk", "bcRel", "bcMix", "bcAir", "bcMkp", "clip", "chorus", "chRate", "chDepth", "width", "wBass", "thFrz", "lofi", "lfSrr", "lfBits", "lfAm", "spType", "rTri"};
-const float kMpDef[MP_COUNT] = {0.85f, -1.5f, 0.8f, 0, 0, 0, 1, 1, 0, 1.4f, 0, 2, 0, 0, 0, 0.7f, 0, 6, 0.55f, 0, 120, 1, 0, 0.5f, 0.5f, 2, 0, 0, 0, 0, 0.53f, 0, 0.7f, 0, 48, 0.8f, 0.3f, 0, 2, 0.7f, 0.4f, 0, 0, 0, 1, 10, 0.3f, 1, 0, 0, 1, 0, 0.4f, 0.5f, 0, 0.5f, 0, 0, 0.4f, 0.4f, 0, 0, 0};
+enum SP { SP_LVL, SP_PAN, SP_MUTE, SP_SOLO, SP_CUE, SP_OUT, SP_DTYPE, SP_DRIVE, SP_DTONE, SP_DMIX, SP_LOW, SP_MID, SP_HIGH, SP_LIM, SP_SC, SP_SCAMT, SP_SCREL, SP_S0, SP_S1, SP_S2, SP_S3, SP_FILT, SP_RES, SP_TRIM, SP_PUNCH, SP_CRUSH, SP_COUNT };
+const char* kSP[SP_COUNT] = {"lvl", "pan", "mute", "solo", "cue", "out", "dtype", "drive", "dtone", "dmix", "low", "mid", "high", "lim", "sc", "scAmt", "scRel", "s0", "s1", "s2", "s3", "filt", "res", "trim", "punch", "crush"};
+enum MP { MP_VOL, MP_LIM, MP_CUELVL, MP_CUEMODE, MP_DTYPE, MP_DRIVE, MP_DTONE, MP_DMIX, MP_FILT, MP_RES, MP_REP, MP_GDIV, MP_GATE, MP_RISER, MP_SPACE, MP_SPSIZE, MP_THROW, MP_TDIV, MP_TFB, MP_TAPE, MP_BPM, MP_CLOCK, MP_RDECAY, MP_RNOISE, MP_TAPESM, MP_RSIZE, MP_FENV, MP_RPITCH, MP_GSHAPE, MP_GPAN, MP_SPDAMP, MP_SPFRZ, MP_TTONE, MP_COMB, MP_CBPITCH, MP_CBFB, MP_CBDAMP, MP_SWEEP, MP_SWRATE, MP_SWDEPTH, MP_SWFB, MP_SWMODE, MP_SUM, MP_BCOMP, MP_BCRAT, MP_BCATK, MP_BCREL, MP_BCMIX, MP_BCAIR, MP_BCMKP, MP_CLIP, MP_CHORUS, MP_CHRATE, MP_CHDEPTH, MP_WIDTH, MP_WBASS, MP_THFRZ, MP_LOFI, MP_LFSRR, MP_LFBITS, MP_LFAM, MP_SPTYPE, MP_RTRI, MP_BCON, MP_BCBASS, MP_LPF, MP_HPF, MP_COUNT };   // MP_SUM ya no se usa
+const char* kMP[MP_COUNT] = {"vol", "lim", "cueLvl", "cueMode", "dtype", "drive", "dtone", "dmix", "filt", "res", "rep", "gdiv", "gate", "riser", "space", "spSize", "throw", "throwDiv", "throwFb", "tape", "bpm", "clock", "rDecay", "rNoise", "tapeSm", "rSize", "fEnv", "rPitch", "gShape", "gPan", "spDamp", "spFrz", "tTone", "comb", "cbPitch", "cbFb", "cbDamp", "sweep", "swRate", "swDepth", "swFb", "swMode", "sum", "bcomp", "bcRatio", "bcAtk", "bcRel", "bcMix", "bcAir", "bcMkp", "clip", "chorus", "chRate", "chDepth", "width", "wBass", "thFrz", "lofi", "lfSrr", "lfBits", "lfAm", "spType", "rTri", "bcOn", "bcBass", "lpf", "hpf"};
+const float kMpDef[MP_COUNT] = {0.85f, -1.5f, 0.8f, 0, 0, 0, 1, 1, 0, 1.4f, 0, 2, 0, 0, 0, 0.7f, 0, 6, 0.55f, 0, 120, 1, 0, 0.5f, 0.5f, 2, 0, 0, 0, 0, 0.53f, 0, 0.7f, 0, 48, 0.8f, 0.3f, 0, 2, 0.7f, 0.4f, 0, 0, 0, 1, 10, 0.3f, 1, 0, 0, 1, 0, 0.4f, 0.5f, 0, 0.5f, 0, 0, 0.4f, 0.4f, 0, 0, 0, 1, 0, 0, 0};
 // Distorsión: Hard, Fuzz y Bitcrusher
 const int kDistMap[2] = {D_FUZZ, D_BITS};
 inline int distType(float v) { return kDistMap[std::clamp(static_cast<int>(v), 0, 1)]; }
@@ -160,9 +160,10 @@ struct SubVoice {
 
 // ------------------------------------------------------------------ tira de canal / grupo
 struct Strip {
-    float p[SP_COUNT] = {1.0f, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, -1, 0.5f, 0.25f, 0, 0, 0, 0, 0, 1.4f, 0};
+    float p[SP_COUNT] = {1.0f, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, -1, 0.5f, 0.25f, 0, 0, 0, 0, 0, 1.4f, 0, 0, 0};
     float trimG = 1;   // trim de entrada del canal
     float baseG = 1;   // ganancia interna del punto de partida (kChBaseDb): no se ve en la web
+    float tsF = 0, tsS = 0, tsG = 1;   // Punch: envolventes rápida y lenta, y la ganancia actual
     Dist dist; Shelf lo[2], mi[2], hi[2]; bool eqDirty = true; Follower fol; Limiter lim; DJFilter dj;
     float L[BLK], R[BLK], pre[2][BLK], g[BLK];
     float sr = 48000;
@@ -177,6 +178,18 @@ struct Strip {
     bool silent = false;
     void stageA(int n, bool group) {
         if (const float g = trimG * baseG; g != 1.0f) for (int i = 0; i < n; ++i) { L[i] *= g; R[i] *= g; }
+        // Punch (transient shaper): compara una envolvente rápida con una lenta. En el ataque la rápida va por delante:
+        // con Punch a la derecha ese tramo sube (más golpe), a la izquierda baja (más suave). En lo sostenido no cambia nada
+        if (std::fabs(p[SP_PUNCH]) > 0.01f || tsG != 1.0f) {
+            const float fa = 1.0f - std::exp(-1.0f / (0.0005f * sr)), fr = 1.0f - std::exp(-1.0f / (0.04f * sr)), sa = 1.0f - std::exp(-1.0f / (0.02f * sr)), amt = p[SP_PUNCH] * 0.6f;
+            for (int o = 0; o < n; o += 8) {
+                const int k = std::min(8, n - o);
+                for (int i = o; i < o + k; ++i) { const float x = std::max(std::fabs(L[i]), std::fabs(R[i])); tsF += (x - tsF) * (x > tsF ? fa : fr); tsS += (x - tsS) * (x > tsS ? sa : fr); }
+                const float tgt = std::clamp(std::pow((tsF + 1e-5f) / (tsS + 1e-5f), amt), 0.4f, 2.5f), st = (tgt - tsG) / k;
+                for (int i = o; i < o + k; ++i) { tsG += st; L[i] *= tsG; R[i] *= tsG; }
+            }
+            if (std::fabs(p[SP_PUNCH]) <= 0.01f && std::fabs(tsG - 1.0f) < 1e-3f) tsG = 1.0f;
+        }
         // canal en silencio: nada que procesar (los filtros no tienen cola audible)
         float pkIn = 0, acc = 0; for (int i = 0; i < n; ++i) { pkIn = std::max(pkIn, std::fabs(L[i]) + std::fabs(R[i])); acc += L[i] + R[i]; }
         if (!std::isfinite(acc) || !(pkIn < 128.0f)) { std::fill(L, L + n, 0.0f); std::fill(R, R + n, 0.0f); pkIn = 0; }   // un motor averiado (o un filtro desbocado, +36 dB) no contagia al resto de la mezcla
@@ -202,7 +215,7 @@ struct Audio {
     NoteSet held[NT];
     Strip st[NCH], grp[NGRP];
     SendFx fx[NSEND]; float fxTail[NSEND] = {};
-    MasterFx mfx; Dist mdist; DJFilter mdj; LookLimiter mlim; BusComp bcomp; std::atomic<float> bcGrDb{0};
+    MasterFx mfx; Dist mdist; DJFilter mdj, mlpf, mhpf;LookLimiter mlim; BusComp bcomp; std::atomic<float> bcGrDb{0};   // mlpf, mhpf: LPF y HPF propios (knobs 1 y 2 del LPD8), además del filtro DJ
     float mp[MP_COUNT]; float sumG = 0, fEnvS = 0;
     // reparto entre núcleos: cada tarea escribe solo en lo suyo
     Parallel par; float monoT[NT][BLK]; float fxOutL[NSEND][BLK], fxOutR[NSEND][BLK]; bool fxRun[NSEND] = {}; std::atomic<bool> fxBad[NSEND];
@@ -215,7 +228,7 @@ struct Audio {
             case 1: case 2: case 3: mel[i].render(st[CH_T0 + i - 1].L, st[CH_T0 + i - 1].R, monoT[i], k); break;
             case 4: samp.render(st[CH_SAMP].L, st[CH_SAMP].R, k); break;
             case 5: brk.render(st[CH_BRK].L, st[CH_BRK].R, k, jobP0, jobDp, bpm, jobPlay); break;
-            default: gran.render(st[CH_GRAN].L, st[CH_GRAN].R, k); break;
+            default: gran.render(st[CH_GRAN].L, st[CH_GRAN].R, k, jobP0, jobDp, bpm); break;
         }
     }
     void renderSend(int f) {
@@ -227,6 +240,7 @@ struct Audio {
     static void srcTask(void* u, int i) { static_cast<Audio*>(u)->renderSource(i); }
     static void sendTask(void* u, int i) { static_cast<Audio*>(u)->renderSend(i); }
     float lanes[8][BLK], tmpL[BLK], tmpR[BLK], mono[BLK];
+    BusComp gcomp[NGRP]; float gCrushP[NGRP] = {};   // Crush de cada grupo: compresión en paralelo de lo que entra en él
     float busL[NBUS][BLK], busR[NBUS][BLK], sendL[NSEND][BLK], sendR[NSEND][BLK], cueL[BLK], cueR[BLK];
     // reloj
     double pos = 0; long ticks = 0; long sinceTick = 1 << 30; bool running = false; float bpm = 120;
@@ -234,6 +248,7 @@ struct Audio {
     // medidores
     std::atomic<float> peak[NCH + NGRP + 2]; std::atomic<float> grDb{0};
     std::atomic<float> cpu{0}, cpuPeak{0};
+    std::atomic<bool> dither16{false}; uint32_t dRng = 22222u;
     std::atomic<uint64_t> calls{0}; std::atomic<unsigned> xruns{0}, late{0};      // vigilante: el audio sigue vivo
     std::atomic<float> bpmPub{120}; std::atomic<bool> clkPub{false}, runPub{false};   // copias seguras para el hilo de control
     std::atomic<int> act[NT]; std::atomic<int> dact[8]; std::atomic<int> sact[kPads];
@@ -258,7 +273,9 @@ struct Audio {
         for (auto& s : st) s.prepare(sr);
         for (auto& g : grp) g.prepare(sr);
         for (auto& f : fx) f.prepare(sr);
-        mfx.prepare(sr); mdist.prepare(sr); mdj.sr = sr; mlim.prepare(sr); bcomp.prepare(sr);
+        mfx.prepare(sr); mdist.prepare(sr); mdj.sr = sr; mlpf.sr = sr; mhpf.sr = sr; mlim.prepare(sr); bcomp.prepare(sr);
+        // Crush de los grupos: copia muy comprimida para mezclar en paralelo (al estilo «New York»): umbral −24 dB, 10:1, ataque 2 ms, release 150 ms
+        for (auto& c : gcomp) { c.prepare(sr); c.amount = 1; c.ratio = 2; c.attack = 2; c.release = 0.15f; }
         for (auto& p : peak) p = 0;
         for (auto& a : act) a = 0;
         for (auto& b : fxBad) b = false;
@@ -328,7 +345,7 @@ struct Audio {
             case MP_THROW: mfx.thr = v; break; case MP_TDIV: mfx.throwDiv = v; break; case MP_TFB: mfx.throwFb = v; break; case MP_TAPE: mfx.tape = v; break; case MP_RDECAY: mfx.repDecay = v; break; case MP_RNOISE: mfx.riserNoise = v; break; case MP_TAPESM: mfx.tapeInertia = v; break; case MP_RSIZE: mfx.repSize = v; break;
             case MP_RPITCH: mfx.repPitch = v; break; case MP_GSHAPE: mfx.gShape = v; break; case MP_GPAN: mfx.gPan = v; break; case MP_SPDAMP: mfx.spDamp = v; break; case MP_SPFRZ: mfx.spFreeze = v >= 0.5f; break; case MP_TTONE: mfx.thTone = v; break;
             case MP_COMB: mfx.comb = v; break; case MP_CBPITCH: mfx.cbPitch = v; break; case MP_CBFB: mfx.cbFb = v; break; case MP_CBDAMP: mfx.cbDamp = v; break;
-            case MP_BCOMP: bcomp.amount = v; break; case MP_BCRAT: bcomp.ratio = v; break; case MP_BCATK: bcomp.attack = v; break; case MP_BCREL: bcomp.release = v; break; case MP_BCMIX: bcomp.mix = v; break; case MP_BCAIR: bcomp.air = v; break; case MP_BCMKP: bcomp.makeup = v; break;
+            case MP_BCOMP: bcomp.amount = v; break; case MP_BCRAT: bcomp.ratio = v; break; case MP_BCATK: bcomp.attack = v; break; case MP_BCREL: bcomp.release = v; break; case MP_BCMIX: bcomp.mix = v; break; case MP_BCAIR: bcomp.air = v; break; case MP_BCMKP: bcomp.makeup = v; break; case MP_BCON: bcomp.on = v >= 0.5f; break; case MP_BCBASS: bcomp.bassThru = v >= 0.5f; break;
             case MP_SWEEP: mfx.sweep = v; break; case MP_SWRATE: mfx.swRate = v; break; case MP_SWDEPTH: mfx.swDepth = v; break; case MP_SWFB: mfx.swFb = v; break; case MP_SWMODE: mfx.swMode = v; break;
             case MP_CHORUS: mfx.chorus = v; break; case MP_CHRATE: mfx.chRate = v; break; case MP_CHDEPTH: mfx.chDepth = v; break; case MP_WIDTH: mfx.width = v; break; case MP_WBASS: mfx.wBass = v; break; case MP_THFRZ: mfx.thFreeze = v >= 0.5f; break;
             case MP_LOFI: mfx.lofi = v; break; case MP_LFSRR: mfx.lfSrr = v; break; case MP_LFBITS: mfx.lfBits = v; break; case MP_LFAM: mfx.lfAm = v; break; case MP_SPTYPE: mfx.spType = v; break; case MP_RTRI: mfx.repTri = v >= 0.5f; break;
@@ -349,7 +366,7 @@ struct Audio {
                 switch (c.b) { case 0: L.tune = c.v; break; case 1: L.decay = c.v; break; case 2: L.snap = c.v; break; case 3: L.filt = std::clamp(c.v, -1.0f, 1.0f); break; case 4: L.reso = c.v; break;
                                case 5: L.sweep = c.v; break; case 6: L.level = c.v; break; case 7: L.pan = c.v; break; case 8: L.vel = c.v; break; case 9: L.tone = c.v; break; case 10: L.color = c.v; break;
                                case 11: L.shape = c.v; break; case 12: L.contour = c.v; break; case 13: L.mute = c.v >= 0.5f; break; case 14: L.note = std::clamp(static_cast<int>(c.v), 0, 127); break;
-                               case 15: L.out = std::clamp(static_cast<int>(c.v), 0, 2); break; }
+                               case 15: L.out = std::clamp(static_cast<int>(c.v), 0, 2); break; case 16: L.drive = std::clamp(c.v, 0.0f, 1.0f); break; }
                 break; }
             case K_SUB: switch (c.b) { case 0: subCh = static_cast<int>(c.v); subHeld.clear(); subUpdate(); break; case 1: subOn = c.v >= 0.5f; subUpdate(); break; case 2: subOct = c.v; subUpdate(); break;
                                        case 3: subTone = c.v; break; case 4: subGlide = c.v; break; case 5: subVol = c.v; break; case 6: subMode = c.v >= 0.5f ? 1 : 0; subHeld.clear(); subUpdate(); break; case 7: subSrc = std::clamp(static_cast<int>(c.v), 1, NT - 1); subHeld.clear(); subUpdate(); break; } break;
@@ -361,7 +378,7 @@ struct Audio {
             case K_ALLOFF: allNotesOff(); break;
             case K_LIVE: if (c.a >= 0 && c.a < LM_COUNT) liveSet(c.a, c.b, c.c, c.v); break;
             case K_LCH: if (c.a >= 0 && c.a < LM_COUNT) lch[c.a] = static_cast<int>(c.v); break;
-            case K_REC: if (c.v >= 0.5f) { recSrc = c.b; recLen = 0; recState = 1; } else if (recState == 1) recState = 2; break;
+            case K_REC: if (c.v >= 0.5f) { if (recState == 0) { recSrc = c.b; recLen = 0; recState = 1; } } else if (recState == 1) recState = 2; break;   // mientras se guarda la anterior (3), no empieza otra
         }
     }
     void handleMidi(const Midi& m) {
@@ -402,11 +419,13 @@ struct Audio {
     // out: intercalado con «oc» canales; in: intercalado con «ic» canales (puede ser nulo)
     void process(float* out, int oc, const float* in, int ic, int n) {
         static thread_local bool ftz = false;
-        if (!ftz) { flushDenormals(); if (par.helpers() > 0) pinToCore(0); ftz = true; }   // los ayudantes van en los núcleos 1, 2 y 3
+        if (!ftz) { flushDenormals(); if (par.helpers() > 0) pinToCore(audioCore()); ftz = true; }   // audio en el último núcleo; los ayudantes, en los de abajo (par.h)
         const auto t0 = std::chrono::steady_clock::now();
         const double now = monoNow(), blockStart = now - n / static_cast<double>(sr);
         calls.fetch_add(1, std::memory_order_relaxed);
-        Cmd c; while (cmds.pop(c)) apply(c);
+        // órdenes de la pantalla y del MIDI: como mucho 600 por bloque. Una memoria (o el arranque) manda unas 2000 de golpe:
+        // así se reparten en 3–4 bloques y no se suman de una vez a lo que suena (en orden, sin perder ninguna)
+        { Cmd c; for (int nc = 0; nc < 600 && cmds.pop(c); ++nc) apply(c); }
         // MIDI con su momento exacto: cada mensaje se aplica en la muestra que le corresponde dentro del bloque
         // (va un bloque por detrás, pero sin el «temblor» de agruparlo todo al principio)
         Midi evs[512]; int ne = 0; Midi m;
@@ -420,12 +439,18 @@ struct Audio {
             while (done < at) { const int k = std::min(BLK, at - done); chunk(out + static_cast<size_t>(done) * oc, oc, in ? in + static_cast<size_t>(done) * ic : nullptr, ic, k); done += k; }
             if (e < ne) handleMidi(evs[e]);
         }
+        // interfaz de 16 bits (la Behringer): dither TPDF de ±1 bit antes de que RtAudio redondee, para que las colas muy
+        // bajas de las reverbs no suenen granuladas. Con 24 bits o más no hace falta
+        if (dither16.load(std::memory_order_relaxed)) {
+            constexpr float lsb = 1.0f / 32768.0f / 4294967296.0f;
+            for (int i = 0, t = n * oc; i < t; ++i) { dRng = dRng * 1664525u + 1013904223u; const uint32_t a = dRng; dRng = dRng * 1664525u + 1013904223u; out[i] += (static_cast<float>(a) - static_cast<float>(dRng)) * lsb; }
+        }
         bpmPub.store(bpm, std::memory_order_relaxed); clkPub.store(clkOn(), std::memory_order_relaxed); runPub.store(running, std::memory_order_relaxed);
         // consumo: tiempo de cálculo frente al tiempo que dura el bloque
         const float load = static_cast<float>(std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count() * sr / n * 100.0);
         cpu = cpu.load() + (load - cpu.load()) * 0.05f;
         if (load > cpuPeak.load()) cpuPeak = load;
-        if (load > 100.0f && calls.load(std::memory_order_relaxed) > 1000) late.fetch_add(1, std::memory_order_relaxed);   // los primeros ~10 s (arranque) no cuentan   // el bloque tardó más de lo que dura: se oye como un corte
+        if (load > 100.0f && calls.load(std::memory_order_relaxed) > 1000) late.fetch_add(1, std::memory_order_relaxed);   // los primeros ~10 s (arranque) no cuentan. Bloque lento: con los bloques de colchón no siempre se oye (los cortes reales los cuenta xruns)
     }
     void chunk(float* out, int oc, const float* in, int ic, int k) {
         // --- tempo: reloj del Oxi si llega; si no, el de la pantalla
@@ -448,6 +473,9 @@ struct Audio {
         if (k >= kParMin) par.run(srcTask, this, kNSrc); else for (int i = 0; i < kNSrc; ++i) renderSource(i);
         for (int l = 0; l < 8; ++l) {
             const DrumLane& L = drums.lane[static_cast<size_t>(l)]; float gl, gr; panGains(L.pan, gl, gr);
+            // Drive por sonido: saturación suave que añade armónicos (el bombo se oye también en altavoces pequeños).
+            // El pico de un golpe a −6 dBFS se queda donde estaba; lo que sube es la densidad
+            if (L.drive > 0.001f) { const float g = 1.0f + 9.0f * L.drive, nrm = 0.5f / std::tanh(g * 0.5f); float* x = lanes[l]; for (int i = 0; i < k; ++i) x[i] = std::tanh(g * x[i]) * nrm; }
             Strip& s = st[std::clamp(L.out, 0, 2)];
             for (int i = 0; i < k; ++i) { s.L[i] += lanes[l][i] * gl; s.R[i] += lanes[l][i] * gr; }
         }
@@ -511,6 +539,15 @@ struct Audio {
         for (int g = 0; g < NGRP; ++g) {
             Strip& s = grp[g];
             std::copy(busL[1 + g], busL[1 + g] + k, s.L); std::copy(busR[1 + g], busR[1 + g] + k, s.R);
+            // Crush: lo que entra en el grupo, muy comprimido, se suma a lo normal (compresión en paralelo). Da cuerpo y sostén
+            // sin perder el golpe; luego todo pasa junto por el EQ, el limitador y el fader del grupo. A tope la copia entra
+            // 4,4 dB por debajo, para no llevar los picos al límite. A 0 no gasta nada
+            { const float a1 = s.p[SP_CRUSH], a0 = gCrushP[g]; gCrushP[g] = a1;
+              if (a1 > 0.001f || a0 > 0.001f) {
+                  float cL[BLK], cR[BLK]; std::copy(s.L, s.L + k, cL); std::copy(s.R, s.R + k, cR); gcomp[g].process(cL, cR, k);
+                  const float d = (a1 - a0) * rk; float a = a0;
+                  for (int i = 0; i < k; ++i) { a += d; s.L[i] += cL[i] * a * 0.6f; s.R[i] += cR[i] * a * 0.6f; }
+              } else gcomp[g].reset(); }
             s.stageA(k, true);
             bool chInSolo = false; for (int i = 0; i < NCH; ++i) chInSolo |= chSolo[i] && gOf(i) == g;
             const bool audible = s.p[SP_MUTE] < 0.5f && (!anySolo || grSolo[g] || chInSolo);
@@ -544,10 +581,14 @@ struct Audio {
           if (ef > 0.001f && std::fabs(base) >= 0.04f) { float e = 0; for (int i = 0; i < k; ++i) e = std::max(e, std::fabs(L[i]) + std::fabs(R[i]));
               fEnvS += (0.5f * e - fEnvS) * (0.5f * e > fEnvS ? 0.6f : 0.03f); const float m = std::min(fEnvS * ef, std::fabs(base) - 0.03f); mdj.f = base + (base < 0 ? m : -m); } }
         mdj.process(L, R, k);
+        // LPF y HPF: cantidad 0 = sin efecto; al subir, el LPF cierra (hasta ~30 Hz) y el HPF abre hacia arriba (hasta ~20 kHz).
+        // Resonancia suave fija (la del filtro DJ puede estar muy alta y aquí chillaría)
+        mlpf.f = -std::clamp(mp[MP_LPF], 0.0f, 1.0f); mlpf.res = 1.0f; mlpf.process(L, R, k);
+        mhpf.f = std::clamp(mp[MP_HPF], 0.0f, 1.0f); mhpf.res = 1.0f; mhpf.process(L, R, k);
         mfx.process(L, R, k, bpm, pos);
         // avería: un valor imposible o desmesurado (más de +36 dB) deja el bloque en silencio y reinicia los efectos, nunca ruido
         { float acc = 0, top = 0; for (int i = 0; i < k; ++i) { acc += L[i] + R[i]; top = std::max(top, std::max(std::fabs(L[i]), std::fabs(R[i]))); }
-          if (!std::isfinite(acc) || !(top < 64.0f)) { std::fill(L, L + k, 0.0f); std::fill(R, R + k, 0.0f); mfx.reset(); mdist.reset(); mdj.reset(); bcomp.reset(); } }
+          if (!std::isfinite(acc) || !(top < 64.0f)) { std::fill(L, L + k, 0.0f); std::fill(R, R + k, 0.0f); mfx.reset(); mdist.reset(); mdj.reset(); mlpf.reset(); mhpf.reset(); bcomp.reset(); } }
         bcomp.process(L, R, k); bcGrDb.store(bcomp.lastGrDb, std::memory_order_relaxed);   // compresor de bus: une la mezcla antes del volumen y el limitador
         { const float vol = mp[MP_VOL], d = (vol - volP) * rk; float a = volP;
           for (int i = 0; i < k; ++i) { a += d; L[i] *= a; R[i] *= a; } volP = vol; }
@@ -555,8 +596,9 @@ struct Audio {
         { float acc = 0; for (int i = 0; i < k; ++i) acc += L[i] + R[i];   // última red: nada imposible llega a la salida, y el máster no se queda mudo
           if (!std::isfinite(acc)) { std::fill(L, L + k, 0.0f); std::fill(R, R + k, 0.0f); bcomp.reset(); mlim.reset(); } }
         float mpk = 0;
-        // saturación final: «Color» = curva suave de siempre (algo de densidad); «Clean» = lineal hasta −1 dBFS y red de seguridad encima
-        const bool soft = mp[MP_CLIP] >= 0.5f; auto oc1 = [soft](float x) { return soft ? softClip(x) : safeClip(x); };
+        // saturación final: lineal hasta −1 dBFS y red de seguridad encima
+        // (el modo «Color», saturación suave, se quitó el 15-11-2026: no aportaba)
+        auto oc1 = [](float x) { return safeClip(x); };
         for (int i = 0; i < k; ++i) { L[i] = oc1(L[i]); R[i] = oc1(R[i]); mpk = std::max(mpk, std::max(std::fabs(L[i]), std::fabs(R[i]))); }
         pk[NCH + NGRP] = mpk;
         // --- pre-escucha: salidas 3-4 si las hay; si no, según el modo
@@ -762,6 +804,25 @@ struct Control {
     std::string brkDir() const { return base + "/breaks"; }
     // Los sonidos de fábrica del sampler y los breaks se generan una vez y se guardan en cache/ (en la Pi 3, generarlos
     // costaba ~5 s de cada arranque). La caché lleva la frecuencia y la fecha de compilación: si cambia, se rehace sola.
+    // 909 con tus muestras: samples/909/ch.wav (HH cerrado), oh.wav (HH abierto) y ride.wav. Si están, el kit 909 las toca en
+    // vez de los sintetizados; si no, sigue sintetizado. Se miran al arrancar y cada vez que se elige el kit 909
+    void drum909Load() {
+        static const std::pair<int, const char*> kF[3] = {{5, "ch"}, {6, "oh"}, {7, "ride"}};
+        for (const auto& [l, nm] : kF) {
+            const std::string f = sampDir() + "/909/" + nm + ".wav"; std::error_code ec;
+            const auto sz = std::filesystem::exists(f, ec) ? static_cast<long long>(std::filesystem::file_size(f, ec)) : -1;
+            if (sz == smp909Size_[l]) continue;
+            smp909Size_[l] = sz;
+            if (sz < 0) { au.drums.smp909[l].store(nullptr, std::memory_order_release); continue; }
+            std::unique_ptr<Sample> s(loadWav(f, 20)); if (!s || s->L.empty()) { au.drums.smp909[l].store(nullptr, std::memory_order_release); continue; }
+            auto* d = new DrumSmp; d->sr = s->sr; d->L.resize(s->L.size()); float pk = 0;
+            for (size_t i = 0; i < s->L.size(); ++i) { d->L[i] = 0.5f * (s->L[i] + s->R[i]); pk = std::max(pk, std::fabs(d->L[i])); }
+            if (pk > 1e-6f) for (float& x : d->L) x *= 0.7f / pk;   // nivel parecido al sintetizado
+            au.drums.smp909[l].store(d, std::memory_order_release);   // la anterior se queda en memoria: el audio podría estar tocándola
+            std::printf("909: muestra propia para %s (%s)\n", nm, f.c_str()); std::fflush(stdout);
+        }
+    }
+    long long smp909Size_[8] = {-2, -2, -2, -2, -2, -2, -2, -2};
     void initLive() {
         std::string tag = std::string(__DATE__) + "-" + __TIME__; for (char& c : tag) if (!std::isalnum(static_cast<unsigned char>(c))) c = '-';
         const std::string dir = base + "/cache", cf = dir + "/fabrica-" + std::to_string(static_cast<int>(au.sr)) + "-" + tag + ".bin";
@@ -849,14 +910,19 @@ struct Control {
             char nm[64]; const std::time_t t = std::time(nullptr); std::strftime(nm, sizeof nm, "grabacion-%Y%m%d-%H%M%S.wav", std::localtime(&t));
             s->name = std::string(nm).substr(0, std::strlen(nm) - 4);
             std::error_code ec; std::filesystem::create_directories(sampDir(), ec);
-            saveWav(sampDir() + "/" + nm, *s); cache[sampDir() + "/" + nm] = s;
+            cache[sampDir() + "/" + nm] = s;
             const int pad = static_cast<int>(st["samp.sel"]);
-            srv.broadcast(std::string("files ") + filesJson());
-            sset("samp.p" + std::to_string(pad) + ".file", nm, -1);
+            sset("samp.p" + std::to_string(pad) + ".file", nm, -1);   // suena ya desde la memoria; el archivo se escribe aparte
             set("samp.p" + std::to_string(pad) + ".2", 0, -1); set("samp.p" + std::to_string(pad) + ".3", 1, -1);
+            // escribir el WAV puede tardar (tarjeta SD): en un hilo aparte, para que los knobs y el MIDI no se congelen
+            au.recState = 3;
+            std::thread([this, path = sampDir() + "/" + nm, copy = *s]() { saveWav(path, copy); recSaved = true; }).detach();
+            return;
         }
         au.recState = 0; srv.broadcast("rec 0");
     }
+    std::atomic<bool> recSaved{false};
+    void recSavedCheck() { if (!recSaved.exchange(false)) return; au.recState = 0; srv.broadcast(std::string("files ") + filesJson()); srv.broadcast("rec 0"); }
     std::chrono::steady_clock::time_point dirtyAt{}; bool dirty = false;
     std::map<std::string, float> webPend_; std::chrono::steady_clock::time_point lastWeb{};
     unsigned lastXr = 0; bool wasDirty = false; std::chrono::steady_clock::time_point dirtySince{};
@@ -909,7 +975,7 @@ struct Control {
             const std::string L = "d.l" + std::to_string(l) + ".";
             st[L + "tune"] = 0; st[L + "decay"] = 0.5f; st[L + "snap"] = 0.5f; st[L + "filt"] = 0; st[L + "reso"] = 0.2f; st[L + "sweep"] = 0.5f; st[L + "level"] = 0.75f; st[L + "pan"] = 0; st[L + "vel"] = 0.8f;
             st[L + "tone"] = 0.5f; st[L + "color"] = kCycColor[l]; st[L + "shape"] = kCycShape[l]; st[L + "contour"] = kCycContour[l];
-            st[L + "mute"] = 0; st[L + "note"] = static_cast<float>(N[l]); st[L + "out"] = static_cast<float>(kLaneOut[l]);
+            st[L + "mute"] = 0; st[L + "note"] = static_cast<float>(N[l]); st[L + "out"] = static_cast<float>(kLaneOut[l]); st[L + "drive"] = 0;
         }
         st["sub.ch"] = 9; st["sub.on"] = 1; st["sub.oct"] = -2; st["sub.tone"] = 0.2f; st["sub.glide"] = 0.03f; st["sub.vol"] = 0.75f; st["sub.mode"] = 1; st["sub.src"] = 1;
         // canales
@@ -989,7 +1055,7 @@ struct Control {
         if ((k[0] == 'c' || k[0] == 'g') && k.size() > 2 && std::isdigit(static_cast<unsigned char>(k[1]))) {
             const size_t d = k.find('.'); if (d == std::string::npos) return true;
             static const std::map<std::string, std::pair<float, float>> R = {{"pan", {-1, 1}}, {"out", {0, 2 + NDIR}}, {"dtype", {0, 1}}, {"low", {-15, 15}}, {"mid", {-15, 15}}, {"high", {-15, 15}},
-                {"lim", {-24, 0}}, {"sc", {-1, NCH - 1}}, {"trim", {-24, 24}}, {"scRel", {0.02f, 1.0f}}, {"filt", {-1, 1}}, {"res", {0.7f, 15}}, {"lvl", {0, 1.5f}}};
+                {"lim", {-24, 0}}, {"sc", {-1, NCH - 1}}, {"trim", {-24, 24}}, {"punch", {-1, 1}}, {"scRel", {0.02f, 1.0f}}, {"filt", {-1, 1}}, {"res", {0.7f, 15}}, {"lvl", {0, 1.5f}}};
             const auto it = R.find(k.substr(d + 1)); if (it != R.end()) { lo = it->second.first; hi = it->second.second; } else { lo = 0; hi = 1; }
             return true;
         }
@@ -1312,6 +1378,14 @@ struct Control {
     }
     void memLoad(const std::string& raw) {
         const std::string n = memName(raw), f = memDir() + "/" + n + ".json"; if (n.empty() || !std::filesystem::exists(f)) return;
+        {   // una memoria cortada (un corte de luz al guardarla) no se carga: dejaría una mezcla de dos estados sin avisar
+            std::ifstream in(f, std::ios::binary); std::string js((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+            size_t e = js.find_last_not_of(" \r\n\t");
+            if (js.size() < 1000 || e == std::string::npos || js[e] != '}' || js.find("\"ver\":") == std::string::npos) {
+                std::printf("Memoria incompleta, no la cargo: %s\n", n.c_str()); std::fflush(stdout);
+                srv.broadcast("memmsg damaged " + n + " (not loaded)"); return;
+            }
+        }
         if (learn_ >= 0) learnStop(); comboOff();
         std::map<std::string, float> keepF; std::map<std::string, std::string> keepS;   // el montaje MIDI no cambia
         for (auto& [k, v] : st) if (k.rfind("midi.", 0) == 0) keepF[k] = v;
@@ -1384,6 +1458,7 @@ struct Control {
         if (k == "ver" || !st.count(k) || !valid(k, v)) return;
         const float old = st[k];
         st[k] = v; Cmd c; if (toCmd(k, v, c)) au.cmds.push(c);
+        if (k == "d.kit" && static_cast<int>(v) == 1) drum909Load();
         dirty = true; dirtyAt = std::chrono::steady_clock::now();
         // lo que llega por MIDI puede venir a cientos por segundo (un LFO del Oxi): a la web se le manda solo el último valor
         if (from == kMidiSrc) webPend_[k] = v; else srv.broadcast("set " + k + " " + jnum(v), from);
@@ -1414,7 +1489,7 @@ struct Control {
             std::string spec = specJson(); spec.pop_back(); spec += "," + mixSpecJson() + ",\"outs\":" + std::to_string(au.outCh) + ",\"ins\":" + std::to_string(au.inCh) + "}";
             spec.pop_back(); spec += "," + liveSpecJson() + "}";
             midiSeen_ = ~0u;   // que el monitor MIDI se reenvíe a la pantalla nueva
-            srv.send(client, "spec " + spec); srv.send(client, "files " + filesJson()); srv.send(client, "state " + stateJson()); srv.send(client, "memlist " + memList());
+            srv.send(client, "spec " + spec); srv.send(client, "files " + filesJson()); srv.send(client, "state " + stateJson()); srv.send(client, "memlist " + memList()); srv.send(client, "cblearn " + std::to_string(learn_));
         }
         else if (op == "kb") { int t, n, v; if (is >> t >> n >> v) au.cmds.push({K_NOTE, static_cast<int16_t>(t), static_cast<int16_t>(n), static_cast<int16_t>(v), 0}); }
         else if (op == "panic") au.cmds.push({K_ALLOFF, 0, 0, 0, 0});
@@ -1430,14 +1505,14 @@ struct Control {
         else if (op == "drreset") {   // batería: un sonido o todos (no toca las notas MIDI ni el canal)
             std::string w; if (is >> w) for (int l = 0; l < 8; ++l) {
                 if (w != "all" && std::atoi(w.c_str()) != l) continue;
-                for (int fi = 0; fi < 14; ++fi) { const char* f = kLaneKeys[fi]; { const std::string k = "d.l" + std::to_string(l) + "." + f; if (defs.count(k) && st[k] != defs[k]) set(k, defs[k], -1); } }
+                for (int fi = 0; fi < kNLane; ++fi) { if (fi == 14 || fi == 15) continue; const char* f = kLaneKeys[fi]; { const std::string k = "d.l" + std::to_string(l) + "." + f; if (defs.count(k) && st[k] != defs[k]) set(k, defs[k], -1); } }
             } }
         else if (op == "sys") { if (sysInfo) srv.send(client, "sys " + sysInfo()); }
         else if (op == "sysst") { if (sysStatus) srv.send(client, "sysst " + sysStatus()); }
         else if (op == "sysroute") { std::string rest; std::getline(is, rest); if (sysRoute) sysRoute(rest); }
         else if (op == "sysapply") { std::string rest; std::getline(is, rest); if (sysApply) sysApply(rest); }
         else if (op == "sysact") { std::string w; if (is >> w && sysAction) sysAction(w); }
-        else if (op == "combo") { std::string w; int n; if (is >> w >> n) { if (w == "save") comboSave(n); else if (w == "down") comboPress(n, true); else if (w == "up") comboPress(n, false); else if (w == "off") comboOff(); else if (w == "learn") { if (n < 0 || n == learn_) learnStop(); else learnStart(n); } else if (w == "clear") comboClear(n); } }
+        else if (op == "combo") { std::string w; int n; if (is >> w >> n) { if (w == "save") comboSave(n); else if (w == "down") comboPress(n, true); else if (w == "up") comboPress(n, false); else if (w == "off") comboOff(); else if (w == "learn") { if (n < 0 || n == learn_) { if (learn_ < 0) srv.broadcast("cblearn -1"); /* «done» sin nada que terminar: se contesta igual, para que ninguna pantalla se quede atascada */ else learnStop(); } else learnStart(n); } else if (w == "clear") comboClear(n); } }
         else if (op == "msnap") { std::string w; int n; if (is >> w >> n) { if (w == "save") snapSave(n); else if (w == "load") snapLoad(n); } }
         else if (op == "sset") { std::string k; if (is >> k) { std::string v; std::getline(is, v); if (!v.empty() && v[0] == ' ') v.erase(0, 1); sset(k, v, client); } }
         else if (op == "files") srv.send(client, "files " + filesJson());
@@ -1451,7 +1526,7 @@ struct Control {
         }
         else if (op == "rec") { int on; if (is >> on) { if (on) { au.cmds.push({K_REC, 0, static_cast<int16_t>(st["rec.src"]), 0, 1}); srv.broadcast("rec 1"); } else au.cmds.push({K_REC, 0, 0, 0, 0}); } }
         else if (op == "preset") { std::string w; int t, s; if (is >> w >> t >> s) { if (w == "load") presetLoad(t, s, client); else if (w == "save") presetSave(t, s); } }
-        else if (op == "lhold") { std::string w; int i, on; if (is >> w >> i >> on && w == "brk" && i >= 0 && i < 8) au.cmds.push({K_LIVE, LM_BRK, 0, static_cast<int16_t>(kBrkHold0 + i), static_cast<float>(on)}); }
+        else if (op == "lhold") { std::string w; int i, on; if (is >> w >> i >> on && w == "brk" && i >= 0 && i < 8) brkHold(i, on != 0); }
     }
     // ============================================================== control por MIDI (sin pantalla)
     // Mapa fijo: cada canal MIDI es un instrumento (el mismo que toca el Oxi) y el mezclador va en su propio canal.
@@ -1608,50 +1683,144 @@ struct Control {
     std::map<int, std::pair<int, std::chrono::steady_clock::time_point>> outAt_;
     bool isEcho(int addr, int v) { const auto it = outAt_.find(addr); return it != outAt_.end() && it->second.first == v && std::chrono::steady_clock::now() - it->second.second < std::chrono::milliseconds(120); }
     // Mensajes de las controladoras (CC, cambios de programa y notas del canal del mezclador)
-    // Akai LPD8: un programa por módulo, cada uno en su canal (ver CONTROLADORAS.md). Pads = notas 36-43, knobs = CC 70-77.
-    //   canal 11 sampler: pads disparan los samples 1-8 y eligen el que editan los knobs
-    //   canal 12 breaks: pads = los 8 efectos (mientras se pulsan)
-    //   canal 13 granular: pad 1 enciende, pad 2 congela, pads 3-8 notas; canal 14 máster: pads = combinaciones, knobs 7-8 = voz
+    // Akai LPD8 mk2: un programa por módulo, cada uno en su canal (ver CONTROLADORAS.md). Se cambia con PROGRAM + pad 1-4.
+    // Knobs = CC 70-77 (absolutos). Los pads tienen tres bancos según el botón NOTE / PROG CHNG / CC: notas 36-43, cambios de
+    // programa 0-7 o CC 12-19. Freon enciende las luces de los pads según el estado real (SysEx de colores, firmware de fábrica)
+    //   canal 11 Sampler: pads = samples 1-8 (y eligen cuál editan los knobs) · knobs del pad elegido: Tune, LPF, Reso, Drive,
+    //            Lo-fi, envío A (reverb), envío B (delay), Volume
+    //   canal 12 Breaks: NOTE = efectos mientras se mantienen · CC = elegir break 1-8 · PROG CHNG pad 1 = reset ·
+    //            knobs: qué break, Tune, LPF, Reso, tamaño del repeat, Random, Stutter, Level
+    //   canal 13 Granular: pads 1 On, 2 Freeze, 3 Sync, 4 modo notas (conmutan), 5-8 notas · knobs: posición/tamaño/densidad
+    //            (o pasos rítmicos con Sync), afinación, dispersión, estéreo, feedback, nivel (hasta 100 %)
+    //   canal 14 Máster: pads = las 8 combinaciones · knobs: LPF, HPF, Repeat, tamaño del repeat, Comb, Space, Riser, crossfader
     std::vector<std::string> lpdBrk_; std::chrono::steady_clock::time_point lpdBrkAt_{};
+    std::function<void(const std::vector<unsigned char>&)> lpdOut; std::function<bool()> lpdNew;
+    int lpdProg_ = -1, lpdBank_ = 0, lpdBrkSel_ = -1; bool brkHold_[8] = {}; float dubSaved_ = 0;
+    std::vector<unsigned char> lpdLast_; std::chrono::steady_clock::time_point lpdAt_{}, lpdRefresh_{};
+    // la lista de breaks del LPD8: tus WAV de breaks/ (como mucho 8, en orden); si no hay ninguno, los de fábrica
+    const std::vector<std::string>& lpdBreaks() {
+        const auto now = std::chrono::steady_clock::now();
+        if (lpdBrk_.empty() || now - lpdBrkAt_ > std::chrono::seconds(5)) {
+            lpdBrk_.clear(); lpdBrkAt_ = now;
+            for (const auto& f : listWavs(brkDir())) if (lpdBrk_.size() < 8) lpdBrk_.push_back(f);
+            if (lpdBrk_.empty()) for (size_t i = 0; i < facB.size() && i < 8; ++i) lpdBrk_.push_back("fab:" + std::to_string(i));
+        }
+        return lpdBrk_;
+    }
+    void brkSelect(size_t i) { const auto& l = lpdBreaks(); if (i < l.size()) { lpdBrkSel_ = static_cast<int>(i); if (ss["brk.name"] != l[i]) sset("brk.name", l[i], kMidiSrc); } }
+    // efectos de los breaks mientras se mantienen. El 8 (Dub throw) manda el break al envío B (el delay) y al soltar lo devuelve:
+    // los ecos siguen sonando
+    void brkHold(int i, bool on) {
+        if (i < 0 || i > 7 || brkHold_[i] == on) return;
+        brkHold_[i] = on; au.cmds.push({K_LIVE, LM_BRK, 0, static_cast<int16_t>(kBrkHold0 + i), on ? 1.0f : 0.0f});
+        if (i == 7) { const std::string k = "c" + std::to_string(CH_BRK) + ".s1"; if (on) { dubSaved_ = st[k]; set(k, 1, -1); } else set(k, dubSaved_, -1); }
+        lpdRefresh_ = {};
+    }
+    // reset de los efectos del break: todo a su punto neutro (se quedan el break, sus compases y el nivel)
+    void brkReset() {
+        for (int i = 0; i < 8; ++i) brkHold(i, false);
+        for (int j : {BK_TUNE, BK_GATE, BK_RAND, BK_REV, BK_STUT, BK_FILT, BK_RES, BK_DRIVE, BK_BITS, BK_RSIZE}) set("brk." + std::to_string(j), kBrkSpec[j].def, kMidiSrc);
+        topNote("Breaks", "effects reset");
+    }
+    void topNote(const std::string& a, const std::string& b) { srv.broadcast("note " + a + "|" + b); }
+    // luces de los pads del programa en uso: 8 colores RGB (0-255) en un SysEx «Pad LED Color Update» del LPD8 mk2
+    void lpdTick() {
+        if (!lpdOut) return;
+        const auto now = std::chrono::steady_clock::now();
+        if (lpdNew && lpdNew()) { lpdLast_.clear(); }
+        if (lpdProg_ < 0) return;
+        struct C { int r, g, b; }; C c[8] = {};
+        const C kOrange{255, 90, 0}, kGreen{0, 255, 60}, kBlue{0, 90, 255}, kCyan{0, 220, 220}, kPurple{170, 0, 255}, kYellow{255, 190, 0}, kWhite{150, 150, 150};
+        switch (lpdProg_) {
+        case 0: { const int sel = static_cast<int>(st["samp.sel"]); if (sel >= 0 && sel < 8) c[sel] = kOrange; break; }
+        case 1:
+            if (lpdBank_ == 2) { if (lpdBrkSel_ >= 0 && lpdBrkSel_ < 8) c[lpdBrkSel_] = kWhite; }
+            else for (int i = 0; i < 8; ++i) if (brkHold_[i]) c[i] = kGreen;
+            break;
+        case 2:
+            if (st["gran.on"] >= 0.5f) c[0] = kBlue;
+            if (st["gran.frz"] >= 0.5f) c[1] = kCyan;
+            if (st["gran." + std::to_string(GR_TIME)] >= 0.5f) c[2] = kPurple;
+            if (st["gran." + std::to_string(GR_MODE)] >= 0.5f) c[3] = kBlue;
+            break;
+        default: { const int s2 = static_cast<int>(st["cb.sel"]); if (s2 >= 0 && s2 < 8) c[s2] = kYellow; break; }
+        }
+        std::vector<unsigned char> m = {0xF0, 0x47, 0x7F, 0x4C, 0x06, 0x00, 0x30};
+        for (const C& x : c) for (int v : {x.r, x.g, x.b}) { m.push_back(static_cast<unsigned char>(v >> 7)); m.push_back(static_cast<unsigned char>(v & 0x7F)); }
+        m.push_back(0xF7);
+        // se manda al cambiar; y tras tocar un pad, otra vez a los 60 ms (al soltarlo el LPD8 vuelve a sus colores guardados)
+        const bool due = lpdRefresh_ != std::chrono::steady_clock::time_point{} && now >= lpdRefresh_;
+        if ((m != lpdLast_ || due) && now - lpdAt_ > std::chrono::milliseconds(15)) { lpdOut(m); lpdLast_ = m; lpdAt_ = now; if (due) lpdRefresh_ = {}; }
+    }
     bool lpd8(const CtlMidi& m) {
         const int prog = (m.s & 0x0F) - 10, ty = m.s & 0xF0; if (prog < 0 || prog > 3) return false;
-        const bool isNote = ty == 0x90 || ty == 0x80, down = ty == 0x90 && m.d2 > 0;
-        const int pad = m.d1 - 36, knob = m.d1 - 70, val = isNote ? (down ? 127 : 0) : m.d2;
-        if (isNote && (pad < 0 || pad > 7)) return true;
-        if (!isNote && (ty != 0xB0 || knob < 0 || knob > 7)) return true;
+        const bool isNote = ty == 0x90 || ty == 0x80, isPC = ty == 0xC0, isCC = ty == 0xB0;
+        int pad = -1, bank = 0, knob = -1; bool down = false;
+        if (isNote) { pad = m.d1 - 36; down = ty == 0x90 && m.d2 > 0; bank = 0; }
+        else if (isPC) { pad = m.d1; down = true; bank = 1; }
+        else if (isCC && m.d1 >= 12 && m.d1 <= 19) { pad = m.d1 - 12; down = m.d2 >= 64; bank = 2; }
+        else if (isCC && m.d1 >= 70 && m.d1 <= 77) knob = m.d1 - 70;
+        else return true;
+        if (pad > 7) return true;
+        if (prog != lpdProg_) { lpdProg_ = prog; lpdLast_.clear(); }   // otro programa: sus luces
+        if (pad >= 0) { lpdBank_ = bank; lpdRefresh_ = std::chrono::steady_clock::now() + std::chrono::milliseconds(60); }
         const int16_t port = static_cast<int16_t>(m.port + 1000);   // fuera de la lista de puertos: no se vuelve a traducir
         auto cc = [&](int ch, int c, int v) { if (ch >= 0) onCtl({static_cast<unsigned char>(0xB0 | ch), static_cast<unsigned char>(c), static_cast<unsigned char>(v), port}); };
-        auto note = [&](int ch, int n) { if (ch >= 0) au.midi.push({static_cast<unsigned char>((down ? 0x90 : 0x80) | ch), static_cast<unsigned char>(n), static_cast<unsigned char>(down ? std::max(1, static_cast<int>(m.d2)) : 0), monoNow()}); };
-        static const int kSamp[8] = {SA_TUNE, SA_START, SA_END, SA_ATT, SA_REL, SA_FILT, SA_RES, SA_LVL};
-        static const int kBrk[8] = {-1, BK_TUNE, BK_GATE, BK_RAND, BK_STUT, BK_FILT, BK_RES, BK_LVL};   // knob 1: qué break; knob 8: nivel (Jorge, 13-11-2026)
-        static const int kGr[8] = {GR_POS, GR_SIZE, GR_DENS, GR_PITCH, GR_SPRAY, GR_SPREAD, GR_FB, GR_LVL};
-        static const int kGrNote[6] = {60, 62, 63, 65, 67, 72};
-        static const int kMst[5] = {108, 102, 103, 105, 106};   // filtro, repeat, gater, space, throw
+        const float v = knob >= 0 ? m.d2 / 127.0f : 0.0f;
+        auto put = [&](const std::string& k, float x) { set(k, x, kMidiSrc); };
         switch (prog) {
-        case 0: { const int ch = chOf("samp.ch");
-            if (isNote) { if (down && static_cast<int>(st["samp.sel"]) != pad) set("samp.sel", static_cast<float>(pad), kMidiSrc); }   // la nota la manda el hilo de MIDI
-            else cc(ch, 16 + kSamp[knob], val);
+        case 0: {   // Sampler
+            if (pad >= 0) { if (bank == 0 && down && static_cast<int>(st["samp.sel"]) != pad) set("samp.sel", static_cast<float>(pad), kMidiSrc); break; }   // la nota la manda el hilo de MIDI
+            const std::string P = "samp.p" + std::to_string(std::clamp(static_cast<int>(st["samp.sel"]), 0, kPads - 1)) + ".";
+            switch (knob) {
+                case 0: put(P + std::to_string(SA_TUNE), std::round(-24.0f + 48.0f * v)); break;
+                case 1: put(P + std::to_string(SA_FILT), -v); break;            // LPF: 0 = abierto, a tope = cerrado
+                case 2: put(P + std::to_string(SA_RES), v); break;
+                case 3: put(P + std::to_string(SA_DRIVE), v); break;
+                case 4: put(P + std::to_string(SA_BITS), 16.0f - 14.0f * v); break;   // Lo-fi: de 16 bits a 2
+                case 5: put("c" + std::to_string(CH_SAMP) + ".s0", v); break;  // envío A (reverb)
+                case 6: put("c" + std::to_string(CH_SAMP) + ".s1", v); break;  // envío B (delay)
+                default: put(P + std::to_string(SA_LVL), 1.5f * v); break;
+            }
             break; }
-        case 1: { const int ch = chOf("brk.ch");
-            if (isNote) cc(ch, 102 + pad, val);
-            else if (knob == 0) {   // elegir break: los de fábrica y luego los de la carpeta breaks/ (la lista se relee cada 5 s como mucho)
-                const auto now = std::chrono::steady_clock::now();
-                if (lpdBrk_.empty() || now - lpdBrkAt_ > std::chrono::seconds(5)) {
-                    lpdBrk_.clear(); lpdBrkAt_ = now;
-                    for (size_t i = 0; i < facB.size(); ++i) lpdBrk_.push_back("fab:" + std::to_string(i));
-                    for (const auto& f : listWavs(brkDir())) lpdBrk_.push_back(f);
-                }
-                if (!lpdBrk_.empty()) { const std::string& nm = lpdBrk_[std::min(lpdBrk_.size() - 1, static_cast<size_t>(val) * lpdBrk_.size() / 128)]; if (ss["brk.name"] != nm) sset("brk.name", nm, kMidiSrc); }
-            } else cc(ch, 16 + kBrk[knob], val);
+        case 1: {   // Breaks
+            if (pad >= 0) {
+                if (bank == 0) brkHold(pad, down);
+                else if (bank == 1 && pad == 0) brkReset();
+                else if (bank == 2 && down) brkSelect(static_cast<size_t>(pad));
+                break;
+            }
+            switch (knob) {
+                case 0: { const auto& l = lpdBreaks(); if (!l.empty()) brkSelect(std::min(l.size() - 1, static_cast<size_t>(m.d2) * l.size() / 128)); break; }
+                case 1: put("brk." + std::to_string(BK_TUNE), -12.0f + 24.0f * v); break;
+                case 2: put("brk." + std::to_string(BK_FILT), -v); break;
+                case 3: put("brk." + std::to_string(BK_RES), v); break;
+                case 4: put("brk." + std::to_string(BK_RSIZE), std::round(5.0f * v)); break;
+                case 5: put("brk." + std::to_string(BK_RAND), v); break;
+                case 6: put("brk." + std::to_string(BK_STUT), v); break;
+                default: put("brk." + std::to_string(BK_LVL), 1.5f * v); break;
+            }
             break; }
-        case 2: { const int ch = chOf("gran.ch");
-            if (!isNote) cc(ch, 16 + kGr[knob], val); else if (pad < 2) cc(ch, 110 + pad, val);   // notas 3-8: las manda el hilo de MIDI
+        case 2: {   // Granular
+            if (pad >= 0) {   // 1-4 conmutan (las notas de los pads 5-8 las manda el hilo de MIDI)
+                if (bank != 0 || !down || pad > 3) break;
+                static const char* kT[4] = {"gran.on", "gran.frz", nullptr, nullptr};
+                const std::string k = kT[pad] ? kT[pad] : "gran." + std::to_string(pad == 2 ? GR_TIME : GR_MODE);
+                put(k, st[k] >= 0.5f ? 0.0f : 1.0f);
+                break;
+            }
+            static const int kGr[8] = {GR_POS, GR_SIZE, GR_DENS, GR_PITCH, GR_SPRAY, GR_SPREAD, GR_FB, GR_LVL}, kGrS[3] = {GR_SPOS, GR_SSIZE, GR_SRATE};   // con Sync, 1-3 van por pasos
+            if (knob == 7) put("gran." + std::to_string(GR_LVL), v);   // nivel hasta el 100 %
+            else cc(chOf("gran.ch"), 16 + (knob < 3 && st["gran." + std::to_string(GR_TIME)] >= 0.5f ? kGrS[knob] : kGr[knob]), m.d2);
             break; }
-        default:
-            if (isNote) onMixNote(mixCh(), 64 + pad, val);
-            else if (knob < 5) cc(mixCh(), kMst[knob], val);
-            else if (knob < 7) cc(chOf("voz.ch"), 16 + (knob == 5 ? VZ_PITCH : VZ_FORMANT), val);
-            else cc(mixCh(), 95, val);   // knob 8: crossfader de las combinaciones (seco → combinación)
+        default: {   // Máster
+            if (pad >= 0) { if (bank == 0) onMixNote(mixCh(), 64 + pad, down ? 127 : 0); break; }
+            switch (knob) {
+                case 0: put("m.lpf", v); break; case 1: put("m.hpf", v); break; case 2: put("m.rep", v); break;
+                case 3: put("m.rSize", std::round(5.0f * v)); break; case 4: put("m.comb", v); break; case 5: put("m.space", v); break;
+                case 6: put("m.riser", v); break; default: cc(mixCh(), 95, m.d2); break;   // crossfader de las combinaciones (seco → combinación)
+            }
+            break; }
         }
         return true;
     }
@@ -1682,7 +1851,7 @@ struct Control {
             return;
         }
         if (ch == mixCh() && cc == 109) { if (val >= 64) comboOff(); if (val >= 64) for (const char* k : {"m.rep", "m.gate", "m.riser", "m.space", "m.throw", "m.tape", "m.filt", "m.comb", "m.sweep", "m.spFrz", "m.chorus", "m.width", "m.thFrz", "m.lofi"}) if (st[k] != 0) set(k, 0, kMidiSrc); return; }   // todo el máster a cero
-        if (ch == chOf("brk.ch") && cc >= 102 && cc < 110) { au.cmds.push({K_LIVE, LM_BRK, 0, static_cast<int16_t>(kBrkHold0 + cc - 102), val >= 64 ? 1.0f : 0.0f}); return; }   // holds: mientras se pulsa
+        if (ch == chOf("brk.ch") && cc >= 102 && cc < 110) { brkHold(cc - 102, val >= 64); return; }   // holds: mientras se pulsa
         if (ch == chOf("samp.ch") && cc == 111) { if (val >= 64) { const bool on = au.recState.load() == 0; if (on) { au.cmds.push({K_REC, 0, static_cast<int16_t>(st["rec.src"]), 0, 1}); srv.broadcast("rec 1"); } else au.cmds.push({K_REC, 0, 0, 0, 0}); } return; }
         const int a = addrCC(ch, cc); const auto it = ccMap.find(a); if (it == ccMap.end()) return;
         const Tgt& t = it->second;
@@ -1812,7 +1981,7 @@ struct Control {
                     l += " s"; for (auto& sp : au.gran.segPk) l += " " + jnum(std::round(sp.load() * 100) / 100);
                     srv.broadcast(l);
                 }
-                if (au.recState.load() == 2) finishRec();
+                if (au.recState.load() == 2) finishRec(); recSavedCheck(); lpdTick();
                 // monitor MIDI: puertos abiertos y último mensaje
                 { const unsigned c = gMidiCount.load();
                   std::string ports; { std::lock_guard<std::mutex> lk(gMidiNamesMx); for (size_t i = 0; i < gMidiNames.size(); ++i) { if (i) ports += " | "; ports += gMidiNames[i]; } }
@@ -2082,7 +2251,7 @@ struct MidiHub {
     std::function<void(const std::string&)> onPortsChanged;   // aviso al hilo de control (estado completo a las controladoras nuevas)
     struct Port { std::unique_ptr<RtMidiIn> in; std::string name; MidiHub* hub = nullptr; double acc = 0; ClockEst est; int idx = 0; bool lpd = false; };
     struct Out { std::unique_ptr<RtMidiOut> out; std::string name; };
-    std::vector<std::unique_ptr<Port>> ports; std::vector<std::unique_ptr<Out>> outs; int nextIdx = 0;
+    std::vector<std::unique_ptr<Port>> ports; std::vector<std::unique_ptr<Out>> outs, lpdOuts; int nextIdx = 0;   // lpdOuts: solo para las luces del LPD8 (SysEx), nunca para devolver valores
     static void cb(double dt, std::vector<unsigned char>* m, void* u) {
         if (!m || m->empty()) return;
         auto* p = static_cast<Port*>(u); MidiHub& h = *p->hub; const unsigned char st = (*m)[0];
@@ -2102,11 +2271,11 @@ struct MidiHub {
         // Akai LPD8 (canales 11 a 14): todo, notas incluidas, lo traduce el hilo de control (Control::lpd8)
         if (p->lpd && (st & 0x0F) >= 10 && (st & 0x0F) <= 13 && (ty == 0x90 || ty == 0x80 || ty == 0xB0)) {
             const int prog = (st & 0x0F) - 10, pad = d1 - 36; const bool note = ty == 0x90 || ty == 0x80, down = ty == 0x90 && d2 > 0;
-            static const int kGrNote[6] = {60, 62, 63, 65, 67, 72};
+            static const int kGrNote[4] = {60, 63, 67, 72};   // granular: pads 5-8 = do, mi♭, sol, do' (los 1-4 son On, Freeze, Sync y modo notas)
             const int sch = gLpdSamp.load(std::memory_order_relaxed), gch = gLpdGran.load(std::memory_order_relaxed);
             auto out = [&](int ch, int n) { h.au->pushMidi({static_cast<unsigned char>((down ? 0x90 : 0x80) | ch), static_cast<unsigned char>(n), static_cast<unsigned char>(down ? std::max<int>(1, d2) : 0), t}); };
             if (note && pad >= 0 && pad < 8 && prog == 0 && sch >= 0) out(sch, 36 + pad);                 // sampler: suena ya; el hilo de control solo elige el pad
-            if (note && pad >= 2 && pad < 8 && prog == 2) { if (gch >= 0) out(gch, kGrNote[pad - 2]); }   // granular: notas
+            if (note && pad >= 4 && pad < 8 && prog == 2) { if (gch >= 0) out(gch, kGrNote[pad - 4]); }   // granular: notas
             else h.au->ctlq.push({st, d1, d2, static_cast<int16_t>(p->idx)});
         }
         else if (ty == 0xB0 || ty == 0xC0) {
@@ -2160,6 +2329,13 @@ struct MidiHub {
             RtMidiOut probe; const unsigned n = probe.getPortCount();
             std::vector<std::string> now; for (unsigned i = 0; i < n; ++i) now.push_back(probe.getPortName(i));
             for (size_t k = 0; k < outs.size();) { if (std::find(now.begin(), now.end(), outs[k]->name) != now.end()) { ++k; continue; } outs.erase(outs.begin() + static_cast<long>(k)); changed = true; }
+            {   std::lock_guard<std::mutex> lk(lpdMx);
+                for (size_t k = 0; k < lpdOuts.size();) { if (std::find(now.begin(), now.end(), lpdOuts[k]->name) != now.end()) { ++k; continue; } lpdOuts.erase(lpdOuts.begin() + static_cast<long>(k)); }
+                for (unsigned i = 0; i < n; ++i) {   // LPD8: salida propia para sus luces
+                    const std::string& nm = now[i]; if (lower(nm).find("lpd8") == std::string::npos || isIgnored(nm)) continue;
+                    bool have = false; for (auto& o : lpdOuts) have |= o->name == nm; if (have) continue;
+                    auto o = std::make_unique<Out>(); o->name = nm; o->out = std::make_unique<RtMidiOut>(); o->out->openPort(i); lpdOuts.push_back(std::move(o)); lpdNew = true;
+                } }
             for (unsigned i = 0; i < n; ++i) {
                 const std::string& nm = now[i];
                 // al MC-24 no se le abre salida: solo tiene potenciómetros, y tras cerrarla deja de mandar hasta reenchufarlo
@@ -2182,6 +2358,9 @@ struct MidiHub {
             try { o->out->sendMessage(&msg); } catch (RtMidiError&) {}
         }
     }
+    std::mutex lpdMx; bool lpdNew = false;   // lpdNew: se acaba de conectar un LPD8 (hay que mandarle sus luces)
+    void sendLpd(const std::vector<unsigned char>& msg) { std::lock_guard<std::mutex> lk(lpdMx); for (auto& o : lpdOuts) { try { o->out->sendMessage(&msg); } catch (RtMidiError&) {} } }
+    bool takeLpdNew() { std::lock_guard<std::mutex> lk(lpdMx); const bool r = lpdNew; lpdNew = false; return r; }
     std::string outNames() const { std::string r; for (auto& o : outs) { if (!r.empty()) r += " | "; r += o->name; } return r; }
 };
 
@@ -2220,7 +2399,11 @@ SysCfg sysLoad(const std::string& path) {
     return c;
 }
 bool sysSave(const std::string& path, const SysCfg& c) {
-    const std::string tmp = path + ".tmp"; { std::ofstream f(tmp); for (auto& [k, v] : c) f << k << '=' << v << '\n'; if (!f) return false; }
+    // archivo aparte, fsync y renombrado: un corte de luz deja el ajuste anterior o el nuevo, nunca uno a medias
+    const std::string tmp = path + ".tmp"; std::string txt; for (auto& [k, v] : c) txt += k + '=' + v + '\n';
+    FILE* f = std::fopen(tmp.c_str(), "wb"); if (!f) return false;
+    bool ok = std::fwrite(txt.data(), 1, txt.size(), f) == txt.size(); ok = std::fflush(f) == 0 && ok; ok = ::fsync(fileno(f)) == 0 && ok; ok = std::fclose(f) == 0 && ok;
+    if (!ok) { std::remove(tmp.c_str()); return false; }
     return std::rename(tmp.c_str(), path.c_str()) == 0;
 }
 // Buffer mínimo seguro. En la Pi 3, con 64 y 128 se encadenaron cortes y el USB de la Clarett se quedó bloqueado en el
@@ -2321,7 +2504,7 @@ int main(int argc, char** argv) {
     marca("hasta los núcleos");
     dx7::libInit(base + "/dx7");   // sonidos del DX7: los de serie y los bancos .syx de la carpeta dx7/
     marca("biblioteca DX7");
-    Control ctl(*au); ctl.base = base; ctl.initLive(); marca("sampler y breaks");
+    Control ctl(*au); ctl.base = base; ctl.initLive(); ctl.drum909Load(); marca("sampler y breaks");
     ctl.file = argStr(argc, argv, "--estado", base + "/freon-estado.json");
     ctl.defaults(); ctl.defs = ctl.st; marca("valores de fábrica");
     // primera vez con el nombre nuevo: se recoge el estado del groovebox (en esta carpeta o en la carpeta groovebox de al lado)
@@ -2345,6 +2528,7 @@ int main(int argc, char** argv) {
     hub.scan(true);
     ctl.tick = [&hub]() { hub.scan(false); };
     const bool midiLog = std::getenv("GB_MIDILOG") != nullptr;   // pruebas: muestra lo que se devuelve a las controladoras
+    ctl.lpdOut = [&hub](const std::vector<unsigned char>& m) { hub.sendLpd(m); }; ctl.lpdNew = [&hub]() { return hub.takeLpdNew(); };
     ctl.midiOut = [&hub, &ctl, midiLog](const std::vector<unsigned char>& m) { hub.send(m, ctl.ss["midi.skip"]); if (midiLog && m.size() == 3) std::printf("MIDI> %02X %d %d\n", m[0], m[1], m[2]); };
 
     // --- Audio
@@ -2371,14 +2555,16 @@ int main(int argc, char** argv) {
         const std::string wantOut = !autoOut.empty() ? autoOut : forceDefault ? std::string() : cfgS("audio", "--audio"), wantIn = cfgS("entrada", "--entrada") == "none" ? std::string("none") : !autoOut.empty() ? autoOut : cfgS("entrada", "--entrada");
         int od = findDevice(*audio, wantOut, false);
 #ifdef __linux__
-        // de reserva, en la Pi: su salida de auriculares, directa y en estéreo (el «default» de ALSA pasa por conversiones y suena peor)
-        if (wantOut.empty()) { od = findDevice(*audio, "Headphones", false); if (od < 0) od = findDevice(*audio, "bcm2835", false); if (od < 0) od = -1; }
+        // de reserva, en la Pi: su salida de auriculares, directa y en estéreo (el «default» de ALSA pasa por conversiones y suena peor).
+        // La Pi 5 no tiene jack: entonces el HDMI (solo abre si hay una pantalla o un extractor de audio HDMI conectado)
+        if (wantOut.empty()) { od = findDevice(*audio, "Headphones", false); if (od < 0) od = findDevice(*audio, "bcm2835", false); if (od < 0) od = findDevice(*audio, "hdmi", false); if (od < 0) od = -1; }
 #endif
         if (od == -2) { if (!quiet) std::printf("No encuentro la salida de audio '%s' (mira --list).\n", wantOut.c_str()); return false; }
         out.deviceId = od >= 0 ? static_cast<unsigned>(od) : audio->getDefaultOutputDevice();
         const int firstOut = std::max(1, argInt(argc, argv, "--out", 1));
         out.firstChannel = static_cast<unsigned>(firstOut - 1);
         const auto info = audio->getDeviceInfo(out.deviceId); outName = info.name;
+        au->dither16 = (info.nativeFormats & (RTAUDIO_SINT24 | RTAUDIO_SINT32 | RTAUDIO_FLOAT32 | RTAUDIO_FLOAT64)) == 0;   // solo 16 bits (o menos): dither
         if (info.outputChannels < out.firstChannel + 2) { if (!quiet) std::printf("La interfaz '%s' tiene %u salidas; no se puede usar --out %d.\n", info.name.c_str(), info.outputChannels, firstOut); return false; }
         out.nChannels = std::min(16u, (info.outputChannels - out.firstChannel) & ~1u);   // todas las salidas (por pares), hasta 16
         // el jack de la Raspberry dice tener 8 canales, pero es estéreo
@@ -2416,7 +2602,7 @@ int main(int argc, char** argv) {
     std::atomic<bool> restart{false};
     std::atomic<bool> fakeStop{false};
     const auto startFake = [&]() { fakeStop = false; fake = std::thread([&]() { std::vector<float> b(512); while (!gQuit && !fakeStop) { au->process(b.data(), 2, nullptr, 0, 256); std::this_thread::sleep_for(std::chrono::microseconds(256 * 1000000 / rate)); } }); };
-    ctl.sysStatus = [&]() { return std::to_string(cpuTempC()) + " " + piThrottled() + " " + std::to_string(au->xruns.load() + au->late.load()) + " " + jnum(au->cpu.load()) + " " + jnum(au->cpuPeak.exchange(0.0f)) + " " + (audioNote.empty() ? std::string("-") : audioNote); };   // 6.º: interfaz de reserva (default/auto/none)
+    ctl.sysStatus = [&]() { return std::to_string(cpuTempC()) + " " + piThrottled() + " " + std::to_string(au->xruns.load()) + " " + jnum(au->cpu.load()) + " " + jnum(au->cpuPeak.exchange(0.0f)) + " " + (audioNote.empty() ? std::string("-") : audioNote) + " " + std::to_string(au->late.load()); };   // 3.º: cortes de verdad (los avisa la interfaz); 6.º: interfaz de reserva (default/auto/none); 7.º: bloques lentos (con colchón, no siempre se oyen)
     ctl.sysInfo = [&]() {
         std::string o = "{\"outs\":["; std::string in = "\"ins\":[", mid = "\"midi\":[", off = "\"midioff\":["; bool fo = true, fi = true, fm = true;
         try { RtAudio a; for (unsigned id : a.getDeviceIds()) { const auto inf = a.getDeviceInfo(id); if (inf.outputChannels) { o += (fo ? "" : ",") + jstr(utf8Clean(inf.name).c_str()); fo = false; } if (inf.inputChannels) { in += (fi ? "" : ",") + jstr(utf8Clean(inf.name).c_str()); fi = false; } } } catch (...) {}
@@ -2500,6 +2686,8 @@ int main(int argc, char** argv) {
                 ntohl(reinterpret_cast<sockaddr_in*>(i->ifa_addr)->sin_addr.s_addr) == 0x0A2A0001u) nowAp = true; freeifaddrs(ifa); }
             if (nowAp != ap) { ap = nowAp; due = 2; }   // comprobación cada 2 s: 2 vueltas = 4 s
             if (due > 0 && --due == 0) gReopen = true;
+#else
+            (void)ap; (void)due;
 #endif
         };
         ctl.onReopen = [&]() { if (ctl.watchAudio && !openAudio(true)) std::printf("No pude reabrir el audio; lo intenta el vigilante.\n"); };

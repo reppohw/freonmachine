@@ -24,6 +24,8 @@ struct MoogParams {
     float mod = 0.0f;                        // cantidad de modulación del osc 3
     float vel = 0.3f;                        // velocidad → filtro y volumen
     float volume = 0.8f;
+    float vintage = 0.0f;                    // al estilo del Prophet-5 rev4: deriva lenta y diferencias entre notas (0 = estable)
+    float feedback = 0.0f;                   // la salida vuelve al mezclador (el truco del Minimoog para engordar el grave)
     bool glideOn = true, o3lfo = false, modFilt = false, modPitch = false, retrig = false;
 };
 
@@ -80,7 +82,12 @@ public:
         // Como en el Minimoog: con glide, el tono se desliza desde la última nota tocada
         if (!p.glideOn || !played_) semi_ = target_;
         played_ = true;
-        if (!legato || p.retrig) { fenv_.gateOn(); aenv_.gateOn(); }
+        if (!legato || p.retrig) {
+            fenv_.gateOn(); aenv_.gateOn();
+            // Vintage: cada nota trae su pequeña diferencia (osc 2 y 3 ±5 cents, corte ±6 %, envolventes ±10 %), fija hasta la siguiente
+            const float v = p.vintage;
+            nT2_ = 1.0f + rnd2() * v * 0.0029f; nT3_ = 1.0f + rnd2() * v * 0.0029f; nCut_ = 1.0f + rnd2() * v * 0.06f; nEnv_ = 1.0f + rnd2() * v * 0.10f;
+        }
     }
     void noteOff(int note) {
         remove(note);
@@ -97,25 +104,30 @@ public:
         const float kt = p.kbd == 0 ? 0.0f : p.kbd == 1 ? 0.33f : p.kbd == 2 ? 0.67f : 1.0f;
         const float lfoF = 0.2f * std::exp2((p.semi3 + 24.0f) / 6.0f);   // osc 3 como LFO: de 0,2 a ~50 Hz
         const float vs = velGain(vel_, p.vel);   // la velocidad solo cambia entre notas
+        // deriva lenta de cada oscilador (una vez por bloque): paseo aleatorio que cambia de rumbo cada 2–5 s.
+        // Sin Vintage, ±0,5 cents (casi quieto); con Vintage a tope, ±8 cents, como un VCO que respira
+        walkT_ -= n; if (walkT_ <= 0) { walkT_ = static_cast<int>(sr_ * (2.0f + 3.0f * (0.5f + 0.5f * rnd2()))); for (float& t : walkTo_) t = rnd2(); }
+        for (int k = 0; k < 3; ++k) drift_[k] += (walkTo_[k] - drift_[k]) * std::min(1.0f, n / (1.5f * sr_));
+        const float dd = 0.0003f + p.vintage * 0.0046f, d1 = 1.0f + drift_[0] * dd, d2 = (1.0f + drift_[1] * dd) * nT2_, d3 = (1.0f + drift_[2] * dd) * nT3_;
+        const float fbk = p.feedback * 1.2f, eA = p.fA * nEnv_, eD = p.fD * nEnv_, eR = p.fR * nEnv_, aA = p.A * nEnv_, aD = p.D * nEnv_, aR = p.R * nEnv_;
         for (int i = 0; i < n; ++i) {
             semi_ += (target_ - semi_) * gl;
-            for (float& d : drift_) d += (noise_.next() * 0.6f - d) * driftC_;
             // modulación del osc 3 (va un ciclo por detrás; suficiente para modular)
             const float mod = p.mod * o3last_;
             const float pm = p.modPitch ? std::exp2(mod * 2.0f / 12.0f) : 1.0f;
             if (semi_ != semiK_) { semiK_ = semi_; hzK_ = mtof(semi_); }   // potencias: solo si cambia lo que entra (es lo más caro por muestra)
             const float f = hzK_ * octm * pm;
-            const float dt1 = f * (1.0f + drift_[0] * 0.0012f) / srOs_;
-            const float dt2 = f * m2 * (1.0f + drift_[1] * 0.0012f) / srOs_;
-            const float dt3 = (p.o3lfo ? lfoF : f * m3 * (1.0f + drift_[2] * 0.0012f)) / srOs_;
+            const float dt1 = f * d1 / srOs_;
+            const float dt2 = f * m2 * d2 / srOs_;
+            const float dt3 = (p.o3lfo ? lfoF : f * m3 * d3) / srOs_;
 
-            const float fe = fenv_.process(p.fA, p.fD, p.fS, p.fR);
-            const float ae = aenv_.process(p.A, p.D, p.S, p.R);
+            const float fe = fenv_.process(eA, eD, p.fS, eR);
+            const float ae = aenv_.process(aA, aD, p.S, aR);
             const float cut = sCut_.process(p.cutoff), emph = sEmph_.process(p.emph), drv = sDrv_.process(p.drive), vol = sVol_.process(p.volume);
             if (f != fK_ || kt != ktK_) { fK_ = f; ktK_ = kt; trackK_ = std::pow(f / 261.6f, kt); }
             const float cx = p.contour * 5.0f * fe * (0.6f + 0.4f * vs);
             if (cx != cxK_) { cxK_ = cx; cgK_ = std::exp2(cx); }
-            float fc = cut * trackK_ * cgK_;
+            float fc = cut * trackK_ * cgK_ * nCut_;
             if (p.modFilt) fc *= std::exp2(mod * 3.0f);
             // Emphasis: 0..1 → resonancia del ladder; pasado ~90 % autooscila, como el Minimoog
             const float k = emph * 1.12f, dg = 1.0f + drv * 5.0f, dcomp = 1.0f / std::sqrt(dg);
@@ -130,10 +142,11 @@ public:
                 o3last_ = o3;
                 float m = p.lvl1 * wave(p.wave1, ph_[0], dt1) + p.lvl2 * wave(p.wave2, ph_[1], dt2) + (p.o3lfo ? 0.0f : p.lvl3 * o3);
                 if (p.noise > 0.001f) m += p.noise * noise_.next();
+                m += fbk * fbLast_;   // realimentación: la salida del filtro vuelve a entrar al mezclador y lo satura (más cuerpo y grave)
                 m = softClip(m * 0.45f * dg) * dcomp * 1.6f;
                 // el ladder pierde graves y volumen al subir la resonancia (aunque el filtro esté abierto): se compensa el 70 %,
                 // normalizado a Emphasis 0,45 (el valor de los presets), así que ahí suena igual que antes y ya no se hunde al subirla
-                o = lad_.process(m) * 2.2f * (1.0f + 0.7f * lad_.resQ) * (1.0f / 2.41f);
+                o = lad_.process(m) * 2.2f * (1.0f + 0.7f * lad_.resQ) * (1.0f / 2.41f); fbLast_ = o;
             }
             float y = dec_.process(os[0], os[1]);
             y *= ae * vol * vol * 0.9f * vs;
@@ -152,6 +165,7 @@ private:
             default: return blepPulse(p, dt, 0.12f);
         }
     }
+    float rnd2() { seed_ = seed_ * 1664525u + 1013904223u; return static_cast<float>(seed_ >> 8) * (2.0f / 16777216.0f) - 1.0f; }   // −1..1
     void push(int note) { remove(note); if (held_ < 16) stack_[held_++] = note; }
     void remove(int note) { int j = 0; for (int i = 0; i < held_; ++i) if (stack_[i] != note) stack_[j++] = stack_[i]; held_ = j; }
 
@@ -160,6 +174,7 @@ private:
     float semi_ = 45.0f, target_ = 45.0f, vel_ = 0.8f;
     float semiK_ = -1e9f, hzK_ = 0, fK_ = -1, ktK_ = -1, trackK_ = 1, cxK_ = -1e9f, cgK_ = 1, lfcK_ = -1, lkK_ = -1;
     bool played_ = false;
+    float walkTo_[3] = {}, nT2_ = 1, nT3_ = 1, nCut_ = 1, nEnv_ = 1, fbLast_ = 0; int walkT_ = 0; uint32_t seed_ = 4321;
     float hpX_ = 0.0f, hpY_ = 0.0f;
     int stack_[16] = {}, held_ = 0;
     HuovLadder lad_; Decim2 dec_; Env fenv_, aenv_; Noise noise_;

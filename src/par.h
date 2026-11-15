@@ -8,6 +8,7 @@
 //  - En Linux cada ayudante va fijo a su núcleo y con prioridad de tiempo real. Si no la consigue, no entra
 //    en la lista: mejor un núcleo menos que uno al que el sistema pueda quitar la CPU a mitad de una tarea.
 #pragma once
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cstdint>
@@ -52,6 +53,11 @@ inline void cpuWake() {
 #endif
 }
 // Fija el hilo que llama a un núcleo (solo en Linux; en el Mac no hace nada)
+// Núcleos: el audio va en el último y los ayudantes hacia abajo; el 0, donde caen las interrupciones del USB, la tarjeta y
+// la wifi (unas 1000 por segundo en la Pi 5, medido), queda para el último ayudante o libre si se piden menos núcleos
+inline int coreCount() { const unsigned n = std::thread::hardware_concurrency(); return n ? static_cast<int>(n) : 4; }
+inline int audioCore() { return coreCount() - 1; }
+inline int helperCore(int h) { return std::max(0, coreCount() - 2 - h); }
 inline bool pinToCore(int core) {
 #if defined(__linux__)
     cpu_set_t set; CPU_ZERO(&set); CPU_SET(core, &set);
@@ -139,7 +145,7 @@ private:
 #if defined(__linux__)
         if (rtPrio > 0) {
             sched_param sp{}; sp.sched_priority = rtPrio;
-            if (pthread_setschedparam(pthread_self(), SCHED_FIFO, &sp) != 0 || !pinToCore(h + 1)) { st = -1; return; }
+            if (pthread_setschedparam(pthread_self(), SCHED_FIFO, &sp) != 0 || !pinToCore(helperCore(h))) { st = -1; return; }
         }
 #else
         (void)h; (void)rtPrio;

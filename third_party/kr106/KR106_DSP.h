@@ -229,7 +229,9 @@ public:
   // voices a slight pitch spread that sounds richer than a perfectly-tuned
   // stack. In poly mode the same drift would just sound out of tune across
   // notes, so it's gated to unison only (mPortaMode == 0).
-  float EffectiveDrift() const { return (mPortaMode == 0) ? mDriftAmount : 0.f; }
+  // Freon Machine: in poly mode, the Vintage knob turns on a drift of its own (mPolyDrift, 0 = original behaviour)
+  float EffectiveDrift() const { return (mPortaMode == 0) ? mDriftAmount : mPolyDrift; }
+  float mPolyDrift = 0.f;
 
   // Set the global drift amount and apply it to all voices (rescaling
   // their existing static-offset units, no reroll).

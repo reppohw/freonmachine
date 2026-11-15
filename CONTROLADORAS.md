@@ -159,13 +159,17 @@ Escribirle la configuración por MIDI desde la Pi no funcionó: lo dejó colgado
 
 ## Akai LPD8 mk2 (sampler, breaks, granular y efectos del máster)
 
-Programado desde Freon Machine (copia del original en `controladoras/lpd8-original.syx.txt`, la de Freon en `controladoras/lpd8-freon.syx.txt`). Cada programa manda en su canal y Freon lo traduce (como el MC-24); los knobs van en modo absoluto. Pads: notas 36-43, sensibles a la fuerza, sin enclavar. Knobs: CC 70-77. Freon no le manda nada de vuelta.
+Programado desde Freon Machine (copia del original en `controladoras/lpd8-original.syx.txt`, la de Freon en `controladoras/lpd8-freon.syx.txt`). Un programa por módulo, cada uno en su canal; Freon lo traduce. **Para cambiar de programa: mantener PROGRAM y tocar el pad 1-4** (los botones NOTE, PROG CHNG y CC no cambian los knobs: solo lo que mandan los pads).
 
-| Programa (color) | Canal | Pads 1-8 | Knobs 1-8 |
+- **Knobs:** CC 70-77, absolutos.
+- **Pads, tres bancos** según el botón encendido: **NOTE** = notas 36-43 (la función principal), **PROG CHNG** = cambios de programa 0-7, **CC** = CC 12-19. Momentáneos en el aparato; lo que conmuta lo decide Freon.
+- **Luces:** las pone Freon según el estado real, con el SysEx de colores del LPD8 mk2 (`F0 47 7F 4C 06 00 30` + 8 × R, G, B en dos bytes de 7 bits + `F7`), que funciona con el firmware de fábrica (comprobado el 15-11-2026). En reposo el aparato tiene los pads apagados; al pulsar, el color del programa. Tras cambiar de programa, las luces se ponen al tocar el primer pad o knob (el LPD8 no avisa del cambio).
+
+| Programa (color al pulsar) | Canal | Pads | Knobs 1-8 |
 |---|---|---|---|
-| 1 Sampler (naranja) | 11 | disparan los samples 1-8 y eligen el que editan los knobs | afinación, inicio, final, ataque, release, filtro, resonancia, nivel |
-| 2 Breaks (verde) | 12 | efectos mientras se pulsan: Repeat, Repeat 1/32, Reverse, Half time, Random, Octave down, Chop, Backwards | **qué break** (los de fábrica y luego los de la carpeta breaks/), afinación, longitud, aleatorio, stutter, filtro, resonancia, **nivel** |
-| 3 Granular (azul) | 13 | 1 enciende/apaga, 2 congela, 3-8 notas (do, re, mi♭, fa, sol, do') en el modo tocado | posición, tamaño, densidad, afinación, dispersión, estéreo, feedback, nivel |
-| 4 Máster (amarillo) | 14 | eligen y activan las 8 combinaciones (toque = fija, otro toque en la misma = la quita, mantener = mientras se pulsa) | filtro DJ, repeat, gater, space, throw, pitch de la voz, formant de la voz, **crossfader** de las combinaciones (seco → combinación) |
+| 1 Sampler (naranja) | 11 | NOTE: disparan los samples 1-8 y eligen cuál editan los knobs (luz en el elegido) | del pad elegido: Tune, LPF (0 = abierto), Reso, Drive, Lo-fi (16 → 2 bits), envío A (reverb) y B (delay) del canal Sampler, Volume |
+| 2 Breaks (verde) | 12 | NOTE: efectos mientras se mantienen (luz mientras actúan): Repeat (tamaño del knob 5), Reverse, Half speed, Tape stop, Gate, Random, Freeze, Dub throw (el break al delay, los ecos siguen al soltar). Todo entra en la siguiente semicorchea · CC: elegir break 1-8 · PROG CHNG pad 1: **reset** de los efectos y knobs del break | qué break (tus WAV de `breaks/`, como mucho 8; si no hay, los de fábrica), Tune, LPF, Reso, tamaño del repeat, Random, Stutter, Level |
+| 3 Granular (azul) | 13 | 1 On, 2 Freeze, 3 Sync, 4 modo notas (conmutan; luz si están activos) · 5-8 notas: do, mi♭, sol, do' | posición, tamaño, densidad (con Sync: hacia atrás, tamaño y cada cuánto nace un grano, por pasos rítmicos), afinación, dispersión, estéreo, feedback, nivel (hasta 100 %) |
+| 4 Máster (amarillo) | 14 | las 8 combinaciones (toque = fija, otro toque = la quita, mantener = mientras se pulsa); luz solo en la activa | LPF, HPF, Repeat, tamaño del repeat, Comb, Space, Riser, **crossfader** de las combinaciones (seco → combinación) |
 
-Para cambiar de programa: mantener PROG SELECT y tocar el pad 1-4.
+La voz ya no está en el LPD8.
