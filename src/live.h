@@ -113,9 +113,8 @@ inline const PSpec kBrkSpec[BK_COUNT] = {
     {"Filter", -1, 1, 0.01f, 0, 'd', false, nullptr, "Color"}, {"Resonance", 0, 1, 0.01f, 0.2f, 'p', false, nullptr, "Color"}, {"Drive", 0, 1, 0.01f, 0, 'p', false, nullptr, "Color"},
     {"Bits", 2, 16, 0, 16, 'f', false, "bits", "Color"}, {"Level", 0, 1.5f, 0.01f, 0.9f, 'p', false, nullptr, "Color"},
     {"Repeat size", 0, 5, 1, 1, 'n', false, "1/32|1/16|1/8|1/4|1/2|1 bar", "Repeat"},
-    // qué parte del archivo se repite: como CHOPPAH con estos mismos breaks, los 2 primeros compases (en los 3.º y 4.º de las
-    // grabaciones suele haber variaciones y el tempo del batería más suelto); «Whole» = el archivo entero
-    {"Loop", 0, 2, 1, 2, 'n', false, "Whole|First bar|First 2 bars", "Break"}};
+    // qué parte del archivo se repite: el archivo entero (con warp) o solo el primer compás o los dos primeros
+    {"Loop", 0, 2, 1, 0, 'n', false, "Whole|First bar|First 2 bars", "Break"}};
 // efectos mientras se mantienen (pads 1-8 del LPD8, programa Breaks). Ideas de CHOPPAH (firmware de troceo de breaks):
 // todo entra en la siguiente semicorchea. Dub throw lo hace el control (manda el break al envío B, el delay, y los ecos siguen)
 inline const char* kBrkHolds[8] = {"Repeat", "Reverse", "Half speed", "Tape stop", "Gate", "Random", "Freeze", "Dub throw"};
@@ -216,26 +215,54 @@ private:
 };
 
 // ------------------------------------------------------------------ breaks: un loop cortado en semicorcheas que sigue el tempo
-// Cortes de un break ajustados a sus golpes: un baterista de verdad no toca a tempo perfecto (en el Amen los golpes van
-// de +17 ms a −15 ms de la rejilla según el compás, medido), así que la rejilla igual se desincroniza al final. Cada corte
-// se lleva al golpe claro que tenga muy cerca (como mucho un 25 % de semicorchea, para no robarle el golpe al corte vecino);
-// sin golpe claro, se queda en la rejilla
+// Warp de un break: un batería de verdad no toca a tempo fijo (en el Amen las negras van de +17 ms a −49 ms de la rejilla
+// recta a lo largo de los 4 compases: se va adelantando). Se sigue el pulso negra a negra por programación dinámica (Ellis,
+// 2007): el camino de negras que mejor cae en bombo y caja sin saltos bruscos de tempo. Las semicorcheas se reparten dentro
+// de cada negra y cada una suena a la velocidad justa para llenar su paso (repitch de ±1-3 %): el desfase no se acumula
 struct BreakCuts { const Sample* s = nullptr; int n = 0; std::vector<double> pos; };
 inline BreakCuts* makeCuts(const Sample& s, int n) {
-    auto* c = new BreakCuts; c->s = &s; c->n = n; const size_t N = s.size(); const int H = 128;
-    const double sl = static_cast<double>(N) / n; c->pos.resize(static_cast<size_t>(n) + 1);
-    std::vector<float> E; E.reserve(N / H + 1);
-    for (size_t f = 1; f + H < N; f += H) { double e = 0; for (size_t i = f; i < f + H; ++i) { const float d = (s.L[i] + s.R[i]) - (s.L[i - 1] + s.R[i - 1]); e += d * d; } E.push_back(static_cast<float>(std::log10(e + 1e-9))); }
-    std::vector<float> O(E.size(), 0.0f); float mx = 0;
-    for (size_t i = 1; i < E.size(); ++i) { O[i] = std::max(0.0f, E[i] - E[i - 1]); mx = std::max(mx, O[i]); }
-    for (int k = 0; k <= n; ++k) {
-        const double g = k * sl; double best = g; float bo = 0.5f * mx;
-        if (k > 0 && k < n) {
-            const long lo = static_cast<long>((g - 0.25 * sl) / H), hi = static_cast<long>((g + 0.25 * sl) / H);
-            for (long f = std::max(1L, lo); f <= hi && f < static_cast<long>(O.size()); ++f) if (O[static_cast<size_t>(f)] > bo) { bo = O[static_cast<size_t>(f)]; best = static_cast<double>((f - 1) * H + 1); }
-        }
-        c->pos[static_cast<size_t>(k)] = std::clamp(best, k ? c->pos[static_cast<size_t>(k - 1)] + 1.0 : 0.0, static_cast<double>(N - 1));
+    auto* c = new BreakCuts; c->s = &s; c->n = n; const size_t N = s.size(); c->pos.resize(static_cast<size_t>(n) + 1);
+    for (int k = 0; k <= n; ++k) c->pos[static_cast<size_t>(k)] = k * static_cast<double>(N) / n;   // por si no se puede seguir: rejilla recta
+    const int Q = n / 4, H = 256; if (Q < 2 || N < static_cast<size_t>(H) * 64) return c;
+    // envolventes de golpe por tramas: graves (bombo), medios (caja) y agudos
+    std::vector<float> lo, mi, hf; float l1 = 0, l2 = 0, prev = 0; double el = 0, em = 0, eh = 0; int cnt = 0;
+    const float a1 = 1.0f - std::exp(-2.0f * kPi * 150.0f / s.sr), a2 = 1.0f - std::exp(-2.0f * kPi * 2500.0f / s.sr);
+    for (size_t i = 0; i < N; ++i) {
+        const float x = 0.5f * (s.L[i] + s.R[i]); l1 += (x - l1) * a1; l2 += (x - l2) * a2; const float m = l2 - l1, h = x - prev; prev = x;
+        el += l1 * l1; em += m * m; eh += h * h;
+        if (++cnt == H) { lo.push_back(std::log10(static_cast<float>(el) + 1e-9f)); mi.push_back(std::log10(static_cast<float>(em) + 1e-9f)); hf.push_back(std::log10(static_cast<float>(eh) + 1e-9f)); el = em = eh = 0; cnt = 0; }
     }
+    auto fluxNorm = [](std::vector<float>& e) { for (size_t i = e.size(); i-- > 1;) e[i] = std::max(0.0f, e[i] - e[i - 1]); if (!e.empty()) e[0] = 0;
+        double m = 0, q = 0; for (float x : e) { m += x; q += static_cast<double>(x) * x; } m /= e.size(); const double sd = std::sqrt(std::max(1e-12, q / e.size() - m * m)); for (float& x : e) x = static_cast<float>(x / sd); };
+    fluxNorm(lo); fluxNorm(mi); fluxNorm(hf);
+    const int F = static_cast<int>(lo.size()); std::vector<float> B(static_cast<size_t>(F));
+    for (int i = 0; i < F; ++i) { const auto at = [&](int j) { return j < 0 || j >= F ? 0.0f : lo[static_cast<size_t>(j)] + mi[static_cast<size_t>(j)] + 0.3f * hf[static_cast<size_t>(j)]; }; B[static_cast<size_t>(i)] = std::max({at(i - 1), at(i), at(i + 1)}); }
+    const double tau = static_cast<double>(F) / Q; const int W = static_cast<int>(0.3 * tau); const double alpha = 400;
+    std::vector<std::vector<int>> pos(static_cast<size_t>(Q) + 1), from(static_cast<size_t>(Q) + 1); std::vector<std::vector<double>> sc(static_cast<size_t>(Q) + 1);
+    for (int q = 0; q <= Q; ++q) {
+        const int ctr = static_cast<int>(q * tau), a = q == 0 ? 0 : std::max(1, ctr - W);
+        const int z = q == 0 ? static_cast<int>(0.1 * tau) : q == Q ? F - 1 : std::min(F - 1, ctr + W);
+        for (int t = a; t <= z; ++t) {
+            double best = q ? -1e18 : 0; int bi = -1;
+            if (q) for (size_t j = 0; j < pos[static_cast<size_t>(q) - 1].size(); ++j) {
+                const int tp = pos[static_cast<size_t>(q) - 1][j]; if (tp >= t) continue;
+                const double r = std::log((t - tp) / tau), v = sc[static_cast<size_t>(q) - 1][j] - alpha * r * r; if (v > best) { best = v; bi = static_cast<int>(j); }
+            }
+            if (q && bi < 0) continue;
+            pos[static_cast<size_t>(q)].push_back(t); sc[static_cast<size_t>(q)].push_back(best + (q == Q ? 0.0 : B[static_cast<size_t>(t)])); from[static_cast<size_t>(q)].push_back(bi);
+        }
+        if (pos[static_cast<size_t>(q)].empty()) return c;
+    }
+    std::vector<double> beat(static_cast<size_t>(Q) + 1); size_t j = 0; double bs = -1e18;
+    for (size_t k = 0; k < sc[static_cast<size_t>(Q)].size(); ++k) if (sc[static_cast<size_t>(Q)][k] > bs) { bs = sc[static_cast<size_t>(Q)][k]; j = k; }
+    for (int q = Q; q >= 0; --q) { beat[static_cast<size_t>(q)] = pos[static_cast<size_t>(q)][j] * static_cast<double>(H); j = static_cast<size_t>(std::max(0, from[static_cast<size_t>(q)][j])); }
+    // el seguidor marca cada pulso un poco tarde (la trama donde sube la energía): se lleva el primero al principio del archivo
+    // (los breaks empiezan en el golpe) y todos se mueven igual. El último (donde vuelve a empezar) sigue el tempo que llevaba el
+    // batería: si el archivo trae un resto de más al final (cortado por su duración), ese resto no se usa y nada se estira
+    const double bias = beat[0];
+    for (int q = 0; q <= Q; ++q) beat[static_cast<size_t>(q)] = std::clamp(beat[static_cast<size_t>(q)] - bias, 0.0, static_cast<double>(N));
+    for (int q = 1; q <= Q; ++q) if (beat[static_cast<size_t>(q)] <= beat[static_cast<size_t>(q) - 1] + 64) return c;   // algo raro: rejilla recta
+    for (int k = 0; k <= n; ++k) { const int q = std::min(Q - 1, k / 4); c->pos[static_cast<size_t>(k)] = beat[static_cast<size_t>(q)] + (k - 4 * q) / 4.0 * (beat[static_cast<size_t>(q) + 1] - beat[static_cast<size_t>(q)]); }
     return c;
 }
 
@@ -344,7 +371,8 @@ private:
         const double srcBpm = bars() * 4 * 60.0 / (N / s.sr);
         const BreakCuts* c = cuts.load(std::memory_order_acquire); const bool cut = c && c->s == &s && c->n == n;   // cortes en los golpes reales
         const double a = cut ? c->pos[static_cast<size_t>(idx)] : idx * sl, b = cut ? c->pos[static_cast<size_t>(idx) + 1] : (idx + 1) * sl;
-        const double inc = (bpm / srcBpm) * (s.sr / sr_) * rate * std::exp2(p[BK_TUNE] / 12.0);
+        // con warp, cada corte suena a la velocidad justa para llenar su semicorchea (su largo real entre dos pulsos)
+        const double inc = (cut ? (b - a) / spb : (bpm / srcBpm) * (s.sr / sr_)) * rate * std::exp2(p[BK_TUNE] / 12.0);
         V* v = nullptr; for (auto& x : v_) if (!x.on) { v = &x; break; } if (!v) v = &v_[0];
         v->on = true; v->delay = delay; v->age = 0; v->left = static_cast<long>(lenSteps * spb);
         v->inc = rev ? -inc : inc; v->pos = rev ? b - 1 : a;
