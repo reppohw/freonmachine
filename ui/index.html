@@ -114,6 +114,7 @@ select { max-width: 100%; }   /* opciones con texto largo (Knob mode): no ensanc
 .dgrid .lh { padding: 6px 2px 5px 14px; font-size: 11px; width: 100%; }
 .dgrid .lh::before { left: 5px; }
 .dgrid select { width: 100%; }
+.dgrid.d7 { grid-template-columns: 74px repeat(7, minmax(0, 1fr)); }
 .dgrid .sep { grid-column: 1 / -1; height: 1px; background: var(--line); margin: 2px 0; }
 
 /* --- directo --- */
@@ -171,7 +172,7 @@ select { max-width: 100%; }   /* opciones con texto largo (Knob mode): no ensanc
 h2 { margin: 0; font-family: var(--f-label); font-weight: 600; font-size: 13px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink); display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
 h2 span { font-size: 11px; letter-spacing: 0.08em; color: var(--dim); text-transform: none; font-family: var(--f-mono); font-weight: 400; }
 .notef input { width: 64px; }
-@media (max-width: 720px) { .presets { grid-template-columns: repeat(4, minmax(0, 1fr)); } .grp .knobs { flex-wrap: wrap; } .dgrid { grid-template-columns: 60px repeat(8, 70px); overflow-x: auto; } }
+@media (max-width: 720px) { .presets { grid-template-columns: repeat(4, minmax(0, 1fr)); } .grp .knobs { flex-wrap: wrap; } .dgrid { grid-template-columns: 60px repeat(8, 70px); overflow-x: auto; } .dgrid.d7 { grid-template-columns: 60px repeat(7, 70px); } }
 /* --- añadidos --- */
 .dgrid .lh.on { background: #4a1e15; border-color: var(--led); color: #fff; box-shadow: 0 0 10px var(--led-glow); }
 .dgrid .lh.on::before { background: var(--led); box-shadow: 0 0 6px var(--led-glow); }
@@ -467,7 +468,8 @@ const DR = { tune: ["Pitch", -12, 12, 0.01, "t", 0], decay: ["Decay", 0, 1, 0.01
 // Filter y Reso siempre contiguos (knobs 7 y 8), en todos los kits
 const DSLOTS = { pl: ["level", "tune", "decay", "tone", "snap", "sweep", "filt", "reso"], cy: ["level", "tune", "decay", "color", "shape", "sweep", "filt", "reso"], rc: ["level", "tune", "decay", "vel", "snap", "sweep", "filt", "reso"] };
 const FMLBL = { color: "FM", shape: "Ratio", contour: "FM decay", snap: "Noise" };
-const DROWS_FOR = (kit) => { const s = kit <= 1 ? DSLOTS.pl : kit === 2 ? DSLOTS.cy : DSLOTS.rc, x = kit <= 1 ? ["vel", "pan", "drive"] : kit === 2 ? ["contour", "snap", "vel", "pan", "drive"] : ["pan", "drive"]; return [...s, ...x].map(f => { const r = [f, ...DR[f]]; if (kit === 2 && FMLBL[f]) r[1] = FMLBL[f]; return r; }); };
+const DROWS_FOR = (kit) => { if (kit === 0) return ["level", "tune", "decay", "tone", "snap", "pan", "drive"].map(f => [f, ...DR[f]]);   // 808: sin Sweep, filtro ni Velocity
+  const s = kit <= 1 ? DSLOTS.pl : kit === 2 ? DSLOTS.cy : DSLOTS.rc, x = kit <= 1 ? ["vel", "pan", "drive"] : kit === 2 ? ["contour", "snap", "vel", "pan", "drive"] : ["pan", "drive"]; return [...s, ...x].map(f => { const r = [f, ...DR[f]]; if (kit === 2 && FMLBL[f]) r[1] = FMLBL[f]; return r; }); };
 const DORDER = [0, 1, 5, 6, 2, 3, 4, 7];
 // kit DRM (Vermona DRM1): cada sonido es un canal de la DRM con sus 7 mandos, con los nombres del panel
 const DRM_NAME = ["KICK", "SNARE", "CLAP", "MULTI", "DRUM 1", "HI HAT 1", "HI HAT 2", "DRUM 2"];
@@ -494,8 +496,10 @@ function buildInst() {
       const g = el("div", { class: "dgrid" });
       g.append(el("span", { class: "rl" }, "Sound"));
       p.lanes = [];
-      const drm = ST["d.kit"] === 5, lname = (l) => drm ? DRM_NAME[l] : SPEC.lanes[l];
-      DORDER.forEach(l => { const b = keyBtn(lname(l), "lh", () => { sendRaw(`kb 0 ${ST[`d.l${l}.note`]} 110`); flash(b, "on", 120); oled(0, lname(l), "test hit"); }); p.lanes[l] = b; g.append(b); });
+      const drm = ST["d.kit"] === 5, k808 = ST["d.kit"] === 0, lname = (l) => drm ? DRM_NAME[l] : k808 && l === 5 ? "Hi-hat" : SPEC.lanes[l];
+      // 808: un solo hi-hat (cerrado y abierto son el mismo sonido con dos notas; solo cambia la caída)
+      const ORD = k808 ? DORDER.filter(l => l !== 6) : DORDER; if (k808) g.classList.add("d7");
+      ORD.forEach(l => { const b = keyBtn(lname(l), "lh", () => { sendRaw(`kb 0 ${ST[`d.l${l}.note`]} 110`); flash(b, "on", 120); oled(0, lname(l), "test hit"); }); p.lanes[l] = b; g.append(b); });
       if (drm) {   // DRM: los 7 mandos de cada canal con su nombre del panel, VOLUME y PAN (nada más)
         for (let r = 0; r < 7; r++) {
           g.append(el("span", { class: "rl" }, String(r + 1)));
@@ -507,14 +511,19 @@ function buildInst() {
         });
       } else
       DROWS_FOR(ST["d.kit"]).forEach(([f, rl, mi, ma, st, fm, def]) => {
-        g.append(el("span", { class: "rl" }, rl));
-        DORDER.forEach(l => specKnob(g, `d.l${l}.${f}`, { l: rl, min: mi, max: ma, step: st, def, fmt: fm }, (a, b) => oled(0, `${SPEC.lanes[l]} · ${rl}`, b), "sm nolab"));
+        g.append(el("span", { class: "rl" }, k808 && f === "decay" ? "Decay" : rl));
+        ORD.forEach(l => specKnob(g, `d.l${l}.${f}`, { l: rl, min: mi, max: ma, step: st, def, fmt: fm }, (a, b) => oled(0, `${lname(l)} · ${k808 && l === 5 && f === "decay" ? "Closed decay" : rl}`, b), "sm nolab"));
+        if (k808 && f === "decay") {   // fila del abierto: solo en la columna del hi-hat (es el Decay del carril 6)
+          g.append(el("span", { class: "rl" }, "Open dec"));
+          ORD.forEach(l => l === 5 ? specKnob(g, "d.l6.decay", { l: "Open decay", min: 0, max: 1, step: 0.01, def: 0.5, fmt: "p" }, (a, b) => oled(0, "Hi-hat · Open decay", b), "sm nolab") : g.append(el("span", {})));
+        }
       });
       g.append(el("span", { class: "rl" }, "Reset"));
-      DORDER.forEach(l => g.append(confirmKey("Reset", "Sure?", () => { sendRaw(`drreset ${l}`); oled(0, SPEC.lanes[l], "reset"); }, "lh")));
+      ORD.forEach(l => g.append(confirmKey("Reset", "Sure?", () => { sendRaw(`drreset ${l}`); if (k808 && l === 5) sendRaw("drreset 6"); oled(0, lname(l), "reset"); }, "lh")));
       g.append(el("span", { class: "rl" }, "Channel"));
-      DORDER.forEach(l => g.append(selK(`d.l${l}.out`, [[0, "Kick"], [1, "Snare"], [2, "Rest"]], `Mixer channel for ${SPEC.lanes[l]}`)));
+      ORD.forEach(l => g.append(selK(`d.l${l}.out`, [[0, "Kick"], [1, "Snare"], [2, "Rest"]], `Mixer channel for ${SPEC.lanes[l]}`)));
       card.append(g, el("p", { class: "hint" }, "Same position, same job on every kit: Level, Pitch, Decay, timbre, attack, Sweep, Filter, Reso. 808 and 909: Tone = the TONE knob, or brightness on hats and clap; Snap = attack on kick, tom and rim, snappy on the snare, noise on the hats, number of hands on the clap; Sweep = pitch sweep on kick and tom, falling filter on hats, spacing between hands on the clap. FM kit: FM = amount of modulation, Ratio = modulator ratio, Sweep = pitch sweep (filter on hats), FM decay = how long the FM lasts, Noise = noise on top (from the middle upwards, except on the snare). On the FM clap: FM = tone, Ratio = hands, FM decay = spacing. Filter: left = low-pass, right = high-pass. Velocity: how much hit strength changes volume and brightness. Drive: soft saturation per sound (more harmonics, it cuts through small speakers). 909 with your own samples: put ch.wav, oh.wav and ride.wav in the samples/909 folder and the 909 plays them instead of its synthesized cymbals."));
+      if (k808) card.append(el("p", { class: "hint" }, `808: no Sweep, Filter or Velocity (every hit plays the same). One hi-hat: note ${ST["d.l5.note"]} plays it closed, note ${ST["d.l6.note"]} open; both use the same sound and only the decay changes (Decay = closed, Open dec = open). Snap below 30 % also softens the attack. Clap: Pitch moves its tone, Snap = how hard the hands hit against the room.`));
       if (drm) card.append(el("p", { class: "hint" }, "DRM (Vermona DRM1 MKIII emulation): each sound is a DRM channel with its own panel controls. Hi-hats have two notes, like the DRM: HI HAT 1 = its note closed, note + 2 open; HI HAT 2 = its note open, note + 2 closed. Velocity has no effect (the DRM's TRIG plays at 75 %)."));
     } else {
       const ei = ST[T + ".eng"], e = SPEC.engines[ei], ek = `${T}.${e.key}`;
@@ -934,7 +943,7 @@ function meters(parts) {
   const ai = parts.indexOf("act"), lv = parts.slice(0, ai).map(Number), rest = parts.slice(ai + 1);
   const bi = rest.indexOf("bpm"), di = rest.indexOf("dact"), si = rest.indexOf("sact");
   const act = rest.slice(0, di >= 0 ? di : bi).map(Number), dact = di >= 0 ? rest.slice(di + 1, si).map(Number) : [], sact = si >= 0 ? rest.slice(si + 1, bi).map(Number) : [];
-  dact.forEach((a, l) => { if (a && P[0] && P[0].lanes) flash(P[0].lanes[l], "on", 130); });
+  dact.forEach((a, l) => { if (a && P[0] && P[0].lanes) flash(P[0].lanes[l] || (l === 6 && P[0].lanes[5]), "on", 130); });
   sact.forEach((a, i) => { if (a && LV.pads) flash(LV.pads[i], "hit", 130); });
   const bpm = Number(rest[bi + 1]), clk = rest[bi + 3] === "1", gr = Number(rest[bi + 5]), ci = rest.indexOf("cpu"), cpu = ci >= 0 ? Number(rest[ci + 1]) : 0, bci = rest.indexOf("bcgr"), bcgr = bci >= 0 ? Number(rest[bci + 1]) : 0;
   if (gr < -6 && Date.now() > ALERT.hotUntil - 2500) { ALERT.hotUntil = Date.now() + 3000; drawAlerts(); }

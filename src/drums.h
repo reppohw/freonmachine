@@ -226,15 +226,20 @@ inline const float kCycContour[8] = {0.4f, 0.4f, 0.5f, 0.2f, 0.45f, 0.2f, 0.6f, 
 // Dos caminos del mismo ruido: las palmadas (3 a 6 golpes en diente de sierra, a unos 10 ms) y la «sala»,
 // una cola que entra con la última palmada. Tone = filtro, Snap = manos, Sweep = separación, Decay = cola.
 struct ClapVoice {
-    float sr = 48000, gain = 0, gap = 0.01f, eb = 0, et = 0, ta = 0, rise = 0, kB = 0, kT = 0, kA = 0, t = 0, nextB = 0; int bursts = 4, nb = 0; bool on = false;
+    float sr = 48000, gain = 0, gap = 0.01f, eb = 0, et = 0, ta = 0, rise = 0, kB = 0, kT = 0, kA = 0, t = 0, nextB = 0; int bursts = 4, nb = 0; bool on = false; float handG = 1, tailG = 1;
     BQ bp, bp2, hp; Noise nz, nz2;
-    void trigger(float g, float decay, float tone, float snap, float sweep, bool is909) {
+    // pitch: semitonos (mueve las bandas del ruido). En la 808 (k808 = true): Snap = fuerza de las manos frente a la cola
+    // (y de 2 a 5 palmadas) y Decay llega a una cola mucho más corta; la 909 sigue como estaba
+    void trigger(float g, float decay, float tone, float snap, float sweep, bool is909, float pitch = 0.0f, bool k808 = false) {
         on = true; t = 0; gain = g; nb = 0; nextB = 0; eb = 0; et = 0; ta = 1; rise = 0; nz2.s ^= 0x5bd1e995u;
-        bursts = 3 + static_cast<int>(snap * 2.99f);
+        bursts = k808 ? 2 + static_cast<int>(snap * 3.99f) : 3 + static_cast<int>(snap * 2.99f);
         gap = (is909 ? 0.0095f : 0.0115f) * (0.5f + sweep);
-        const float d2 = decay * decay, tail = is909 ? 0.03f + d2 * 0.45f : 0.05f + d2 * 0.7f, fc = (is909 ? 650.0f : 500.0f) * std::exp2(tone * 2.0f);
-        kB = std::exp(-1.0f / ((is909 ? 0.0028f : 0.0035f) * sr)); kT = std::exp(-1.0f / (tail * sr)); kA = 1.0f - std::exp(-1.0f / (0.001f * sr));
-        bp.set(2, fc, is909 ? 1.2f : 1.6f, sr); bp2.set(2, fc * (is909 ? 1.4f : 1.0f), is909 ? 0.9f : 1.0f, sr); hp.set(1, is909 ? 700.0f : 350.0f, 0.7f, sr);
+        const float d2 = decay * decay, tail = is909 ? 0.03f + d2 * 0.45f : k808 ? 0.008f + d2 * 0.74f : 0.05f + d2 * 0.7f;
+        const float fc = (is909 ? 650.0f : 500.0f) * std::exp2(tone * 2.0f) * semi(pitch);
+        handG = k808 ? 0.3f + 1.7f * snap * snap : 1.0f; tailG = k808 ? 1.25f - 0.5f * snap : 1.0f;
+        const float hd = k808 ? 0.0055f - snap * 0.0035f : is909 ? 0.0028f : 0.0035f;   // 808: más Snap = palmadas más secas
+        kB = std::exp(-1.0f / (hd * sr)); kT = std::exp(-1.0f / (tail * sr)); kA = 1.0f - std::exp(-1.0f / (0.001f * sr));
+        bp.set(2, fc, is909 ? 1.2f : 1.6f, sr); bp2.set(2, fc * (is909 ? 1.4f : 1.0f), is909 ? 0.9f : 1.0f, sr); hp.set(1, (is909 ? 700.0f : 350.0f) * semi(pitch), 0.7f, sr);
     }
     bool active() const { return on; }
     float process() {
@@ -244,7 +249,7 @@ struct ClapVoice {
         if (last) { rise += (1.0f - rise) * kA; et = ta * rise; ta *= kT; }
         eb *= kB; t += 1.0f / sr;
         if (last && ta < 1e-4f && eb < 1e-4f) on = false;
-        const float x = bp.process(nz.next()) * eb * 3.2f + bp2.process(nz2.next()) * et * 1.5f;
+        const float x = bp.process(nz.next()) * eb * 3.2f * handG + bp2.process(nz2.next()) * et * 1.5f * tailG;
         return softClip(hp.process(x) * gain * 2.0f) * 0.66f;
     }
 };
@@ -262,9 +267,10 @@ struct HatVoice {
         static const float F8[6] = {205.3f, 304.4f, 369.6f, 522.7f, 540.0f, 800.0f}, F9[6] = {200, 7530, 510, 8075, 730, 10500};
         for (int i = 0; i < 6; ++i) inc[i] = (k9 ? F9[i] : F8[i]) * tuneRatio / sr;
         nm = 0.02f + snap * snap * 0.8f;
-        fc = (k9 ? 9500.0f : 7100.0f) * fMul * std::exp2((tone - 0.5f) * 1.6f); bqQ = k9 ? 0.8f : 1.3f;
+        // 808: el Pitch mueve también las bandas (si no, las cuadradas cambian pero el filtro deja el mismo tono)
+        fc = (k9 ? 9500.0f : 7100.0f * tuneRatio) * fMul * std::exp2((tone - 0.5f) * 1.6f); bqQ = k9 ? 0.8f : 1.3f;
         sw = std::max(0.0f, sweep - 0.3f) * 1.4f; eS = 1; kS = std::exp(-1.0f / (0.05f * sr));
-        bp.set(2, fc, bqQ, sr); bp2.set(2, 3440.0f * tuneRatio, 2.0f, sr); hp.set(1, (k9 ? 6500.0f : 5500.0f) * fMul, 0.8f, sr);
+        bp.set(2, fc, bqQ, sr); bp2.set(2, 3440.0f * tuneRatio, 2.0f, sr); hp.set(1, (k9 ? 6500.0f : 5500.0f * std::sqrt(tuneRatio)) * fMul, 0.8f, sr);
         k = std::exp(-1.0f / (tau * sr)); kF = std::exp(-1.0f / (0.012f * sr));
     }
     void choke() { if (on) k = std::min(k, std::exp(-1.0f / (0.004f * sr))); }
@@ -472,8 +478,11 @@ public:
     }
     void hit(int l, int vel) {
         if (kit == KIT_DRM1) { hitDrm(l, vel, l == 6 ? 1 : 0); return; }
+        // 808: sin Velocity (suena siempre como un golpe de 110, el nivel medido) y un solo hi-hat: la nota del abierto toca
+        // el mismo sonido (carril 5, sus parámetros y su canal) con la caída del abierto (Decay del carril 6)
+        if (kit == KIT_P808) { vel = 110; if (l == 6) { hit808Hat(true); return; } if (l == 5) { hit808Hat(false); return; } }
         const DrumLane& L = lane[static_cast<size_t>(l)];
-        const float v01 = std::clamp(vel, 1, 127) / 127.0f, vs = std::clamp(L.vel, 0.0f, 1.0f);
+        const float v01 = std::clamp(vel, 1, 127) / 127.0f, vs = kit == KIT_P808 ? 0.8f : std::clamp(L.vel, 0.0f, 1.0f);
         const float g = (1.0f - vs + vs * std::pow(v01, 1.6f)) * L.level * kitTrim(kit, l);   // velocidad → volumen
         lastVel_[l] = v01;
         if (l == 5) { v_[6].choke(); pchoke_ = true; cy_[6].on = false; ht_[6].choke(); sv_[6].choke(sr_); }   // el HH cerrado corta el abierto
@@ -505,6 +514,13 @@ public:
         lastVel_[l] = v01;
         v_[static_cast<size_t>(l)].trigger(r, g);
     }
+    void hit808Hat(bool open) {
+        const DrumLane& L = lane[5]; const float v01 = 110.0f / 127.0f, vs = 0.8f;
+        const float g = (1.0f - vs + vs * std::pow(v01, 1.6f)) * L.level * kitTrim(kit, open ? 6 : 5);
+        const float d = lane[open ? 6 : 5].decay, d2 = d * d, d6 = d2 * d2 * d2, tau = open ? 0.03f + d2 * 0.5f + d6 * 2.5f : 0.005f + d2 * 0.07f + d6 * 0.45f;   // a la mitad, como antes; a tope, 3 s abierto y 0,5 s cerrado
+        lastVel_[5] = v01;
+        ht_[5].trigger(false, g, std::clamp((1.0f - vs) * 0.6f + vs * v01, 0.0f, 1.0f), semi(L.tune), tau, L.tone, L.snap, 0.5f, 1.0f);
+    }
     // escribe cada carril por separado (para mandarlos a los canales Bombo / Caja / Resto)
     void prepareFilters(float sr) { sr_ = sr; }
     void render(float* const* outs, int n) {
@@ -526,7 +542,7 @@ public:
             // filtro por sonido: paso bajo (a la izquierda) o paso alto (a la derecha), con resonancia;
             // con velocidad, el paso bajo se abre más al tocar fuerte
             const DrumLane& L = lane[static_cast<size_t>(l)];
-            if (std::fabs(L.filt) > 0.02f) {
+            if (kit != KIT_P808 && std::fabs(L.filt) > 0.02f) {   // la 808 no lleva filtro
                 const bool hp = L.filt > 0;
                 float fc = hp ? 12.0f * std::exp2(L.filt * 10.5f) : 20000.0f * std::exp2(L.filt * 9.5f);
                 if (!hp) fc *= std::exp2(L.vel * (lastVel_[l] - 0.7f) * 2.0f);
@@ -559,7 +575,7 @@ private:
     }
     void hitPlaits(int l, const DrumLane& L, float v01, float vs, float g) {
         const bool k9 = kit == KIT_P909;
-        if (l == 2) { cl_[l].trigger(g * (k9 ? 0.63f : 0.7f), L.decay, L.tone, L.snap, L.sweep, k9); return; }
+        if (l == 2) { cl_[l].trigger(g * (k9 ? 0.63f : 0.7f), L.decay, L.tone, L.snap, k9 ? L.sweep : 0.5f, k9, L.tune, !k9); return; }
         if (l == 5 || l == 6 || (l == 7 && k9)) {   // hats y ride con voz propia: Decay es tiempo real
             const float d2 = L.decay * L.decay, tau = l == 5 ? 0.005f + d2 * 0.07f : l == 6 ? 0.03f + d2 * 0.5f : 0.2f + d2 * 3.0f;
             if (k9) if (const DrumSmp* s = smp909[l].load(std::memory_order_acquire)) {   // tu muestra: Pitch y Decay como siempre (Decay alto = la muestra entera)
@@ -581,6 +597,8 @@ private:
             sc = std::pow(10.0f, -(t[i] + (t[i + 1] - t[i]) * (x - i)) / 20.0f);
         }
         pg_[l] = g * ps.gain * sc; pchoke6_ = l == 6 ? false : pchoke6_;
+        // 808: por debajo del 30 % el Snap sigue ablandando el golpe con una entrada de hasta 8 ms (antes se quedaba en el mínimo de Plaits)
+        { const float r = !k9 && l != 6 ? std::max(0.0f, 0.3f - L.snap) / 0.3f : 0.0f; pa_[l] = r > 0 ? 0.0f : 1.0f; paInc_[l] = r > 0 ? 1.0f / (r * 0.008f * sr_) : 0.0f; }
         plife_[l] = static_cast<int>(sr_ * (0.15f + 6.0f * L.decay * ps.decMul));
         if (l == 6) { pchoke_ = false; pcg_ = 1.0f; }
     }
@@ -595,9 +613,10 @@ private:
             // bombo 808: Tone es el click (cuánto impulso de ataque pasa). Medido: de 0,5 a 0,3 el click baja 9 dB y el cuerpo
             // 0,3 dB. Curva para que el knob a la mitad dé 0,3 (Jorge: tenía demasiado click) y a tope siga llegando a 1
             const float tn = l == 0 && kit != KIT_P909 ? std::pow(L.tone, 1.737f) : L.tone;
-            pv_[l].render(buf, k, sr_, hz, tn, std::clamp(L.decay * ps.decMul, 0.0f, 1.0f), L.snap, L.sweep);
+            pv_[l].render(buf, k, sr_, hz, tn, std::clamp(L.decay * ps.decMul, 0.0f, 1.0f), L.snap, kit == KIT_P909 ? L.sweep : 0.5f);   // 808 sin Sweep
             for (int i = 0; i < k; ++i) {
                 float x = buf[i] * pg_[l];
+                if (pa_[l] < 1.0f) { x *= pa_[l] * pa_[l]; pa_[l] = std::min(1.0f, pa_[l] + paInc_[l]); }
                 if (l == 6 && pchoke_) { pcg_ *= 0.995f; x *= pcg_; }
                 o[off + i] += x; peak = std::max(peak, std::fabs(x));
             }
@@ -616,7 +635,7 @@ private:
         cy_[l].trigger(M[l], F[l] * semi(L.tune), std::clamp(L.decay * DM[l], 0.0f, 1.0f), col, L.shape, L.sweep, L.contour, L.snap, g * G[l]);
     }
     std::array<DrumVoice, 8> v_; float sr_ = 48000, lastVel_[8] = {0.8f, 0.8f, 0.8f, 0.8f, 0.8f, 0.8f, 0.8f, 0.8f}, fs_[8][2] = {};
-    pd::Drum pv_[8]; float pg_[8] = {}; int plife_[8] = {}; bool pchoke_ = false, pchoke6_ = false; float pcg_ = 1.0f;
+    pd::Drum pv_[8]; float pg_[8] = {}, pa_[8] = {1, 1, 1, 1, 1, 1, 1, 1}, paInc_[8] = {}; int plife_[8] = {}; bool pchoke_ = false, pchoke6_ = false; float pcg_ = 1.0f;
     CycVoice cy_[8]; ClapVoice cl_[8]; CowbellVoice cb_[8]; HatVoice ht_[8]; SmpVoice sv_[8];
     drm1::Kick dKick_; drm1::Snare dSnare_; drm1::Clap dClap_; drm1::Multi dMulti_; drm1::Drum dDrum1_, dDrum2_; drm1::HiHat dHH1_, dHH2_;
     drm1::Channel* dch_[8] = {&dKick_, &dSnare_, &dClap_, &dMulti_, &dDrum1_, &dHH1_, &dHH2_, &dDrum2_};

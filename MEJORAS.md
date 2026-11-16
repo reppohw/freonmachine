@@ -1,5 +1,13 @@
 # Freon Machine · mejoras pendientes
 
+## Batería 808: notas de Jorge (15-11-2026), hechas el 16-11-2026 (falta que las escuche)
+- [x] Sin **Sweep**, sin **filtro** (Filter/Reso) y sin **Velocity**: cada golpe suena igual (como uno de 110, el nivel medido).
+- [x] **Clap:** Pitch mueve su tono; Decay llega a una cola mucho más corta; Snap = fuerza de las manos frente a la sala (y de 2 a 5 palmadas).
+- [x] **Hi-hats:** Pitch mueve también el filtro (ahora cambia el tono); Decay hasta unos 0,5 s cerrado y 3 s abierto (a la mitad, como antes).
+- [x] **Un solo hi-hat:** cerrado y abierto son el mismo sonido con sus 2 notas; solo cambia la caída (Decay = cerrado, «Open dec» = abierto).
+- [x] **Snap:** por debajo del 30 % sigue ablandando el golpe (entrada de hasta 8 ms) en bombo, caja, rim y tom.
+- [ ] Escucharlo con Jorge.
+
 ## Hecho el 5-11-2026 (tras la primera prueba de Jorge)
 - [x] Pickup: el knob ya no se suelta al girar rápido; cada controladora lleva su posición. Relativo: si la controladora manda absoluto, se ignora y avisa.
 - [x] Mutes de la batería quitados (web y CC 102–109). Orden de knobs igual en todos los kits: Level, Pitch, Decay, timbre, ataque, Sweep, forma, Velocity.
@@ -75,7 +83,9 @@
 - [ ] Reparto de las Launch Control 3 de la sección de instrumentos: ver CONTROLADORAS.md (propuesta pendiente de revisar con Jorge).
 
 ## Sintes
-- [ ] Preset 5 de fábrica del Slim Phatty (pendiente de que Jorge pase los valores o una grabación).
+- [x] Motor **Phatty** (Slim Phatty) con el preset 5 de fábrica, GRINDMYBASS, sacado de su SysEx; nivel igualado al Moog (16-11-2026).
+- [ ] Que Jorge compare GRINDMYBASS con su Slim Phatty.
+- [ ] Presets 2, 4, 6, 8 y 10 del Slim Phatty (capturarlos por SysEx desde su aparato).
 
 ## Ideas de Jorge para más adelante
 - [x] Compresor de bus en el máster (7-11-2026). Siguen: graves limpios y EQ de máster.

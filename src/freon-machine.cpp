@@ -95,12 +95,12 @@ constexpr float kChBaseDb[NCH] = {-8.5f, -7.5f, -16.5f, -6.3f, -3.0f, -3.0f, -3.
 // Moog +8,5, sobre su Volume de antes); el resto de motores, con su Volume de antes (0,8, o el ajustado a oído el 7-11-2026).
 // El Volume actúa al cuadrado: 40·log10(valor / 0,75)
 //                                         Juno    DX7     Moog    303     GB  Wavet.  Supers. Modal
-constexpr float kTrkEngDb[3][8] = {{5.03f, -3.88f, 1.12f, 1.12f, 0, 1.34f, 2.17f, 1.12f},     // pista 2
-                                   {1.12f, 1.12f, 1.12f, 1.79f, 0, 1.12f, 1.12f, 1.12f},       // pista 3
-                                   {1.12f, -3.03f, 4.62f, 1.12f, 0, 1.12f, 1.12f, 1.12f}};     // pista 4
+constexpr float kTrkEngDb[3][E_COUNT] = {{5.03f, -3.88f, 1.12f, 1.12f, 0, 1.34f, 2.17f, 1.12f, 1.12f},     // pista 2
+                                   {1.12f, 1.12f, 1.12f, 1.79f, 0, 1.12f, 1.12f, 1.12f, 1.12f},       // pista 3
+                                   {1.12f, -3.03f, 4.62f, 1.12f, 0, 1.12f, 1.12f, 1.12f, 1.12f}};     // pista 4
 inline float chBaseGain(int ch, int eng) {
     float db = ch >= 0 && ch < NCH ? kChBaseDb[ch] : 0.0f;
-    if (ch >= CH_T0 && ch < CH_T0 + 3 && eng >= 0 && eng < 8) db += kTrkEngDb[ch - CH_T0][eng];
+    if (ch >= CH_T0 && ch < CH_T0 + 3 && eng >= 0 && eng < E_COUNT) db += kTrkEngDb[ch - CH_T0][eng];
     return std::pow(10.0f, db / 20.0f);
 }
 constexpr int kNLane = 24;
@@ -114,7 +114,10 @@ inline const char* const* drumSlots(int uiKit, const char*& extra) {
     static const char* kRc[8] = {"level", "tune", "decay", "vel", "snap", "sweep", "filt", "reso"};
     // DRM: los 7 mandos del panel de cada canal (en su orden) y VOLUME; nada más, para valorarla como la de verdad
     static const char* kDr[8] = {"k0", "k1", "k2", "k3", "k4", "k5", "k6", "level"};
+    // 808 (notas de Jorge, 15-11-2026): sin Sweep, sin filtro y sin Velocity; los knobs 6-8 quedan libres (nullptr)
+    static const char* k808[8] = {"level", "tune", "decay", "tone", "snap", nullptr, nullptr, nullptr};
     if (uiKit == 5) { extra = nullptr; return kDr; }
+    if (uiKit == 0) { extra = nullptr; return k808; }
     if (uiKit <= 1) { extra = "vel"; return kPl; }
     if (uiKit == 2) { extra = "contour"; return kCy; }
     extra = nullptr; return kRc;
@@ -1620,8 +1623,11 @@ struct Control {
             const char* extra = nullptr; const char* const* slots = drumSlots(static_cast<int>(st["d.kit"]), extra);
             // columnas en el orden de la pantalla y de la controladora: bombo, caja, HH cerrado, HH abierto, clap, rim, tom, perc
             static const int kCol[8] = {0, 1, 5, 6, 2, 3, 4, 7};
+            const bool k808 = static_cast<int>(st["d.kit"]) == 0;
             for (int k = 0; k < 8; ++k) for (int c = 0; c < 8; ++c) {
-                const int l = kCol[c];
+                if (!slots[k]) continue;
+                // 808: un solo hi-hat. La columna del abierto mueve el mismo sonido; su Decay es la caída del abierto
+                const int l = k808 && kCol[c] == 6 && std::string(slots[k]) != "decay" ? 5 : kCol[c];
                 const std::string key = "d.l" + std::to_string(l) + "." + slots[k]; float lo, hi; rangeOf(key, lo, hi);
                 mapRange(ch, 16 + k * 8 + c, key, lo, hi);
             }
@@ -2117,7 +2123,7 @@ int oxiExport(const std::string& dir) {
     }
     // batería: mismas columnas que en la pantalla
     static const char* kSnd[8] = {"Kick", "Snare", "HH closed", "HH open", "Clap", "Rim", "Tom", "Perc"}; static const char kPre[9] = "KSCOLRTP";
-    struct KitDef { const char* title; const char* abbr; int uiKit; }; static const KitDef kKits[3] = {{"Freon Drums", "FDRM", 0}, {"Freon Drums FM", "FDFM", 2}, {"Freon Drums Chip", "FDCH", 3}};
+    struct KitDef { const char* title; const char* abbr; int uiKit; }; static const KitDef kKits[3] = {{"Freon Drums", "FDRM", 1}, {"Freon Drums FM", "FDFM", 2}, {"Freon Drums Chip", "FDCH", 3}};
     const auto lbl = [](const std::string& k, bool fm) -> std::pair<std::string, std::string> {
         static const std::map<std::string, std::pair<std::string, std::string>> A = {{"level", {"Level", "LVL"}}, {"tune", {"Pitch", "PIT"}}, {"decay", {"Decay", "DEC"}}, {"tone", {"Tone", "TON"}}, {"snap", {"Snap", "SNP"}}, {"sweep", {"Sweep", "SWP"}}, {"filt", {"Filter", "FLT"}}, {"reso", {"Reso", "RES"}}, {"vel", {"Velocity", "VEL"}}, {"color", {"FM", "FMA"}}, {"shape", {"Ratio", "RAT"}}, {"contour", {"FM decay", "FMD"}}, {"pan", {"Pan", "PAN"}}};
         if (fm && k == "snap") return {"Noise", "NOI"}; return A.at(k); };
@@ -2125,7 +2131,7 @@ int oxiExport(const std::string& dir) {
         std::vector<OxiP> ps; ps.push_back({"Kit", "KIT", 3, 0, 4, kit.uiKit, false}); const char* extra = nullptr; const char* const* sl = drumSlots(kit.uiKit, extra); const bool fm = kit.uiKit == 2;
         for (int c = 0; c < 8; ++c) {
             const auto add = [&](const std::string& k, int cc) { const auto l = lbl(k, fm); std::string a = std::string(1, kPre[c]) + l.second; const bool ctr = k == "tune" || k == "filt" || k == "pan"; const int d = k == "level" || k == "vel" ? 102 : k == "reso" ? 25 : 64; ps.push_back({oxiAscii(std::string(kSnd[c]) + " " + l.first), a, cc, 0, 127, d, ctr}); };
-            for (int k = 0; k < 8; ++k) add(sl[k], 16 + k * 8 + c);
+            for (int k = 0; k < 8; ++k) if (sl[k]) add(sl[k], 16 + k * 8 + c);
             add("pan", 80 + c); if (extra) add(extra, 88 + c); if (fm) { add("snap", 96 + c); add("vel", 112 + c); }
         }
         oxiWrite(dir, kit.title, kit.abbr, ps); ++files;

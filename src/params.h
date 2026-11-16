@@ -11,6 +11,7 @@
 #include "gameboy.h"
 #include "juno.h"
 #include "moog.h"
+#include "phatty.h"
 #include "voice303.h"
 #include "synths2.h"
 
@@ -23,7 +24,7 @@ struct Preset { const char* name; std::vector<std::pair<int, float>> v; };
 constexpr int kMaxP = 32, kBtn0 = 32;
 struct EngSpec { const char* key; const char* name; const char* desc; int np; PSpec p[kMaxP]; int nb; BSpec b[8]; };
 
-enum Eng { E_JUNO = 0, E_DX, E_MOOG, E_ACID, E_GB, E_WT, E_SAW, E_MODAL, E_COUNT };
+enum Eng { E_JUNO = 0, E_DX, E_MOOG, E_ACID, E_GB, E_WT, E_SAW, E_MODAL, E_PHATTY, E_COUNT };
 
 inline const EngSpec kEng[E_COUNT] = {
     {"juno", "Juno", "Juno-6: saw and pulse DCO with PWM and sub, IR3109 filter, continuous HPF, one ADSR, LFO with delay, BBD chorus. Engine: KR-106 (measured from real Junos). Vintage: more drift and more difference between the 6 voices", 23,
@@ -107,13 +108,28 @@ inline const EngSpec kEng[E_COUNT] = {
       {"Exciter level", 0, 1, 0.01f, 0.8f, 'p', false, nullptr, "Exciter"}, {"Noise", 0, 1, 0.01f, 0.1f, 'p', false, nullptr, "Exciter"},
       {"Release", 0, 1, 0.01f, 0.3f, 'p', false, nullptr, "Output"}, {"Spread", 0, 1, 0.01f, 0.5f, 'p', false, nullptr, "Output"}, {"Velocity", 0, 1, 0.01f, 0.7f, 'p', false, nullptr, "Output"}, {"Volume", 0, 1, 0.01f, 0.75f, 'p', false, nullptr, "Output"}},
      0, {}},
+    {"phatty", "Phatty", "Moog Slim Phatty style mono: 2 oscillators with continuous wave (tri → saw → square → pulse), sync, ladder filter with 1-4 poles and Overload, bipolar filter EG, two ADSR, glide and its modulation section (Mod Amount is the depth the mod wheel reaches)", 29,
+     {{"Osc 1 octave", 0, 3, 1, 1, 'n', false, "16'|8'|4'|2'", "Oscillators"}, {"Osc 1 wave", 0, 1, 0.01f, 0.33f, 'p', false, nullptr, "Oscillators"}, {"Osc 1 level", 0, 1, 0.01f, 1, 'p', false, nullptr, "Oscillators"},
+      {"Osc 2 octave", 0, 3, 1, 1, 'n', false, "16'|8'|4'|2'", "Oscillators"}, {"Osc 2 freq", -7, 7, 0, 0, 't', false, nullptr, "Oscillators"}, {"Osc 2 wave", 0, 1, 0.01f, 0.33f, 'p', false, nullptr, "Oscillators"},
+      {"Osc 2 level", 0, 1, 0.01f, 0.8f, 'p', false, nullptr, "Oscillators"},
+      {"Cutoff", 20, 16000, 0, 800, 'h', true, nullptr, "Filter"}, {"Resonance", 0, 1, 0.01f, 0.2f, 'p', false, nullptr, "Filter"}, {"EG amount", -1, 1, 0.01f, 0.3f, 'b', false, nullptr, "Filter"},
+      {"Key track", 0, 1, 0.01f, 0.5f, 'p', false, nullptr, "Filter"}, {"Overload", 0, 1, 0.01f, 0.2f, 'p', false, nullptr, "Filter"}, {"Poles", 0, 3, 1, 3, 'n', false, "6 dB|12 dB|18 dB|24 dB", "Filter"},
+      {"Attack", 0.001f, 10, 0, 0.002f, 's', true, nullptr, "Filter envelope"}, {"Decay", 0.001f, 10, 0, 0.3f, 's', true, nullptr, "Filter envelope"},
+      {"Sustain", 0, 1, 0.01f, 0.3f, 'p', false, nullptr, "Filter envelope"}, {"Release", 0.001f, 10, 0, 0.3f, 's', true, nullptr, "Filter envelope"},
+      {"Attack", 0.001f, 10, 0, 0.002f, 's', true, nullptr, "Amp envelope"}, {"Decay", 0.001f, 10, 0, 0.5f, 's', true, nullptr, "Amp envelope"},
+      {"Sustain", 0, 1, 0.01f, 0.8f, 'p', false, nullptr, "Amp envelope"}, {"Release", 0.001f, 10, 0, 0.2f, 's', true, nullptr, "Amp envelope"},
+      {"Glide", 0.001f, 5, 0, 0.05f, 's', true, nullptr, "Modulation"}, {"LFO rate", 0.2f, 50, 0, 3, 'f', true, "Hz", "Modulation"},
+      {"Mod source", 0, 7, 1, 0, 'n', false, "Triangle|Square|Saw|Ramp|Filter EG|Osc 2|S&H|Noise", "Modulation"}, {"Mod dest", 0, 3, 1, 0, 'n', false, "Pitch|Filter|Wave|Osc 2", "Modulation"},
+      {"Mod amount", 0, 1, 0.01f, 0, 'p', false, nullptr, "Modulation"}, {"Mod wheel", 0, 1, 0.01f, 0, 'p', false, nullptr, "Modulation"},
+      {"Velocity", 0, 1, 0.01f, 0.3f, 'p', false, nullptr, "Output"}, {"Volume", 0, 1, 0.01f, 0.75f, 'p', false, nullptr, "Output"}},
+     2, {{"Sync", false}, {"Glide", false}}},
 };
 
 // Sonidos de fábrica: cambios sobre los valores por defecto. Huecos sin nombre = vacíos.
 // índice del parámetro Volume de cada motor (Game Boy no tiene)
-inline const int kEngVol[E_COUNT] = {21, 7, 28, 7, -1, 21, 20, 11};
+inline const int kEngVol[E_COUNT] = {21, 7, 28, 7, -1, 21, 20, 11, 28};
 // Cuánto bajó el nivel base de cada motor (dB) al pasar a la mezcla de Jorge como punto de partida (7-11-2026)
-inline const float kEngShift14[E_COUNT] = {-12.9f, 1.7f, -6.2f, -6.0f, -6.0f, -6.0f, -6.0f, -6.0f};
+inline const float kEngShift14[E_COUNT] = {-12.9f, 1.7f, -6.2f, -6.0f, -6.0f, -6.0f, -6.0f, -6.0f, 0.0f};
 inline const std::vector<Preset>& factoryPresets(int e) {
     static const std::vector<Preset> P[E_COUNT] = {
         {   // Juno (deslizadores 0..1 como en el Juno-6)
@@ -164,12 +180,16 @@ inline const std::vector<Preset>& factoryPresets(int e) {
             {"Bowed plate", {{0, 3}, {1, 2}, {2, 0.5f}, {3, 0.8f}, {8, 0.6f}}},
             {"Kalimba", {{0, 1}, {1, 0}, {2, 0.7f}, {3, 0.5f}, {5, 0.6f}, {4, 0.12f}}},
             {"", {}}, {"", {}}, {"", {}}},
+        {   // Phatty: preset 5 de fábrica del Slim Phatty, leído de su SysEx (Slim_Phatty_v3_03_factorysounds.syx)
+            {"GRINDMYBASS", {{0, 0}, {1, 0.383f}, {2, 0.99f}, {3, 0}, {4, 0.11f}, {5, 0.688f}, {6, 0.258f}, {7, 308}, {8, 0.43f}, {9, 0.25f}, {10, 0.48f}, {11, 0.54f}, {12, 1},
+                             {13, 0.008f}, {14, 2.37f}, {15, 0}, {16, 0.019f}, {17, 0.0065f}, {18, 0.001f}, {19, 1}, {20, 0.036f}, {22, 1.88f}, {23, 0}, {24, 1}, {25, 0.617f}, {26, 0}, {32, 0}, {33, 0}}},
+            {"", {}}, {"", {}}, {"", {}}, {"", {}}, {"", {}}, {"", {}}, {"", {}}},
     };
     // Igualación medida con --niveles (objetivo −22 dB, ponderación K): el Volume de cada preset sube o baja lo que le falta.
     // Volume actúa al cuadrado. No pasa de 1, así que los sonidos muy cortos pueden quedar algo por debajo.
     const auto& kVolIdx = kEngVol;
     static const float kPreDb[E_COUNT][8] = {{-10.3f, 0.7f, -0.7f, 8, 8, -9.2f}, {-1.4f, 9, -2.1f, -2.4f, 7.1f, 3, -5.3f, 1.3f}, {3.0f, -0.6f, 6.7f, -0.5f, -0.3f}, {}, {},
-                                             {1.5f, -2.2f, 0, 4.5f, -2.6f}, {1.4f, 1.1f, -2.5f, -1.4f}, {8.6f, -2, -1.9f, 2.3f, 0}};
+                                             {1.5f, -2.2f, 0, 4.5f, -2.6f}, {1.4f, 1.1f, -2.5f, -1.4f}, {8.6f, -2, -1.9f, 2.3f, 0}, {}};
     static const std::vector<std::vector<Preset>> T = [] {
         std::vector<std::vector<Preset>> r(P, P + E_COUNT);
         for (int en = 0; en < E_COUNT; ++en) {
@@ -198,6 +218,7 @@ inline const int kLayer[E_COUNT][16] = {
     /* Wavetable */ { 8,  9, 10,   1,  2,  3,  6, 21,   12, 13, 14, 15,   16, 17, 18, 19},   // A posición, B env→posición, C LFO→posición, D detune
     /* Supersaw  */ { 4,  5,  7,   1,  2,  9,  6, 20,   11, 12, 13, 14,   15, 16, 17, 18},   // A detune, B mezcla, C ensemble, D paso alto
     /* Modal     */ { 2,  5,  6,   4,  3,  7,  9, 11,    0,  1,  8, 10,   -1, -1, -1, -1},   // todo en la página 1 (solo tiene 12): «filtro» = brillo, «reso» = estructura, «env» = excitador; A posición, B amortiguación, C ruido, D apertura; abajo: modelo, excitador, release, velocidad
+    /* Phatty    */ { 7,  8,  9,   1,  5, 11,  4, 28,   13, 14, 15, 16,   17, 18, 19, 20},   // A onda osc 1, B onda osc 2, C overload, D frecuencia osc 2; abajo: las dos ADSR
 };
 // Segunda página: el resto de parámetros del motor, en su orden
 inline std::vector<int> page2(int e) {
@@ -217,12 +238,12 @@ inline float fromCC(const PSpec& s, int v) {
 // Juego completo de motores de una pista (solo suena el elegido)
 struct MeloEngines {
     JunoSynth juno; DxSynth dx; MoogVoice moog; acid::Voice303 acid; GameBoy gbs;
-    WavetableSynth wt; SuperSaw saw; ModalSynth modal;;
+    WavetableSynth wt; SuperSaw saw; ModalSynth modal; PhattyVoice phatty;
     int cur = E_JUNO;
-    void prepare(float sr) { sr_ = sr; juno.prepare(sr); dx.prepare(sr); moog.prepare(sr); acid.prepare(sr); gbs.prepare(sr); wt.prepare(sr); saw.prepare(sr); modal.prepare(sr); }
-    void noteOn(int n, int v) { switch (cur) { case E_JUNO: juno.noteOn(n, v); break; case E_DX: dx.noteOn(n, v); break; case E_MOOG: moog.noteOn(n, v); break; case E_ACID: acid.noteOn(n, v); break; case E_GB: gbs.noteOn(n, v); break; case E_WT: wt.noteOn(n, v); break; case E_SAW: saw.noteOn(n, v); break; case E_MODAL: modal.noteOn(n, v); break; default: modal.noteOn(n, v); } }
-    void noteOff(int n) { juno.noteOff(n); dx.noteOff(n); moog.noteOff(n); acid.noteOff(n); gbs.noteOff(n); wt.noteOff(n); saw.noteOff(n); modal.noteOff(n); }
-    void allOff() { juno.allNotesOff(); dx.allNotesOff(); moog.allNotesOff(); acid.allNotesOff(); gbs.allNotesOff(); wt.allNotesOff(); saw.allNotesOff(); modal.allNotesOff(); }
+    void prepare(float sr) { sr_ = sr; juno.prepare(sr); dx.prepare(sr); moog.prepare(sr); acid.prepare(sr); gbs.prepare(sr); wt.prepare(sr); saw.prepare(sr); modal.prepare(sr); phatty.prepare(sr); }
+    void noteOn(int n, int v) { switch (cur) { case E_JUNO: juno.noteOn(n, v); break; case E_DX: dx.noteOn(n, v); break; case E_MOOG: moog.noteOn(n, v); break; case E_ACID: acid.noteOn(n, v); break; case E_GB: gbs.noteOn(n, v); break; case E_WT: wt.noteOn(n, v); break; case E_SAW: saw.noteOn(n, v); break; case E_MODAL: modal.noteOn(n, v); break; case E_PHATTY: phatty.noteOn(n, v); break; default: modal.noteOn(n, v); } }
+    void noteOff(int n) { juno.noteOff(n); dx.noteOff(n); moog.noteOff(n); acid.noteOff(n); gbs.noteOff(n); wt.noteOff(n); saw.noteOff(n); modal.noteOff(n); phatty.noteOff(n); }
+    void allOff() { juno.allNotesOff(); dx.allNotesOff(); moog.allNotesOff(); acid.allNotesOff(); gbs.allNotesOff(); wt.allNotesOff(); saw.allNotesOff(); modal.allNotesOff(); phatty.allNotesOff(); }
     // Cambio de motor: el anterior se apaga en 10 ms y sigue procesándose en silencio hasta que sus notas terminan
     // (como mucho 4 s); así no se quedan colgadas ni «resucitan» al volver a él. En cuanto calla 50 ms, deja de calcularse.
     void select(int e) {
@@ -230,7 +251,7 @@ struct MeloEngines {
         allOff(); prev_ = cur; prevG_ = 1.0f; prevN_ = static_cast<int>(sr_ * 4.0f); prevQ_ = 0; cur = e;
     }
     // ajuste de nivel por motor (medido): todos suenan parecido al cambiar de uno a otro con los mismos ajustes
-    static float trim(int e) { static const float kDb[E_COUNT] = {-1.9f, -0.6f, -11.7f, -8.1f, -3.8f, -4.2f, -6.6f, -13.6f}; return std::exp2(kDb[std::clamp(e, 0, E_COUNT - 1)] / 6.0206f); }
+    static float trim(int e) { static const float kDb[E_COUNT] = {-1.9f, -0.6f, -11.7f, -8.1f, -3.8f, -4.2f, -6.6f, -13.6f, -17.9f}; return std::exp2(kDb[std::clamp(e, 0, E_COUNT - 1)] / 6.0206f); }
     void render(float* L, float* R, float* mono, int n) {
         renderEng(cur, L, R, mono, n);
         { const float g = trim(cur); for (int i = 0; i < n; ++i) { L[i] *= g; R[i] *= g; } }
@@ -258,6 +279,7 @@ struct MeloEngines {
             case E_WT: wt.render(L, R, n); break;
             case E_SAW: saw.render(L, R, n); break;
             case E_MODAL: modal.render(L, R, n); break;
+            case E_PHATTY: phatty.render(mono, n); for (int i = 0; i < n; ++i) L[i] = R[i] = mono[i]; break;
             default: modal.render(L, R, n); break;
         }
     }
@@ -311,6 +333,13 @@ struct MeloEngines {
         case E_MODAL: { auto& p = modal.p;
             switch (i) { case 0: p.model = iv; break; case 1: p.exciter = iv; break; case 2: p.bright = v; break; case 3: p.damping = v; break; case 4: p.position = v; break; case 5: p.structure = v; break;
                 case 6: p.exLevel = v; break; case 7: p.noise = v; break; case 8: p.release = v; break; case 9: p.spread = v; break; case 10: p.vel = v; break; case 11: p.volume = v; break; }
+            break; }
+        case E_PHATTY: { auto& p = phatty.p;
+            switch (i) { case 0: p.oct1 = iv; break; case 1: p.wave1 = v; break; case 2: p.lvl1 = v; break; case 3: p.oct2 = iv; break; case 4: p.freq2 = v; break; case 5: p.wave2 = v; break;
+                case 6: p.lvl2 = v; break; case 7: p.cutoff = v; break; case 8: p.reso = v; break; case 9: p.egAmt = v; break; case 10: p.kbd = v; break; case 11: p.overload = v; break; case 12: p.poles = iv; break;
+                case 13: p.fA = v; break; case 14: p.fD = v; break; case 15: p.fS = v; break; case 16: p.fR = v; break; case 17: p.A = v; break; case 18: p.D = v; break; case 19: p.S = v; break; case 20: p.R = v; break;
+                case 21: p.glide = v; break; case 22: p.lfoRate = v; break; case 23: p.modSrc = iv; break; case 24: p.modDst = iv; break; case 25: p.modAmt = v; break; case 26: p.modWheel = v; break;
+                case 27: p.vel = v; break; case 28: p.volume = v; break; case 32: p.sync = b; break; case 33: p.glideOn = b; break; }
             break; }
         }
     }
