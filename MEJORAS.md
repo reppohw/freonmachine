@@ -86,7 +86,7 @@
 - [x] Motor **Phatty** (Slim Phatty) con el preset 5 de fábrica, GRINDMYBASS, sacado de su SysEx; nivel igualado al Moog (16-11-2026).
 - [ ] Que Jorge compare GRINDMYBASS con su Slim Phatty.
 - [x] Presets impares 1–15 del Slim Phatty en el Phatty (16-11). SYNC SEQ, SQUAREZ y COLD LEAD quedan 12–18 dB bajos: su filtro se cierra y el Volume ya está a tope.
-- [ ] Presets pares del banco: están desplazados medio byte y aún no se leen bien (o capturarlos por SysEx desde su aparato).
+- [x] Presets pares del Slim Phatty legibles (16-11): empiezan a mitad de byte y cada grupo de 18 bits va como [byte][byte][2 bits] en vez de [byte][2 bits][byte]. Comprobado con los 150 pares de los tres bancos. Añadido 6 DEEP AND DARK (en lugar de COLD LEAD); queda ~12 dB bajo, como SYNC SEQ.
 - [ ] Comprobar si en el Slim Phatty Mod Amount actúa sin rueda (aquí, con Mod wheel a 0, no hay modulación).
 
 ## Ideas de Jorge para más adelante
