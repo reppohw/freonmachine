@@ -1163,6 +1163,12 @@ struct Control {
                 }
             }
         }
+        // presets de fábrica: siempre los del código (si se añaden o cambian, aparecen al arrancar); los tuyos no se tocan
+        for (int e = 0; e < E_COUNT; ++e) for (int sl = 0; sl < 8; ++sl) {
+            const std::string P = presetKey(e, sl); if (st[P + "user"] >= 0.5f) continue;
+            if (const auto d = defs.find(P + "on"); d != defs.end()) st[P + "on"] = d->second;
+            for (int i : engIdx(e)) { const auto d = defs.find(P + std::to_string(i)); if (d != defs.end()) st[P + std::to_string(i)] = d->second; }
+        }
         if (ver > 0 && ver < 16) {   // la mezcla rehecha (Gain de batería y sintes, clap más alto) pasa también por dentro
             for (int c = 0; c < 7; ++c) st["c" + std::to_string(c) + ".trim"] = 0;
             st["d.l2.level"] = 0.75f;
