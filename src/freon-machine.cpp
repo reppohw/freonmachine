@@ -1626,8 +1626,8 @@ struct Control {
             const bool k808 = static_cast<int>(st["d.kit"]) == 0;
             for (int k = 0; k < 8; ++k) for (int c = 0; c < 8; ++c) {
                 if (!slots[k]) continue;
-                // 808: un solo hi-hat. La columna del abierto mueve el mismo sonido; su Decay es la caída del abierto
-                const int l = k808 && kCol[c] == 6 && std::string(slots[k]) != "decay" ? 5 : kCol[c];
+                // 808: un solo hi-hat. La columna del abierto mueve el mismo sonido
+                const int l = k808 && kCol[c] == 6 ? 5 : kCol[c];
                 const std::string key = "d.l" + std::to_string(l) + "." + slots[k]; float lo, hi; rangeOf(key, lo, hi);
                 mapRange(ch, 16 + k * 8 + c, key, lo, hi);
             }

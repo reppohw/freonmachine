@@ -234,12 +234,14 @@ struct ClapVoice {
         on = true; t = 0; gain = g; nb = 0; nextB = 0; eb = 0; et = 0; ta = 1; rise = 0; nz2.s ^= 0x5bd1e995u;
         bursts = k808 ? 2 + static_cast<int>(snap * 3.99f) : 3 + static_cast<int>(snap * 2.99f);
         gap = (is909 ? 0.0095f : 0.0115f) * (0.5f + sweep);
-        const float d2 = decay * decay, tail = is909 ? 0.03f + d2 * 0.45f : k808 ? 0.008f + d2 * 0.74f : 0.05f + d2 * 0.7f;
+        const float d2 = decay * decay, tail = is909 ? 0.03f + d2 * 0.45f : k808 ? 0.008f + d2 * 0.3f : 0.05f + d2 * 0.7f;
         const float fc = (is909 ? 650.0f : 500.0f) * std::exp2(tone * 2.0f) * semi(pitch);
-        handG = k808 ? 0.3f + 1.7f * snap * snap : 1.0f; tailG = k808 ? 1.25f - 0.5f * snap : 1.0f;
+        // 808: la cola es la «sala» del clap, en banda estrecha alrededor de las manos (sin el siseo que la hacía sonar a hi-hat);
+        // al alargarla baja algo de nivel, para que crezca la sala y no el ruido
+        handG = k808 ? 0.3f + 1.7f * snap * snap : 1.0f; tailG = k808 ? (1.25f - 0.5f * snap) * (1.15f - 0.45f * decay) : 1.0f;
         const float hd = k808 ? 0.0055f - snap * 0.0035f : is909 ? 0.0028f : 0.0035f;   // 808: más Snap = palmadas más secas
         kB = std::exp(-1.0f / (hd * sr)); kT = std::exp(-1.0f / (tail * sr)); kA = 1.0f - std::exp(-1.0f / (0.001f * sr));
-        bp.set(2, fc, is909 ? 1.2f : 1.6f, sr); bp2.set(2, fc * (is909 ? 1.4f : 1.0f), is909 ? 0.9f : 1.0f, sr); hp.set(1, (is909 ? 700.0f : 350.0f) * semi(pitch), 0.7f, sr);
+        bp.set(2, fc, is909 ? 1.2f : 1.6f, sr); bp2.set(2, fc * (is909 ? 1.4f : 1.0f), is909 ? 0.9f : k808 ? 3.0f : 1.0f, sr); hp.set(1, (is909 ? 700.0f : 350.0f) * semi(pitch), 0.7f, sr);
     }
     bool active() const { return on; }
     float process() {
@@ -516,8 +518,9 @@ public:
     }
     void hit808Hat(bool open) {
         const DrumLane& L = lane[5]; const float v01 = 110.0f / 127.0f, vs = 0.8f;
-        const float g = (1.0f - vs + vs * std::pow(v01, 1.6f)) * L.level * kitTrim(kit, open ? 6 : 5);
-        const float d = lane[open ? 6 : 5].decay, d2 = d * d, d6 = d2 * d2 * d2, tau = open ? 0.03f + d2 * 0.5f + d6 * 2.5f : 0.005f + d2 * 0.07f + d6 * 0.45f;   // a la mitad, como antes; a tope, 3 s abierto y 0,5 s cerrado
+        const float g = (1.0f - vs + vs * std::pow(v01, 1.6f)) * L.level * kitTrim(kit, open ? 6 : 5) * (open ? 1.0f : 0.81f);   // cerrado: −1,8 dB, al nivel de antes
+        // un solo Decay: el abierto es el mismo knob un 30 % más arriba. Curva de 4 ms a 3 s (a la mitad, unos 35 ms; abierto, unos 0,4 s)
+        const float d = std::min(1.0f, L.decay + (open ? 0.3f : 0.0f)), tau = 0.004f * std::exp(6.62f * std::pow(d, 1.6f));
         lastVel_[5] = v01;
         ht_[5].trigger(false, g, std::clamp((1.0f - vs) * 0.6f + vs * v01, 0.0f, 1.0f), semi(L.tune), tau, L.tone, L.snap, 0.5f, 1.0f);
     }
@@ -575,7 +578,7 @@ private:
     }
     void hitPlaits(int l, const DrumLane& L, float v01, float vs, float g) {
         const bool k9 = kit == KIT_P909;
-        if (l == 2) { cl_[l].trigger(g * (k9 ? 0.63f : 0.7f), L.decay, L.tone, L.snap, k9 ? L.sweep : 0.5f, k9, L.tune, !k9); return; }
+        if (l == 2) { cl_[l].trigger(g * (k9 ? 0.63f : 1.33f), L.decay, L.tone, L.snap, k9 ? L.sweep : 0.5f, k9, L.tune, !k9); return; }
         if (l == 5 || l == 6 || (l == 7 && k9)) {   // hats y ride con voz propia: Decay es tiempo real
             const float d2 = L.decay * L.decay, tau = l == 5 ? 0.005f + d2 * 0.07f : l == 6 ? 0.03f + d2 * 0.5f : 0.2f + d2 * 3.0f;
             if (k9) if (const DrumSmp* s = smp909[l].load(std::memory_order_acquire)) {   // tu muestra: Pitch y Decay como siempre (Decay alto = la muestra entera)

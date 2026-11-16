@@ -2,9 +2,9 @@
 
 ## Batería 808: notas de Jorge (15-11-2026), hechas el 16-11-2026 (falta que las escuche)
 - [x] Sin **Sweep**, sin **filtro** (Filter/Reso) y sin **Velocity**: cada golpe suena igual (como uno de 110, el nivel medido).
-- [x] **Clap:** Pitch mueve su tono; Decay llega a una cola mucho más corta; Snap = fuerza de las manos frente a la sala (y de 2 a 5 palmadas).
+- [x] **Clap:** Pitch mueve su tono; Snap = fuerza de las manos frente a la sala (y de 2 a 5 palmadas). Decay: la cola es la sala en banda estrecha (antes era siseo y sonaba a hi-hat, 16-11), de 8 ms a 0,3 s.
 - [x] **Hi-hats:** Pitch mueve también el filtro (ahora cambia el tono); Decay hasta unos 0,5 s cerrado y 3 s abierto (a la mitad, como antes).
-- [x] **Un solo hi-hat:** cerrado y abierto son el mismo sonido con sus 2 notas; solo cambia la caída (Decay = cerrado, «Open dec» = abierto).
+- [x] **Un solo hi-hat:** cerrado y abierto son el mismo sonido con sus 2 notas; un solo Decay, y el abierto suena como si estuviera un 30 % más arriba (16-11).
 - [x] **Snap:** por debajo del 30 % sigue ablandando el golpe (entrada de hasta 8 ms) en bombo, caja, rim y tom.
 - [ ] Escucharlo con Jorge.
 
@@ -85,7 +85,9 @@
 ## Sintes
 - [x] Motor **Phatty** (Slim Phatty) con el preset 5 de fábrica, GRINDMYBASS, sacado de su SysEx; nivel igualado al Moog (16-11-2026).
 - [ ] Que Jorge compare GRINDMYBASS con su Slim Phatty.
-- [ ] Presets 2, 4, 6, 8 y 10 del Slim Phatty (capturarlos por SysEx desde su aparato).
+- [x] Presets impares 1–15 del Slim Phatty en el Phatty (16-11). SYNC SEQ, SQUAREZ y COLD LEAD quedan 12–18 dB bajos: su filtro se cierra y el Volume ya está a tope.
+- [ ] Presets pares del banco: están desplazados medio byte y aún no se leen bien (o capturarlos por SysEx desde su aparato).
+- [ ] Comprobar si en el Slim Phatty Mod Amount actúa sin rueda (aquí, con Mod wheel a 0, no hay modulación).
 
 ## Ideas de Jorge para más adelante
 - [x] Compresor de bus en el máster (7-11-2026). Siguen: graves limpios y EQ de máster.

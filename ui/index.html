@@ -511,19 +511,15 @@ function buildInst() {
         });
       } else
       DROWS_FOR(ST["d.kit"]).forEach(([f, rl, mi, ma, st, fm, def]) => {
-        g.append(el("span", { class: "rl" }, k808 && f === "decay" ? "Decay" : rl));
-        ORD.forEach(l => specKnob(g, `d.l${l}.${f}`, { l: rl, min: mi, max: ma, step: st, def, fmt: fm }, (a, b) => oled(0, `${lname(l)} · ${k808 && l === 5 && f === "decay" ? "Closed decay" : rl}`, b), "sm nolab"));
-        if (k808 && f === "decay") {   // fila del abierto: solo en la columna del hi-hat (es el Decay del carril 6)
-          g.append(el("span", { class: "rl" }, "Open dec"));
-          ORD.forEach(l => l === 5 ? specKnob(g, "d.l6.decay", { l: "Open decay", min: 0, max: 1, step: 0.01, def: 0.5, fmt: "p" }, (a, b) => oled(0, "Hi-hat · Open decay", b), "sm nolab") : g.append(el("span", {})));
-        }
+        g.append(el("span", { class: "rl" }, rl));
+        ORD.forEach(l => specKnob(g, `d.l${l}.${f}`, { l: rl, min: mi, max: ma, step: st, def, fmt: fm }, (a, b) => oled(0, `${lname(l)} · ${rl}`, b), "sm nolab"));
       });
       g.append(el("span", { class: "rl" }, "Reset"));
-      ORD.forEach(l => g.append(confirmKey("Reset", "Sure?", () => { sendRaw(`drreset ${l}`); if (k808 && l === 5) sendRaw("drreset 6"); oled(0, lname(l), "reset"); }, "lh")));
+      ORD.forEach(l => g.append(confirmKey("Reset", "Sure?", () => { sendRaw(`drreset ${l}`); oled(0, lname(l), "reset"); }, "lh")));
       g.append(el("span", { class: "rl" }, "Channel"));
       ORD.forEach(l => g.append(selK(`d.l${l}.out`, [[0, "Kick"], [1, "Snare"], [2, "Rest"]], `Mixer channel for ${SPEC.lanes[l]}`)));
       card.append(g, el("p", { class: "hint" }, "Same position, same job on every kit: Level, Pitch, Decay, timbre, attack, Sweep, Filter, Reso. 808 and 909: Tone = the TONE knob, or brightness on hats and clap; Snap = attack on kick, tom and rim, snappy on the snare, noise on the hats, number of hands on the clap; Sweep = pitch sweep on kick and tom, falling filter on hats, spacing between hands on the clap. FM kit: FM = amount of modulation, Ratio = modulator ratio, Sweep = pitch sweep (filter on hats), FM decay = how long the FM lasts, Noise = noise on top (from the middle upwards, except on the snare). On the FM clap: FM = tone, Ratio = hands, FM decay = spacing. Filter: left = low-pass, right = high-pass. Velocity: how much hit strength changes volume and brightness. Drive: soft saturation per sound (more harmonics, it cuts through small speakers). 909 with your own samples: put ch.wav, oh.wav and ride.wav in the samples/909 folder and the 909 plays them instead of its synthesized cymbals."));
-      if (k808) card.append(el("p", { class: "hint" }, `808: no Sweep, Filter or Velocity (every hit plays the same). One hi-hat: note ${ST["d.l5.note"]} plays it closed, note ${ST["d.l6.note"]} open; both use the same sound and only the decay changes (Decay = closed, Open dec = open). Snap below 30 % also softens the attack. Clap: Pitch moves its tone, Snap = how hard the hands hit against the room.`));
+      if (k808) card.append(el("p", { class: "hint" }, `808: no Sweep, Filter or Velocity (every hit plays the same). One hi-hat: note ${ST["d.l5.note"]} plays it closed, note ${ST["d.l6.note"]} open; same sound, the open one plays as if Decay were 30 % higher. Snap below 30 % also softens the attack. Clap: Pitch moves its tone, Snap = how hard the hands hit against the room.`));
       if (drm) card.append(el("p", { class: "hint" }, "DRM (Vermona DRM1 MKIII emulation): each sound is a DRM channel with its own panel controls. Hi-hats have two notes, like the DRM: HI HAT 1 = its note closed, note + 2 open; HI HAT 2 = its note open, note + 2 closed. Velocity has no effect (the DRM's TRIG plays at 75 %)."));
     } else {
       const ei = ST[T + ".eng"], e = SPEC.engines[ei], ek = `${T}.${e.key}`;
