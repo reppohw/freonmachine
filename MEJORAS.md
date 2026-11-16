@@ -145,3 +145,8 @@
 - [x] Reloj MIDI exacto tras Start y Song Position; notas MIDI colocadas en su muestra exacta dentro del búfer.
 - [x] Menos consumo: envolventes de la batería sin exp() por muestra, Modal y Voz más ligeros.
 - [x] El kit DRM ya no aparece (confirmado en el código; lo que se veía era el programa anterior, que seguía abierto).
+
+## Home y uso (16-11-2026)
+- [x] **Home:** tu punto de partida, la memoria «Home». Se guarda desde la web y se vuelve a ella con ⌂ Home (arriba, también en el móvil) o sin pantalla con el LPD8 (CC, pads 1 y 8 mantenidos 2 s, con luces). Probado en el Mac; en la Pi está pendiente, porque no respondía.
+- [x] **Contador de uso** por parámetro (Settings › Most touched, `usos.json`), para elegir la primera vista de las controladoras.
+- [ ] Batería en 3 buses (bombo, caja, resto) y canal del monotron por una entrada de la interfaz (para el mezclador de la Launch Control XL 3).

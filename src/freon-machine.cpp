@@ -1362,7 +1362,7 @@ struct Control {
     // Guardado seguro: se escribe aparte, se fuerza al disco y se cambia de golpe; la versión anterior queda como .bak
     bool saveErr = false;
     void save() {
-        dirty = false;
+        dirty = false; useSave();
         const std::string tmp = file + ".tmp", js = stateJson();
         FILE* f = std::fopen(tmp.c_str(), "wb");
         bool ok = f && std::fwrite(js.data(), 1, js.size(), f) == js.size();
@@ -1428,6 +1428,44 @@ struct Control {
         const std::string n = memName(raw); if (n.empty()) return; std::error_code ec;
         std::filesystem::remove(memDir() + "/" + n + ".json", ec); srv.broadcast("memlist " + memList());
     }
+    // --- Home: el punto de partida que eliges tú. Es la memoria «Home» (memorias/Home.json): se guarda desde la web y se
+    // vuelve a ella desde la web o sin pantalla (LPD8: mantener los pads 1 y 8 en el banco CC 2 s, en cualquier programa)
+    static constexpr const char* kHome = "Home";
+    bool homeExists() const { return std::filesystem::exists(memDir() + "/" + kHome + ".json"); }
+    bool goHome() {
+        if (!homeExists()) { srv.broadcast("memmsg error no Home saved yet"); std::printf("Home: no hay ninguna guardada\n"); std::fflush(stdout); return false; }
+        memLoad(kHome); return true;
+    }
+    // --- uso: cuántas veces tocas cada parámetro (desde la web o una controladora), para decidir qué va en la primera vista
+    // de las controladoras. Un gesto cuenta una vez: varios cambios seguidos del mismo parámetro con menos de 1,5 s entre
+    // ellos son el mismo gesto. Se guarda en usos.json junto al estado; no va en las memorias
+    std::map<std::string, std::pair<int, std::chrono::steady_clock::time_point>> use_; bool useDirty_ = false;
+    std::string useFile() const { return base + "/usos.json"; }
+    void countUse(const std::string& k) {
+        const auto now = std::chrono::steady_clock::now(); auto& u = use_[k];
+        if (u.first == 0 || now - u.second > std::chrono::milliseconds(1500)) { ++u.first; useDirty_ = true; }
+        u.second = now;
+    }
+    std::string useJson() const {
+        std::vector<std::pair<int, std::string>> v; for (const auto& [k, u] : use_) if (u.first > 0) v.push_back({u.first, k});
+        std::sort(v.begin(), v.end(), [](const auto& a, const auto& b) { return a.first != b.first ? a.first > b.first : a.second < b.second; });
+        std::string o = "["; for (size_t i = 0; i < v.size(); ++i) { if (i) o += ","; o += "[" + jstr(v[i].second.c_str()) + "," + std::to_string(v[i].first) + "]"; } return o + "]";
+    }
+    void useSave() {
+        if (!useDirty_) return; useDirty_ = false;
+        const std::string f = useFile(), tmp = f + ".tmp", js = useJson();
+        FILE* o = std::fopen(tmp.c_str(), "wb"); bool ok = o && std::fwrite(js.data(), 1, js.size(), o) == js.size();
+        if (o) ok = std::fclose(o) == 0 && ok;
+        if (ok) std::rename(tmp.c_str(), f.c_str()); else std::remove(tmp.c_str());
+    }
+    void useLoad() {   // [["clave",n],…]
+        std::ifstream in(useFile()); std::string js((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        for (size_t p = 0; (p = js.find("[\"", p)) != std::string::npos;) {
+            const size_t q = js.find('"', p + 2); if (q == std::string::npos) break;
+            const size_t c = js.find(',', q); if (c == std::string::npos) break;
+            use_[js.substr(p + 2, q - p - 2)].first = std::atoi(js.c_str() + c + 1); p = c;
+        }
+    }
     std::string stateJson() {
         std::string o = "{"; bool first = true;
         for (auto& [k, v] : st) { if (!first) o += ","; first = false; o += "\"" + k + "\":" + jnum(v); }
@@ -1487,6 +1525,7 @@ struct Control {
         if (k == "d.kit" && static_cast<int>(v) == 1) drum909Load();
         if (k == "brk.0") brkCuts();   // otros compases: otros cortes
         dirty = true; dirtyAt = std::chrono::steady_clock::now();
+        if (from != -1) countUse(k);
         // lo que llega por MIDI puede venir a cientos por segundo (un LFO del Oxi): a la web se le manda solo el último valor
         if (from == kMidiSrc) webPend_[k] = v; else srv.broadcast("set " + k + " " + jnum(v), from);
         queueFb(k);
@@ -1520,6 +1559,8 @@ struct Control {
         }
         else if (op == "kb") { int t, n, v; if (is >> t >> n >> v) au.cmds.push({K_NOTE, static_cast<int16_t>(t), static_cast<int16_t>(n), static_cast<int16_t>(v), 0}); }
         else if (op == "panic") au.cmds.push({K_ALLOFF, 0, 0, 0, 0});
+        else if (op == "home") { std::string w; is >> w; if (w == "save") memSave(kHome); else goHome(); }
+        else if (op == "usage") { std::string w; is >> w; if (w == "reset") { use_.clear(); useDirty_ = true; useSave(); } srv.send(client, "usage " + useJson()); }
         else if (op == "mem") {   // mem list | mem save NOMBRE | mem load NOMBRE | mem del NOMBRE
             std::string w; is >> w; std::string n; std::getline(is, n); if (!n.empty() && n[0] == ' ') n.erase(0, 1);
             if (w == "list") srv.send(client, "memlist " + memList()); else if (w == "save") memSave(n); else if (w == "load") memLoad(n); else if (w == "del") memDel(n);
@@ -1736,6 +1777,7 @@ struct Control {
     //   canal 14 Máster: pads = las 8 combinaciones · knobs: LPF, HPF, Repeat, tamaño del repeat, Comb, Space, Riser, crossfader
     std::vector<std::string> lpdBrk_; std::chrono::steady_clock::time_point lpdBrkAt_{};
     std::function<void(const std::vector<unsigned char>&)> lpdOut; std::function<bool()> lpdNew;
+    bool lpdCcDown_[8] = {}; std::chrono::steady_clock::time_point lpdHomeAt_{}, lpdFlashTo_{}; bool lpdFlashOk_ = false;
     int lpdProg_ = -1, lpdBank_ = 0, lpdBrkSel_ = -1; bool brkHold_[8] = {}; float dubSaved_ = 0; std::atomic<bool> lpdReprog_{false};
     std::vector<unsigned char> lpdLast_; std::chrono::steady_clock::time_point lpdAt_{}, lpdRefresh_{};
     // la lista de breaks del LPD8: tus WAV de breaks/ (como mucho 8, en orden); si no hay ninguno, los de fábrica
@@ -1780,7 +1822,20 @@ struct Control {
         if (lpdProg_ < 0) return;
         struct C { int r, g, b; }; C c[8] = {};
         const C kOrange{255, 90, 0}, kGreen{0, 255, 60}, kBlue{0, 90, 255}, kCyan{0, 220, 220}, kPurple{170, 0, 255}, kYellow{255, 190, 0}, kWhite{150, 150, 150};
-        switch (lpdProg_) {
+        // Home: mantener 2 s los pads 1 y 8 (banco CC). Mientras, los pads se van llenando de blanco; al soltar antes, nada.
+        // Hecho: los 8 en blanco un momento; si no hay Home guardada, en rojo
+        const bool homeHeld = lpdHomeAt_ != std::chrono::steady_clock::time_point{};
+        if (homeHeld && now - lpdHomeAt_ >= std::chrono::seconds(2)) {
+            lpdHomeAt_ = {}; lpdCcDown_[0] = lpdCcDown_[7] = false;
+            lpdFlashOk_ = goHome(); lpdFlashTo_ = now + std::chrono::milliseconds(900);
+        }
+        const bool flash = now < lpdFlashTo_;
+        if (flash) for (C& x : c) x = lpdFlashOk_ ? C{255, 255, 255} : C{255, 0, 0};
+        else if (lpdHomeAt_ != std::chrono::steady_clock::time_point{}) {
+            const int n = std::clamp(static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(now - lpdHomeAt_).count() / 250), 0, 7);
+            for (int i = 0; i <= n; ++i) c[i] = kWhite;
+        }
+        else switch (lpdProg_) {
         case 0: { const int sel = static_cast<int>(st["samp.sel"]); if (sel >= 0 && sel < 8) c[sel] = kOrange; break; }
         case 1:
             if (lpdBank_ == 2) { if (lpdBrkSel_ >= 0 && lpdBrkSel_ < 8) c[lpdBrkSel_] = kWhite; }
@@ -1798,6 +1853,7 @@ struct Control {
         for (const C& x : c) for (int v : {x.r, x.g, x.b}) { m.push_back(static_cast<unsigned char>(v >> 7)); m.push_back(static_cast<unsigned char>(v & 0x7F)); }
         m.push_back(0xF7);
         // se manda al cambiar; y tras tocar un pad, otra vez a los 60 ms (al soltarlo el LPD8 vuelve a sus colores guardados)
+        if (!flash && lpdFlashTo_ != std::chrono::steady_clock::time_point{}) { lpdFlashTo_ = {}; lpdRefresh_ = now; }
         const bool due = lpdRefresh_ != std::chrono::steady_clock::time_point{} && now >= lpdRefresh_;
         if ((m != lpdLast_ || due) && now - lpdAt_ > std::chrono::milliseconds(15)) { lpdOut(m); lpdLast_ = m; lpdAt_ = now; if (due) lpdRefresh_ = {}; }
     }
@@ -1813,6 +1869,11 @@ struct Control {
         if (pad > 7) return true;
         if (prog != lpdProg_) { lpdProg_ = prog; lpdLast_.clear(); }   // otro programa: sus luces
         if (pad >= 0) { lpdBank_ = bank; lpdRefresh_ = std::chrono::steady_clock::now() + std::chrono::milliseconds(60); }
+        if (bank == 2 && pad >= 0) {   // Home sin pantalla: pads 1 y 8 del banco CC mantenidos a la vez (ver lpdTick)
+            lpdCcDown_[pad] = down;
+            if (lpdCcDown_[0] && lpdCcDown_[7]) { if (lpdHomeAt_ == std::chrono::steady_clock::time_point{}) lpdHomeAt_ = std::chrono::steady_clock::now(); }
+            else lpdHomeAt_ = {};
+        }
         const int16_t port = static_cast<int16_t>(m.port + 1000);   // fuera de la lista de puertos: no se vuelve a traducir
         auto cc = [&](int ch, int c, int v) { if (ch >= 0) onCtl({static_cast<unsigned char>(0xB0 | ch), static_cast<unsigned char>(c), static_cast<unsigned char>(v), port}); };
         const float v = knob >= 0 ? m.d2 / 127.0f : 0.0f;
@@ -2565,6 +2626,7 @@ int main(int argc, char** argv) {
         for (const std::string& old : {base + "/groovebox-estado.json", base + "/../groovebox/groovebox-estado.json"})
             if (std::filesystem::exists(old)) { const std::string nf = ctl.file; ctl.file = old; ctl.load(); ctl.file = nf; ctl.dirty = true; std::printf("Estado recogido de %s\n", old.c_str()); break; }
     if (!ctl.dirty) ctl.load();
+    ctl.useLoad();
     ctl.performanceOff(); marca("cargar estado");
     ctl.pushAll(); marca("aplicar estado");
     gMixCh = ctl.mixCh();
