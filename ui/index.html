@@ -67,6 +67,7 @@ button, select, input { font: inherit; color: inherit; }
 .take { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; padding: 6px 0; border-top: 1px solid #2a2a2a; }
 .take b { flex: 1 1 100%; font-weight: 600; }
 .take a { color: var(--oled); }
+.takeplay { padding: 4px 0 8px; }
 @keyframes blink { 50% { border-color: var(--led); } }
 .keys { display: grid; gap: 5px; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
 select, input[type="number"] { background: var(--oled-bg); color: var(--oled); border: 1px solid var(--line-2); border-radius: var(--r); padding: 5px 6px; font-size: 11.5px; min-height: 28px; max-width: 100%; }
@@ -1057,7 +1058,7 @@ let MEMS = [];
 // --- grabación de lives (fase 1: estéreo). Arriba: ● Rec / ■ tiempo (parar pide un segundo toque) y ◆ marca
 let TREC = { on: false, secs: 0, gaps: 0, free: 0, lastMin: 0, saving: false }, TAKES = [];
 const hms = (s) => { s = Math.max(0, Math.floor(s)); const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, x = s % 60; return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(x).padStart(2, "0"); };
-const fmtMB = (b) => b >= 1073741824 ? (b / 1073741824).toFixed(1) + " GB" : Math.max(1, Math.round(b / 1048576)) + " MB";
+const fmtMB = (b) => b >= 1073741824 ? (b / 1073741824).toFixed(1) + " GB" : b >= 1048576 ? Math.round(b / 1048576) + " MB" : Math.max(1, Math.round(b / 1024)) + " KB";
 function drawTrec() {
   const bar = $("#recBar"); if (!bar) return;
   if (!bar.firstChild) {
@@ -1082,16 +1083,26 @@ function drawTakes() {
   TAKES.forEach(t => {
     const row = el("div", { class: "take" }, el("b", {}, t.n));
     t.f.forEach(([f, size, secs]) => {
-      row.append(el("a", { href: `/rec/${encodeURIComponent(t.n)}/${encodeURIComponent(f)}`, download: `${t.n} ${f}` }, f), el("span", { class: "hint" }, fmtMB(size) + (secs ? " · " + hms(secs) : "")));
+      const url = `/rec/${encodeURIComponent(t.n)}/${encodeURIComponent(f)}`;
+      if (f.endsWith(".wav")) row.append(keyBtn("▶", "", () => playTake(row, url, `${t.n} · ${f}`)));
+      row.append(el("a", { href: url, download: `${t.n} ${f}` }, f), el("span", { class: "hint" }, fmtMB(size) + (secs ? " · " + hms(secs) : "")));
     });
     row.append(confirmKey("×", "Delete?", () => sendRaw(`trec del ${t.n}`), "danger"));
     box.append(row);
   });
 }
+// escuchar una toma en este aparato (móvil u ordenador): un solo reproductor, bajo la toma elegida. Sale por el navegador, no por la Pi
+function playTake(row, url, name) {
+  let p = $("#takePlayer");
+  if (p && p.dataset.url === url) { p.parentNode.remove(); return; }   // segundo toque: se cierra
+  if (p) p.parentNode.remove();
+  const a = el("audio", { id: "takePlayer", controls: "", preload: "metadata", src: url, "aria-label": `Play ${name}` }); a.dataset.url = url; a.style.width = "100%";
+  row.after(el("div", { class: "takeplay" }, a)); a.play().catch(() => {});
+}
 function buildRec(box) {
   const last = keyBtn("Save last 15 min", "", () => sendRaw("trec last")); last.id = "lastKey";
   box.append(el("div", { class: "card", id: "recCard" }, el("h3", {}, "Recordings"),
-    el("p", { class: "hint" }, "● Rec (top) records the stereo master as it sounds, 24-bit WAV with its start time (Pro Tools: Spot). Freon always keeps the last 15 minutes: if something went well and you weren't recording, Save last. ◆ drops a marker (saved in marcas.txt). Without a screen, on the mixer channel: note 56 Rec/Stop, 57 marker, 58 save last. A power cut loses only the last few seconds."),
+    el("p", { class: "hint" }, "● Rec (top) records the stereo master as it sounds, 24-bit WAV with its start time (Pro Tools: Spot). Freon always keeps the last 15 minutes: if something went well and you weren't recording, Save last. ◆ drops a marker (saved in marcas.txt). Without a screen, on the mixer channel: note 56 Rec/Stop, 57 marker, 58 save last. A power cut loses only the last few seconds. ▶ plays a take here, on this phone or computer (not through the Pi)."),
     el("div", { class: "scrow" }, last, el("span", { class: "hint", id: "recState" }, "…")),
     el("div", { class: "takes", id: "takeList" })));
   drawTrec(); drawTakes();

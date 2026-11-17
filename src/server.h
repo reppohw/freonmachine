@@ -16,6 +16,7 @@
 #include <cstring>
 #include <fstream>
 #include <functional>
+#include <cstdlib>
 #include <memory>
 #include <cctype>
 #include <sstream>
@@ -200,13 +201,28 @@ private:
             const std::string rel = urlDecode(path.substr(5));
             auto f = std::make_shared<std::ifstream>(recRoot + "/" + rel, std::ios::binary | std::ios::ate);
             if (rel.find("..") != std::string::npos || rel.empty() || !*f) { rawSend(c, "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"); c.closeAfter = true; return; }
-            const uint64_t size = static_cast<uint64_t>(f->tellg()); f->seekg(0);
+            const uint64_t size = static_cast<uint64_t>(f->tellg());
+            // «Range: bytes=a-b»: el reproductor del navegador pide trozos para saltar (Safari lo exige)
+            uint64_t from = 0, to = size ? size - 1 : 0; bool part = false;
+            const std::string rg = header(req, "range");
+            if (rg.rfind("bytes=", 0) == 0 && size) {
+                const std::string r = rg.substr(6); const auto dash = r.find('-');
+                if (dash != std::string::npos && r.find(',') == std::string::npos) {
+                    const std::string a = r.substr(0, dash), b = r.substr(dash + 1);
+                    if (!a.empty()) { from = std::strtoull(a.c_str(), nullptr, 10); if (!b.empty()) to = std::min<uint64_t>(std::strtoull(b.c_str(), nullptr, 10), size - 1); }
+                    else if (!b.empty()) { const uint64_t n = std::min<uint64_t>(std::strtoull(b.c_str(), nullptr, 10), size); from = size - n; }   // los últimos n bytes
+                    if (from > to || from >= size) { rawSend(c, "HTTP/1.1 416 Range Not Satisfiable\r\nContent-Range: bytes */" + std::to_string(size) + "\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"); c.closeAfter = true; return; }
+                    part = true;
+                }
+            }
+            f->seekg(static_cast<std::streamoff>(from)); const uint64_t len = size ? to - from + 1 : 0;
             std::string fname = rel.substr(rel.find('/') + 1), take = rel.substr(0, rel.find('/'));
             std::string dl = take + " " + fname; for (char& ch : dl) if (ch == '"' || ch == '/' || ch == '\\') ch = '_';
             const std::string ext = rel.substr(rel.rfind('.') + 1);
             const std::string type = ext == "wav" ? "audio/wav" : ext == "txt" ? "text/plain; charset=utf-8" : "application/octet-stream";
-            c.out += "HTTP/1.1 200 OK\r\nContent-Type: " + type + "\r\nContent-Length: " + std::to_string(size) + "\r\nContent-Disposition: attachment; filename=\"" + dl + "\"\r\nConnection: close\r\n\r\n";
-            c.file = f; c.fileLeft = size; c.closeAfter = true; c.last = Clock::now(); flush(c); return;
+            c.out += std::string(part ? "HTTP/1.1 206 Partial Content\r\nContent-Range: bytes " + std::to_string(from) + "-" + std::to_string(to) + "/" + std::to_string(size) + "\r\n" : "HTTP/1.1 200 OK\r\n") +
+                     "Content-Type: " + type + "\r\nAccept-Ranges: bytes\r\nContent-Length: " + std::to_string(len) + "\r\nContent-Disposition: inline; filename=\"" + dl + "\"\r\nConnection: close\r\n\r\n";
+            c.file = f; c.fileLeft = len; c.closeAfter = true; c.last = Clock::now(); flush(c); return;
         }
         std::ifstream f(root + path, std::ios::binary);
         if (!f) { rawSend(c, "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"); c.closeAfter = true; return; }

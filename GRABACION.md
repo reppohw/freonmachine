@@ -126,6 +126,7 @@ Cada fase se prueba en la Pi con el live cargado (CPU, cortes y una grabación l
 - **Tomas:** `grabaciones/AAAA-MM-DD HH-MM-SS/master.wav` (24 bits, BWF con la hora de inicio) y `marcas.txt`. «Lo último» crea `… (last N min)/master.wav`. Si una toma pasa de 3,5 GB sigue en `master 2.wav`.
 - **Controles:**
   - Web: ● Rec arriba (en marcha muestra el tiempo; parar pide un segundo toque), ◆ marca, y la tarjeta Settings › Recordings (guardar lo último, espacio libre, descargar, borrar).
+  - Escuchar: ▶ en cada toma abre un reproductor en el propio móvil u ordenador (no suena por la Pi). El servidor sirve trozos del archivo (Range), así que se puede saltar a cualquier punto sin bajar la toma entera.
   - Canal del mezclador: nota 56 Rec/Stop, 57 marca, 58 guardar lo último. La luz de «grabando» (nota 96) se enciende.
 - **Seguridad:** no arranca con menos de 500 MB libres y para sola por debajo de 300 MB. Si el disco no llega, se meten ceros del mismo largo y una marca «Gap».
 - **Probado en el Mac** (sin tarjeta, `--sin-audio`):
