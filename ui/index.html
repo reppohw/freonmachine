@@ -424,7 +424,8 @@ function groupedKnobs(params, keyOf, onTouch, only) {
 }
 
 // ================================================================ screen
-const TN = ["Drums", "Track 2", "Track 3", "Track 4"];
+// nombres en pantalla como en el Oxi de Jorge: los sintes son T1-T3 y la batería T4 (por dentro siguen siendo t2-t4 y t1)
+const TN = ["Drums", "Track 1", "Track 2", "Track 3"], TL = ["T4", "T1", "T2", "T3"];
 const ui = { tab: "inst", kbTrack: 1, kbOct: 4, lastPre: {} };
 try { Object.assign(ui, JSON.parse(localStorage.getItem("gb-ui") || "{}")); } catch {}
 // lo que es del momento no se recuerda: si se aprende un combo o se elige un slot, lo dice el motor al conectar
@@ -469,8 +470,8 @@ function oled(ti, a, b) {
 }
 function oledIdle(ti) {
   const p = P[ti]; if (!p) return;
-  if (ti === 0) { p.o1.textContent = `T1 · ${SPEC.kits[ST["d.kit"]]}`; p.o2.textContent = "8 sounds · every parameter"; return; }
-  const e = SPEC.engines[ST[`t${ti + 1}.eng`]]; p.o1.textContent = `T${ti + 1} · ${e.name}`; p.o2.textContent = e.desc;
+  if (ti === 0) { p.o1.textContent = `T4 · ${SPEC.kits[ST["d.kit"]]}`; p.o2.textContent = "8 sounds · every parameter"; return; }
+  const e = SPEC.engines[ST[`t${ti + 1}.eng`]]; p.o1.textContent = `${TL[ti]} · ${e.name}`; p.o2.textContent = e.desc;
 }
 const DR = { tune: ["Pitch", -12, 12, 0.01, "t", 0], decay: ["Decay", 0, 1, 0.01, "p", 0.5], snap: ["Snap", 0, 1, 0.01, "p", 0.5], filt: ["Filter", -1, 1, 0.01, "d", 0], reso: ["Reso", 0, 1, 0.01, "p", 0.2],
   sweep: ["Sweep", 0, 1, 0.01, "p", 0.5], level: ["Level", 0, 1, 0.01, "p", 0.8], pan: ["Pan", -1, 1, 0.02, "o", 0], vel: ["Velocity", 0, 1, 0.01, "p", 0.8],
@@ -499,7 +500,7 @@ function buildInst() {
     const seg = el("div", { class: "seg", role: "group" });
     if (ti === 0) SPEC.kits.forEach((n, k) => seg.append(el("button", { class: "key plain", "aria-pressed": String(ST["d.kit"] === k), onclick: () => { send("d.kit", k); build(); } }, n)));
     else SPEC.engines.forEach((e, k) => (e.hidden && ST[T + ".eng"] !== k) || seg.append(el("button", { class: "key plain", "aria-pressed": String(ST[T + ".eng"] === k), onclick: () => { send(T + ".eng", k); build(); } }, e.name)));
-    card.append(el("div", { class: "chead" }, act, el("div", { class: "cname" }, el("b", {}, TN[ti]), el("span", {}, `T${ti + 1} · MIDI channel ${ST[T + ".ch"] || "off"}`)), seg, keyBtn("Test", "", () => test(ti)),
+    card.append(el("div", { class: "chead" }, act, el("div", { class: "cname" }, el("b", {}, TN[ti]), el("span", {}, `${TL[ti]} · MIDI channel ${ST[T + ".ch"] || "off"}`)), seg, keyBtn("Test", "", () => test(ti)),
       ...(ti === 0 ? [confirmKey("Reset kit", "Sure?", () => { sendRaw("drreset all"); oled(0, "Drums", "all sounds reset"); }, "danger")] : [])));
     p.o1 = el("span", { class: "o1" }); p.o2 = el("span", { class: "o2 dim" });
     card.append(el("div", { class: "screen", "aria-live": "polite" }, p.o1, p.o2));
@@ -570,7 +571,7 @@ function buildInst() {
     .forEach(([f, q, c]) => { const w = el("div", { class: "kslot" }); specKnob(w, "sub." + f, q, (a, b) => topMsg("Sub · " + a, b), "sm"); w.append(el("i", {}, `CC ${c}`)); sk.append(w); });
   sc.append(el("div", { class: "chead" }, el("div", { class: "cname" }, el("b", {}, "Sub"), el("span", {}, ST["sub.mode"] >= 0.5 ? `plays the lowest note held on T${(ST["sub.src"] || 1) + 1}` : `MIDI channel ${ST["sub.ch"] || "off"} · plays the notes it gets on its channel`)),
     toggleKey("sub.on", "Sub on · CC 110", (v) => topMsg("Sub", v ? "on" : "off"))), sk,
-    el("div", { class: "row" }, selK("sub.mode", [[1, "Follows the lowest note of a track"], [0, "Plays its own MIDI channel"]], "Sub mode"), ST["sub.mode"] >= 0.5 ? selK("sub.src", [[1, "T2"], [2, "T3"], [3, "T4"]], "Track to follow") : ""));
+    el("div", { class: "row" }, selK("sub.mode", [[1, "Follows the lowest note of a track"], [0, "Plays its own MIDI channel"]], "Sub mode"), ST["sub.mode"] >= 0.5 ? selK("sub.src", [[1, "T1"], [2, "T2"], [3, "T3"]], "Track to follow") : ""));
   box.append(sc);
 }
 function test(ti) {
@@ -744,7 +745,7 @@ const DIST = ["Fuzz", "Bitcrusher"];
 // envíos que se ofrecen (A reverb, B delay); C y D siguen en el motor, ocultos. Si alguno oculto tiene señal, se enseña
 function nSends() { const n = SPEC.sends || 4; for (let f = 3; f >= n; f--) if (Object.keys(ST).some(k => /^[cg]\d+\.s\d$/.test(k) && k.endsWith("s" + f) && ST[k] > 0.001)) return f + 1; return n; }
 function chName(i) { if (i >= 4 && i <= 6) { const t = i - 3; return SPEC.engines[ST[`t${t + 1}.eng`]].name; } return SPEC.channels[i]; }
-function chSub(i) { return i < 3 ? "Drums" : i === 3 ? "Sub" : i <= 6 ? `Track ${i - 2}` : i <= 10 ? "Live" : (i - 11 < SPEC.ins ? "Input" : "No input"); }
+function chSub(i) { return i < 3 ? "Drums" : i === 3 ? "Sub" : i <= 6 ? `Track ${i - 3}` : i <= 10 ? "Live" : (i - 11 < SPEC.ins ? "Input" : "No input"); }
 function vfader(k, label) {
   const f = el("input", { type: "range", min: "0", max: "1", step: "0.01", class: "fader", "aria-label": label }), read = el("span", { class: "fread" });
   const draw = () => { f.value = String(ST[k]); read.textContent = lvlDb(ST[k]); };
@@ -1132,7 +1133,7 @@ function buildSet() {
   const box = $("#setBox"); box.textContent = "";
   buildMem(box); buildRec(box);
   const chRow = el("div", { class: "row" });
-  for (let ti = 0; ti < 4; ti++) chRow.append(chSelect(`t${ti + 1}.ch`, `T${ti + 1} · ${TN[ti]}`));
+  for (let ti = 0; ti < 4; ti++) chRow.append(chSelect(`t${ti + 1}.ch`, `${TL[ti]} · ${TN[ti]}`));
   [["samp", "Sampler"], ["brk", "Breaks"], ["gran", "Granular"], ["voz", "Voice"]].forEach(([m, n]) => chRow.append(chSelect(m + ".ch", n)));
   chRow.append(chSelect("sub.ch", "Sub"));
   const notes = el("div", { class: "row" });
@@ -1165,7 +1166,7 @@ function buildSet() {
       el("p", { class: "hint" }, "Notes: sampler 36–51 = pads 1–16, and 60 upwards plays the selected pad chromatically (72 = original pitch). Breaks 36–51 jump to a slice and 60–67 are the hold effects. Granular and Voice follow the notes they receive."),
       el("p", { class: "hint" }, "Every MIDI input is opened (USB, Bluetooth, controllers) and new ones are picked up every 2 seconds. Clock is taken from the first input that sends it. The top screen shows each message as it arrives."),
       el("p", { class: "hint" }, "Open MIDI inputs: ", el("b", { id: "midiPorts" }, MIDI.ports || "—"))),
-    card("Computer keyboard", "to play without the Oxi", el("p", { class: "hint" }, "1–4 choose a track, 5 the sampler (the 16 keys are the 16 pads), 6 granular, 7 voice and 8 the sub. A W S E D F T G Y H U J K O L P are notes; Z / X change octave.")),
+    card("Computer keyboard", "to play without the Oxi", el("p", { class: "hint" }, "1–3 choose synth tracks T1–T3, 4 the drums (T4), 5 the sampler (the 16 keys are the 16 pads), 6 granular, 7 voice and 8 the sub. A W S E D F T G Y H U J K O L P are notes; Z / X change octave.")),
     card("Stop", "in case something keeps ringing", keyBtn("Stop all notes", "danger", () => sendRaw("panic"))),
     card("Most touched", "how many times you move each parameter, from here or a controller; to choose what goes on the controllers' first view",
       el("div", { class: "scrow" }, keyBtn("Refresh", "", () => sendRaw("usage")), confirmKey("Reset", "Reset counts?", () => sendRaw("usage reset"), "danger")),
@@ -1182,13 +1183,13 @@ buildSnaps = scoped("mix.snaps", buildSnaps); buildMaster = scoped("mix.master",
 // --- Computer keyboard
 const KB = "awsedftgyhujkolp";
 const kbHeld = new Map();
-const KBT = { 0: "T1 Drums", 1: "T2", 2: "T3", 3: "T4", 10: "Sampler", 12: "Granular", 13: "Voice", 20: "Sub" };
+const KBT = { 0: "T4 Drums", 1: "T1", 2: "T2", 3: "T3", 10: "Sampler", 12: "Granular", 13: "Voice", 20: "Sub" };
 document.addEventListener("keydown", (e) => {
   if (e.repeat || e.metaKey || e.ctrlKey || /input|select|textarea/i.test(e.target.tagName)) return;
   const k = e.key.toLowerCase();
   if (k === "z") { ui.kbOct = Math.max(1, ui.kbOct - 1); kbInfo(); return; }
   if (k === "x") { ui.kbOct = Math.min(7, ui.kbOct + 1); kbInfo(); return; }
-  const tk = { 1: 0, 2: 1, 3: 2, 4: 3, 5: 10, 6: 12, 7: 13, 8: 20 }[k];
+  const tk = { 1: 1, 2: 2, 3: 3, 4: 0, 5: 10, 6: 12, 7: 13, 8: 20 }[k];
   if (tk != null) { ui.kbTrack = tk; saveUi(); kbInfo(); return; }
   const i = KB.indexOf(k); if (i < 0 || !ready) return;
   const t = ui.kbTrack, n = t === 0 ? ST[`d.l${i % 8}.note`] : t === 10 ? 36 + i : 12 * (ui.kbOct + 1) + i;
@@ -1200,7 +1201,7 @@ document.addEventListener("keyup", (e) => { const k = e.key.toLowerCase(); if (k
 const kbRelease = () => { kbHeld.forEach(([t, n]) => sendRaw(`kb ${t} ${n} 0`)); kbHeld.clear(); };
 window.addEventListener("blur", kbRelease);
 document.addEventListener("visibilitychange", () => { if (document.hidden) kbRelease(); });
-function kbInfo() { $("#kbInfo").textContent = `Computer keyboard → ${KBT[ui.kbTrack] || "T2"}${[1, 2, 3, 12, 13, 20].includes(ui.kbTrack) ? " · octave " + ui.kbOct : ""}   (1-4 tracks · 5 sampler · 6 granular · 7 voice · 8 sub · A W S E D… notes · Z / X octave)`; saveUi(); }
+function kbInfo() { $("#kbInfo").textContent = `Computer keyboard → ${KBT[ui.kbTrack] || "T1"}${[1, 2, 3, 12, 13, 20].includes(ui.kbTrack) ? " · octave " + ui.kbOct : ""}   (1-4 tracks · 5 sampler · 6 granular · 7 voice · 8 sub · A W S E D… notes · Z / X octave)`; saveUi(); }
 
 $("#tabs").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b && b.dataset.t) setTab(b.dataset.t); });
 // Home: vuelve a tu punto de partida (la memoria «Home»). Dos toques, para no hacerlo sin querer

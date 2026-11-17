@@ -87,7 +87,7 @@ struct Feedback { int16_t t, e, i; float v; };   // CC del Oxi que movió un kno
 constexpr int NT = 4, BLK = 256, NCH = 15, NGRP = 2, NSEND = 4, NDIR = 7, NBUS = 3 + NDIR;   // buses: máster, grupo A, grupo B y 7 pares de salidas directas
 // Canales: 0 Bombo, 1 Caja, 2 Resto bat, 3 Sub, 4-6 pistas 2-4, 7-10 directo (fase 3), 11-14 entradas de audio
 constexpr int CH_SUB = 3, CH_T0 = 4, CH_GRAN = 7, CH_SAMP = 8, CH_BRK = 9, CH_VOZ = 10, CH_IN = 11;
-const char* kChNames[NCH] = {"Kick", "Snare", "Drums rest", "Sub", "Track 2", "Track 3", "Track 4", "Granular", "Sampler", "Breaks", "Voice", "Input 1", "Input 2", "Input 3", "Input 4"};
+const char* kChNames[NCH] = {"Kick", "Snare", "Drums rest", "Sub", "Track 1", "Track 2", "Track 3", "Granular", "Sampler", "Breaks", "Voice", "Input 1", "Input 2", "Input 3", "Input 4"};
 // Punto de partida (mezcla de Jorge, 13-11-2026, rehecha la misma noche): con los knobs de volumen al 75 %, los faders
 // a 0 dB y los Gain a 0 suena su mezcla. Lo que ponían el Gain y el fader de cada canal va aquí, por dentro.
 // Los instrumentos del directo (granular, sampler, breaks, voz) y las entradas, sin tocar por ahora.
@@ -2316,7 +2316,7 @@ int levelsTest() {
         std::printf("%-10s MEDIA: %.1f dB\n\n", kEng[e].name, sum / std::max(cnt, 1));
     }
     // batería: un golpe a velocidad 110, ventana de 100 ms
-    static const char* KN[6] = {"808", "909", "FM", "Chip", "Exp", "DRM"}; static const int KI[6] = {KIT_P808, KIT_P909, KIT_CYC, KIT_GB, KIT_EXP, KIT_DRM1}; static const char* SN[8] = {"Bombo", "Caja", "Clap", "Rim", "Tom", "HH cer", "HH abi", "Perc"};
+    static const char* KN[6] = {"808", "909", "FM", "Game Boy", "Exp", "DRM"}; static const int KI[6] = {KIT_P808, KIT_P909, KIT_CYC, KIT_GB, KIT_EXP, KIT_DRM1}; static const char* SN[8] = {"Bombo", "Caja", "Clap", "Rim", "Tom", "HH cer", "HH abi", "Perc"};
     std::printf("%-6s", ""); for (auto* n : KN) std::printf("%14s", n); std::printf("\n");
     for (int l = 0; l < 8; ++l) {
         std::printf("%-6s", SN[l]);
