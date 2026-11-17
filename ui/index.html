@@ -289,7 +289,9 @@ function connect() {
       v.slice(0, 40).forEach(([k, n]) => c.append(el("span", { class: "memitem" }, el("b", {}, String(n)), " ", k))); } }
     else if (op === "trec") { if (rest) { const [on, secs, gaps, free, lastMin, saving] = rest.split(" ").map(Number); TREC = { on: !!on, secs, gaps, free, lastMin, saving: !!saving }; drawTrec(); } }
     else if (op === "trecs") { TAKES = JSON.parse(rest); drawTakes(); }
-    else if (op === "rpinfo") { RP.info = JSON.parse(rest); RP.pos = 0; drawReplay(); }
+    else if (op === "rpinfo") { const nf = JSON.parse(rest); if (!RP.info || RP.info.take !== nf.take) RP.pos = 0; RP.info = nf; RP.ver = nf.ver || "live.freon"; drawReplay(); }
+    else if (op === "rpunch") { RP.punch = JSON.parse(rest); drawReplay(); }
+    else if (op === "rpend") { RP.pend = JSON.parse(rest); RP.punch = []; drawReplay(); }
     else if (op === "rplay") { const sp1 = rest.split(" "); RP.on = sp1[0] === "1"; if (RP.on) { RP.pos = +sp1[1]; RP.len = +sp1[2]; RP.take = sp1.slice(3).join(" "); if (!RP.info || RP.info.take !== RP.take) sendRaw(`rplay info ${RP.take}`); } drawReplay(); }
     else if (op === "rpmsg") { const [w, ...n] = rest.split(" "); topMsg("Replay", `${w} ${n.join(" ")}`); }
     else if (op === "trecmsg") { const [w, ...n] = rest.split(" "); topMsg("Recording", `${w} ${n.join(" ")}`); }
@@ -1130,7 +1132,7 @@ function playTake(row, url, name) {
   row.after(el("div", { class: "takeplay" }, a)); a.play().catch(() => {});
 }
 // --- reproducir un live (live.freon): elegir un punto (o una marca), pre-roll y ▶. Al parar vuelve tu estado de antes
-let RP = { info: null, on: false, pos: 0, len: 0, take: "", drag: false, pre: 4 };
+let RP = { info: null, on: false, pos: 0, len: 0, take: "", drag: false, pre: 4, ver: "live.freon", punch: [], pend: [] };
 function drawReplay() {
   const box = $("#replayBox"); if (!box) return;
   if (!RP.info) { box.hidden = true; return; }
@@ -1142,16 +1144,25 @@ function drawReplay() {
     const pre = el("select", { id: "rpPre", "aria-label": "Pre-roll" }); [[0, "No pre-roll"], [2, "Pre-roll 2 s"], [4, "Pre-roll 4 s"], [8, "Pre-roll 8 s"], [16, "Pre-roll 16 s"]].forEach(([v, n]) => pre.append(el("option", { value: v }, n)));
     pre.value = String(RP.pre); pre.addEventListener("change", () => { RP.pre = +pre.value; });
     box.append(el("h3", { id: "rpTitle" }, "Replay"),
-      el("p", { class: "hint" }, "Freon plays the live back exactly as you played it: notes, knobs, presets and tempo, with the recorded inputs. Pick a point (or a marker), choose a pre-roll and press ▶. The Oxi's notes are ignored meanwhile (stop it); your controllers still work. ■ brings back what you had before."),
+      el("p", { class: "hint" }, "Freon plays the live back exactly as you played it: notes, knobs, presets and tempo, with the recorded inputs. Pick a point (or a marker), choose a pre-roll and press ▶. To fix something, just move it while it plays: from that moment that parameter is yours (its recorded moves go quiet) until you press ■. Then save the pass as a new version, or discard it. The original is never touched. The Oxi's notes are ignored meanwhile (stop it). ■ brings back what you had before."),
       el("div", { class: "scrow" }, pos), el("div", { class: "scrow" }, el("b", { id: "rpTime" }, "0:00"), el("span", { class: "hint", id: "rpLen" }, ""), pre,
-        keyBtn("▶ Play from here", "", () => sendRaw(`rplay start ${RP.pos.toFixed(2)} ${RP.pre} ${RP.info.take}`)), keyBtn("■ Stop", "danger", () => sendRaw("rplay stop")),
+        el("select", { id: "rpVer", "aria-label": "Version of the live" }),
+        keyBtn("▶ Play from here", "", () => sendRaw(`rplay start ${RP.pos.toFixed(2)} ${RP.pre} ${RP.ver} ${RP.info.take}`)), keyBtn("■ Stop", "danger", () => sendRaw("rplay stop")),
         keyBtn("Close", "", () => { if (RP.on) sendRaw("rplay stop"); RP.info = null; drawReplay(); })),
-      el("div", { class: "scrow", id: "rpMarks" }));
+      el("div", { class: "scrow", id: "rpMarks" }), el("div", { class: "scrow", id: "rpPunch" }));
+    $("#rpVer").addEventListener("change", (e) => { RP.ver = e.target.value; });
   }
   $("#rpTitle").textContent = `Replay · ${RP.info.take}` + (RP.on ? " · playing" : "");
   const pos = $("#rpPos"); pos.max = String(Math.max(1, len));
   if (RP.on && !RP.drag) pos.value = String(RP.pos);
   $("#rpTime").textContent = hms(RP.on && !RP.drag ? RP.pos : +pos.value); $("#rpLen").textContent = "/ " + hms(len);
+  const vs = $("#rpVer"), vers = RP.info.vers && RP.info.vers.length ? RP.info.vers : ["live.freon"];
+  if (vs.dataset.list !== vers.join("|")) { vs.textContent = ""; vers.forEach(v => vs.append(el("option", { value: v }, v === "live.freon" ? "Original" : "Version " + v.replace(/^live-|\.freon$/g, "")))); vs.dataset.list = vers.join("|"); }
+  vs.value = RP.ver;
+  const pu = $("#rpPunch"); pu.textContent = "";
+  if (RP.on && RP.punch.length) pu.append(el("span", { class: "hint" }, "Writing: " + RP.punch.join(", ")));
+  if (!RP.on && RP.pend.length) pu.append(el("span", { class: "hint" }, "Changed in this pass: " + RP.pend.join(", ")),
+    keyBtn("Save as new version", "", () => sendRaw("rplay save")), confirmKey("Discard", "Discard changes?", () => sendRaw("rplay discard"), "danger"));
   const mk = $("#rpMarks"); mk.textContent = "";
   (RP.info.marks || []).forEach(([sec, label]) => mk.append(keyBtn(`◆ ${hms(sec)} ${label}`, "", () => { RP.pos = sec; pos.value = String(sec); $("#rpTime").textContent = hms(sec); })));
   if (!RP.info.live) mk.append(el("span", { class: "hint" }, "This take has no live.freon (recorded before it existed)"));

@@ -191,3 +191,23 @@ Cada fase se prueba en la Pi con el live cargado (CPU, cortes y una grabación l
 - **Probado en la Pi (18-11):** una toma de 6 s reproducida desde una marca con 1 s de pre-roll. Las 24 notas desde ese punto salen con desfase 0 y los mismos valores, y al acabar vuelve el estado de antes.
 - **El sonido no se cancela restando** (prueba de cancelación). Los osciladores de los sintes giran libres, como en un analógico, y cada nota empieza con otra fase; además, LFOs, chorus, deriva y ruido no repiten. La envolvente de nivel coincide (mediana 1,6 dB por ventana de 20 ms). Es el mismo live tocado otra vez, no una copia del audio.
 - **Siguiente (paso 2):** corregir encima. Lo que toques mientras suena pasa a ser tuyo (se calla lo grabado de ese parámetro), y al parar: guardar como versión nueva o descartar.
+
+## Corregir encima (paso 2, 18-11-2026)
+
+- **Mientras suena un replay,** cualquier parámetro que toques (web o controladora) pasa a ser tuyo desde ese momento. Su automatización grabada se calla, también la ya programada, y lo que haces se apunta. El panel muestra «Writing: T1 · Cutoff…».
+- **Al parar (■),** el panel muestra lo que cambiaste: «Save as new version» o «Discard».
+- **Guardar** crea `live-2.freon`, `live-3.freon`… en la misma toma; el original no se toca. En la versión nueva, cada parámetro tocado tiene:
+  - lo grabado hasta que lo tocaste;
+  - lo tuyo desde ese momento hasta donde paraste;
+  - ahí vuelve a su valor grabado y sigue como antes.
+- **Versiones:** se eligen en el desplegable del panel, y cada pasada se hace sobre la versión elegida. Para corregir otro punto: otra pasada sobre la última versión.
+- **Atajos:** pulsar ▶ sin haber guardado descarta los cambios pendientes, y avisa.
+- **Por dentro:**
+  - `Control::rpTouch` marca el parámetro (`Audio::rpPunchK`, que el motor consulta antes de aplicar cada evento del replay) y guarda tus valores con su muestra en el archivo.
+  - `rpSave` mezcla y escribe.
+  - Lo tuyo se apunta con la muestra en que el control lo recibe, que llega al motor en el bloque siguiente: hasta un bloque de diferencia (21 ms con el buffer de 1024).
+- **Probado en el Mac:**
+  - Tocando un knob a los 2 s, la web deja de recibir lo grabado y solo ve tus valores.
+  - La versión 2 contiene lo original, lo tuyo y la vuelta al valor grabado en el punto de parada.
+  - Al reproducirla, la web ve exactamente esa secuencia.
+- **Siguiente (paso 3):** regenerar el audio. Hoy ya se puede: Rec mientras se reproduce la versión, desde el principio y sin pre-roll. Falta hacerlo con un botón («Render») y, si hace falta, más rápido que el tiempo real.
