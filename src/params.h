@@ -122,7 +122,7 @@ inline const EngSpec kEng[E_COUNT] = {
       {"Glide", 0.001f, 5, 0, 0.05f, 's', true, nullptr, "Modulation"}, {"LFO rate", 0.2f, 50, 0, 3, 'f', true, "Hz", "Modulation"},
       {"Mod source", 0, 7, 1, 0, 'n', false, "Triangle|Square|Saw|Ramp|Filter EG|Osc 2|S&H|Noise", "Modulation"}, {"Mod dest", 0, 3, 1, 0, 'n', false, "Pitch|Filter|Wave|Osc 2", "Modulation"},
       {"Mod amount", 0, 1, 0.01f, 0, 'p', false, nullptr, "Modulation"}, {"Mod wheel", 0, 1, 0.01f, 0, 'p', false, nullptr, "Modulation"},
-      {"Velocity", 0, 1, 0.01f, 0.3f, 'p', false, nullptr, "Output"}, {"Volume", 0, 1, 0.01f, 0.75f, 'p', false, nullptr, "Output"},
+      {"Velocity", 0, 1, 0.01f, 0.3f, 'p', false, nullptr, "Output"}, {"Volume", 0, 2, 0.01f, 0.75f, 'p', false, nullptr, "Output"},   // hasta 2 (+6 dB): el Phatty sale flojo y necesitaba margen
       {"Ladder", 0, 1, 1, 0, 'n', false, "Classic|Improved", "Filter"}},
      2, {{"Sync", false}, {"Glide", false}}},
 };
@@ -198,7 +198,7 @@ inline const std::vector<Preset>& factoryPresets(int e) {
     // Volume actúa al cuadrado. No pasa de 1, así que los sonidos muy cortos pueden quedar algo por debajo.
     const auto& kVolIdx = kEngVol;
     static const float kPreDb[E_COUNT][8] = {{-10.3f, 0.7f, -0.7f, 8, 8, -9.2f}, {-1.4f, 9, -2.1f, -2.4f, 7.1f, 3, -5.3f, 1.3f}, {3.0f, -0.6f, 6.7f, -0.5f, -0.3f}, {}, {},
-                                             {1.5f, -2.2f, 0, 4.5f, -2.6f}, {1.4f, 1.1f, -2.5f, -1.4f}, {8.6f, -2, -1.9f, 2.3f, 0}, {1.0f, 8.0f, 0, 7.1f, 0, 16.4f, 6.1f, 7.1f}};   // Phatty: igualados a GRINDMYBASS (el Volume no pasa de 1)
+                                             {1.5f, -2.2f, 0, 4.5f, -2.6f}, {1.4f, 1.1f, -2.5f, -1.4f}, {8.6f, -2, -1.9f, 2.3f, 0}, {1.2f, 8.2f, 0, 7.4f, 0, 17.2f, 6.7f, 7.3f}};   // Phatty: igualados a GRINDMYBASS (su Volume llega a 2, +6 dB de margen)
     static const std::vector<std::vector<Preset>> T = [] {
         std::vector<std::vector<Preset>> r(P, P + E_COUNT);
         for (int en = 0; en < E_COUNT; ++en) {
@@ -206,7 +206,7 @@ inline const std::vector<Preset>& factoryPresets(int e) {
             for (size_t s = 0; s < r[static_cast<size_t>(en)].size() && s < 8; ++s) {
                 Preset& pr = r[static_cast<size_t>(en)][s]; if (!pr.name[0] || kPreDb[en][s] == 0) continue;
                 float* val = nullptr; for (auto& kv : pr.v) if (kv.first == vi) val = &kv.second;
-                const float cur = val ? *val : kEng[en].p[vi].def, nv = std::clamp(cur * std::pow(10.0f, kPreDb[en][s] / 40.0f), 0.05f, 1.0f);
+                const float cur = val ? *val : kEng[en].p[vi].def, nv = std::clamp(cur * std::pow(10.0f, kPreDb[en][s] / 40.0f), 0.05f, kEng[en].p[vi].max);
                 if (val) *val = nv; else pr.v.push_back({vi, nv});
             }
         }

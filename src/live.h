@@ -19,7 +19,35 @@
 namespace gb {
 
 // ------------------------------------------------------------------ muestras y archivos WAV
-struct Sample { std::vector<float> L, R; float sr = 48000; std::string name; size_t size() const { return L.size(); } };
+struct Sample { std::vector<float> L, R; float sr = 48000; std::string name; float norm = -1.0f;   // norm: ganancia para igualar (breaks); <0 = sin calcular
+                size_t size() const { return L.size(); } };
+// Sonoridad percibida (BS.1770, sin puertas: los breaks son loops sin silencios largos), en LUFS. Filtro K: estante de
+// agudos (+4 dB desde ~1,5 kHz) y paso alto (RLB, ~38 Hz); coeficientes por transformada bilineal para cualquier frecuencia
+inline float loudnessLufs(const Sample& s) {
+    if (s.size() < 1000) return -70.0f;
+    auto shelf = [](double fs, double* b, double* a) {   // estante de la norma, recalculado para fs (Pyloudnorm / libebur128)
+        const double f0 = 1681.974450955533, G = 3.999843853973347, Q = 0.7071752369554196, K = std::tan(3.141592653589793 * f0 / fs);
+        const double Vh = std::pow(10.0, G / 20.0), Vb = std::pow(Vh, 0.4996667741545416), a0 = 1.0 + K / Q + K * K;
+        b[0] = (Vh + Vb * K / Q + K * K) / a0; b[1] = 2.0 * (K * K - Vh) / a0; b[2] = (Vh - Vb * K / Q + K * K) / a0; a[0] = 2.0 * (K * K - 1.0) / a0; a[1] = (1.0 - K / Q + K * K) / a0;
+    };
+    auto hipass = [](double fs, double* b, double* a) {
+        const double f0 = 38.13547087602444, Q = 0.5003270373238773, K = std::tan(3.141592653589793 * f0 / fs), a0 = 1.0 + K / Q + K * K;
+        b[0] = 1.0; b[1] = -2.0; b[2] = 1.0; a[0] = 2.0 * (K * K - 1.0) / a0; a[1] = (1.0 - K / Q + K * K) / a0;
+    };
+    double b1[3], a1[2], b2[3], a2[2]; shelf(s.sr, b1, a1); hipass(s.sr, b2, a2);
+    double sum = 0;
+    for (const auto* ch : {&s.L, &s.R}) {
+        if (ch->empty()) continue;
+        double x1 = 0, x2 = 0, y1 = 0, y2 = 0, u1 = 0, u2 = 0, z1 = 0, z2 = 0;
+        for (float xf : *ch) {
+            const double x = xf, y = b1[0] * x + b1[1] * x1 + b1[2] * x2 - a1[0] * y1 - a1[1] * y2; x2 = x1; x1 = x; y2 = y1; y1 = y;
+            const double z = b2[0] * y + b2[1] * u1 + b2[2] * u2 - a2[0] * z1 - a2[1] * z2; u2 = u1; u1 = y; z2 = z1; z1 = z;
+            sum += z * z;
+        }
+    }
+    const double ms = sum / static_cast<double>(s.size());   // suma de los dos canales, como la norma
+    return ms > 1e-12 ? static_cast<float>(-0.691 + 10.0 * std::log10(ms)) : -70.0f;
+}
 
 inline Sample* loadWav(const std::string& path, float maxSec = 90) {
     FILE* f = std::fopen(path.c_str(), "rb"); if (!f) return nullptr;
@@ -330,7 +358,7 @@ public:
         if (!s) { for (auto& v : v_) v.on = false; return; }
         float g, k; Svf::coefs(p[BK_FILT], p[BK_RES], sr_, g, k);
         const bool filt = std::fabs(p[BK_FILT]) > 0.02f, hp = p[BK_FILT] > 0;
-        const float dg = 1.0f + p[BK_DRIVE] * 8.0f, dn = 1.0f / std::tanh(dg), lvl = p[BK_LVL];
+        const float dg = 1.0f + p[BK_DRIVE] * 8.0f, dn = 1.0f / std::tanh(dg), lvl = p[BK_LVL] * (s->norm > 0.0f ? s->norm : 1.0f);   // norm: break igualado (−14 LUFS)
         // Tape stop: la velocidad cae a 0 en medio compás mientras se mantiene y vuelve en una corchea al soltar
         const float tapeTo = hold[3] ? 0.0f : 1.0f, tapeK = 1.0f / static_cast<float>(spb * (hold[3] ? 8.0 : 2.0));
         const float tape0 = tape_; tape_ = tape_ < tapeTo ? std::min(tapeTo, tape_ + tapeK * n) : std::max(tapeTo, tape_ - tapeK * n);

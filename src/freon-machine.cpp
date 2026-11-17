@@ -879,9 +879,20 @@ struct Control {
         if (!s && !f.empty()) { std::printf("No se pudo leer samples/%s\n", f.c_str()); s = pad < static_cast<int>(facS.size()) ? facS[static_cast<size_t>(pad)] : nullptr; }
         au.samp.smp[pad].store(s);
     }
+    // Breaks igualados: al cargar uno se mide su sonoridad (LUFS) y se lleva a −14 LUFS, como mucho ±12 dB. Así se cambia de
+    // break sin saltos de volumen; el knob Level sigue mandando encima. Se calcula una vez, antes de dárselo al audio
+    static constexpr float kBrkLufs = -14.0f;
+    static void breakNorm(Sample* s) {
+        if (!s || s->norm > 0) return;
+        const float l = loudnessLufs(*s);
+        s->norm = std::clamp(std::pow(10.0f, (kBrkLufs - l) / 20.0f), 0.25f, 4.0f);
+        std::printf("Break %s: %.1f LUFS, ganancia %+.1f dB\n", s->name.c_str(), l, 20.0f * std::log10(s->norm)); std::fflush(stdout);
+    }
     Sample* breakSample(const std::string& nm) {
-        if (nm.rfind("fab:", 0) == 0) { const int i = std::atoi(nm.c_str() + 4); return i >= 0 && i < static_cast<int>(facB.size()) ? facB[static_cast<size_t>(i)] : nullptr; }
-        return fileSample(brkDir(), nm);
+        Sample* s = nullptr;
+        if (nm.rfind("fab:", 0) == 0) { const int i = std::atoi(nm.c_str() + 4); s = i >= 0 && i < static_cast<int>(facB.size()) ? facB[static_cast<size_t>(i)] : nullptr; }
+        else s = fileSample(brkDir(), nm);
+        breakNorm(s); return s;
     }
     // compases más probables para un loop: el tempo que más se acerque a 125
     static int guessBars(const Sample& s) {
@@ -890,7 +901,7 @@ struct Control {
         return best;
     }
     void assignBreak(bool guess) {
-        Sample* s = breakSample(ss["brk.name"]); if (!s && !facB.empty()) s = facB[0];
+        Sample* s = breakSample(ss["brk.name"]); if (!s && !facB.empty()) { s = facB[0]; breakNorm(s); }
         au.brk.smp.store(s);
         if (guess && s) { const std::string nm = ss["brk.name"]; set("brk.0", nm.rfind("fab:", 0) == 0 ? 1.0f : static_cast<float>(guessBars(*s)), -1); }
         brkCuts();
