@@ -292,9 +292,14 @@ struct Audio {
         for (int c = 0; c < NCH; ++c) st[c].baseG = chBaseGain(c, c >= CH_T0 && c < CH_T0 + 3 ? (c == CH_T0 ? E_JUNO : c == CH_T0 + 1 ? E_ACID : E_MOOG) : -1);
         samp.prepare(sr); brk.prepare(sr); gran.prepare(sr); voz.prepare(sr);
         recL.assign(static_cast<size_t>(sr * 30), 0.0f); recR.assign(static_cast<size_t>(sr * 30), 0.0f);
-        if (dring.buf.empty()) dring.init(1u << 21);   // grabación de lives: ~44 s de margen a 48 kHz (16 MB)
+        if (dring.buf.empty()) dring.init(1u << 21, 2);          // grabación de lives: máster, ~44 s de margen a 48 kHz (16 MB)
+        if (sring.buf.empty()) sring.init(1u << 19, kStemCh);    // pistas: ~11 s (88 MB)
     }
-    rec::DiskRing dring;   // salida del máster hacia la grabación (la vacía el hilo de rec::Recorder)
+    // grabación de lives (src/recorder.h): máster, pistas (entradas, canales después del fader, retornos) y eventos.
+    // absFrame: muestras procesadas desde el arranque; es el reloj común de los tres
+    static constexpr int kStemCh = 4 + 2 * NCH + 2 * NSEND;
+    rec::DiskRing dring, sring; rec::EvRing evr; std::atomic<bool> evOn{false}; std::atomic<uint64_t> absFrame{0};
+    float logBpm = -1; bool evWas = false; float zeroBuf[BLK] = {};
     // notas de los módulos de directo
     void liveNote(int m, int n, int v) {
         switch (m) {
@@ -434,7 +439,8 @@ struct Audio {
         calls.fetch_add(1, std::memory_order_relaxed);
         // órdenes de la pantalla y del MIDI: como mucho 600 por bloque. Una memoria (o el arranque) manda unas 2000 de golpe:
         // así se reparten en 3–4 bloques y no se suman de una vez a lo que suena (en orden, sin perder ninguna)
-        { Cmd c; for (int nc = 0; nc < 600 && cmds.pop(c); ++nc) apply(c); }
+        const bool evl = evOn.load(std::memory_order_relaxed); if (evl && !evWas) logBpm = -1; evWas = evl;
+        { Cmd c; for (int nc = 0; nc < 600 && cmds.pop(c); ++nc) { apply(c); if (evl) evr.push({absFrame.load(std::memory_order_relaxed), 'c', static_cast<uint8_t>(c.k), c.a, c.b, c.c, c.v}); } }
         // MIDI con su momento exacto: cada mensaje se aplica en la muestra que le corresponde dentro del bloque
         // (va un bloque por detrás, pero sin el «temblor» de agruparlo todo al principio)
         Midi evs[512]; int ne = 0; Midi m;
@@ -446,7 +452,7 @@ struct Audio {
             int at = n;
             if (e < ne) { at = static_cast<int>((evs[e].t - blockStart) * sr); at = std::clamp(at & grid, done, n); }
             while (done < at) { const int k = std::min(BLK, at - done); chunk(out + static_cast<size_t>(done) * oc, oc, in ? in + static_cast<size_t>(done) * ic : nullptr, ic, k); done += k; }
-            if (e < ne) handleMidi(evs[e]);
+            if (e < ne) { handleMidi(evs[e]); if (evl) evr.push({absFrame.load(std::memory_order_relaxed), 'm', 0, evs[e].s, evs[e].d1, evs[e].d2, 0.0f}); }
         }
         // interfaz de 16 bits (la Behringer): dither TPDF de ±1 bit antes de que RtAudio redondee, para que las colas muy
         // bajas de las reverbs no suenen granuladas. Con 24 bits o más no hace falta
@@ -466,6 +472,7 @@ struct Audio {
         sinceTick += k;
         const bool clk = clkOn();
         bpm = clk ? clkBpm.load() : mp[MP_BPM];
+        if (evWas && std::fabs(bpm - logBpm) > 0.001f) { logBpm = bpm; evr.push({absFrame.load(std::memory_order_relaxed), 't', 0, 0, 0, 0, bpm}); }   // live.freon: tempo
         const double spb = sr * 60.0 / bpm / 4.0;
         if (!clk || !running) pos += k / spb;
         else pos = ticks / 6.0 + std::min(1.0, sinceTick / spb);   // entre pulsos, interpola
@@ -582,6 +589,13 @@ struct Audio {
             for (int i = 0; i < k; ++i) { o = std::max(o, std::fabs(a[i]) + std::fabs(b[i])); busL[0][i] += a[i]; busR[0][i] += b[i]; }
             if (o > 2e-5f && fxIdle[f] < 40.0f) fxTail[f] = std::max(fxTail[f], 4.5f);
         }
+        {   // pistas para la grabación: entradas (tal cual), canales después del fader y retornos de efectos
+            const float* pc[kStemCh]; int j = 0;
+            for (int q = 0; q < 4; ++q) pc[j++] = inRaw[q];
+            for (int i = 0; i < NCH; ++i) { const bool on = !st[i].silent; pc[j++] = on ? st[i].L : zeroBuf; pc[j++] = on ? st[i].R : zeroBuf; }
+            for (int f = 0; f < NSEND; ++f) { pc[j++] = fxRun[f] ? fxOutL[f] : zeroBuf; pc[j++] = fxRun[f] ? fxOutR[f] : zeroBuf; }
+            sring.push(pc, k);
+        }
         // --- máster
         float* L = busL[0]; float* R = busR[0];
         mdist.process(L, R, k);
@@ -610,7 +624,8 @@ struct Audio {
         auto oc1 = [](float x) { return safeClip(x); };
         for (int i = 0; i < k; ++i) { L[i] = oc1(L[i]); R[i] = oc1(R[i]); mpk = std::max(mpk, std::max(std::fabs(L[i]), std::fabs(R[i]))); }
         pk[NCH + NGRP] = mpk;
-        dring.push(L, R, k);   // grabación de lives y «lo último»: tal como sale (sin la pre-escucha)
+        { const float* mc[2] = {L, R}; dring.push(mc, k); }   // grabación de lives y «lo último»: tal como sale (sin la pre-escucha)
+        absFrame.store(absFrame.load(std::memory_order_relaxed) + static_cast<uint64_t>(k), std::memory_order_relaxed);
         // --- pre-escucha: salidas 3-4 si las hay; si no, según el modo
         bool anyCue = false; for (auto& s : st) anyCue |= s.p[SP_CUE] >= 0.5f; for (auto& g : grp) anyCue |= g.p[SP_CUE] >= 0.5f;
         const float cl = mp[MP_CUELVL]; const int mode = static_cast<int>(mp[MP_CUEMODE]);
@@ -928,6 +943,7 @@ struct Control {
         if ((k.size() > 5 && k.compare(k.size() - 5, 5, ".file") == 0) || k == "brk.name")
             if (v.find('/') != std::string::npos || v.find('\\') != std::string::npos || v.find("..") != std::string::npos || v.size() > 200) return;
         ss[k] = v; dirty = true; dirtyAt = std::chrono::steady_clock::now();
+        if (trec.recording.load() && k.rfind("midi.", 0) != 0) trec.cmdLog(au.absFrame.load(), "s " + k + " " + v);   // live.freon: archivos de samples y breaks
         if (k == "brk.name") assignBreak(true);
         else if (k.rfind("samp.p", 0) == 0) assignPad(std::atoi(k.c_str() + 6));
         srv.broadcast("sset " + k + " " + v, from);
@@ -989,7 +1005,7 @@ struct Control {
         // directo
         const int lchDef[LM_COUNT] = {5, 6, 7, 8};
         for (int m = 0; m < LM_COUNT; ++m) st[std::string(kLiveKeys[m]) + ".ch"] = static_cast<float>(lchDef[m]);
-        st["samp.sel"] = 0; st["rec.src"] = 0;
+        st["samp.sel"] = 0; st["rec.src"] = 0; st["rec.stems"] = 0;
         for (int pad = 0; pad < kPads; ++pad) { for (int j = 0; j < SA_COUNT; ++j) st["samp.p" + std::to_string(pad) + "." + std::to_string(j)] = kSampSpec[j].def; ss["samp.p" + std::to_string(pad) + ".file"] = ""; }
         for (int j = 0; j < BK_COUNT; ++j) st["brk." + std::to_string(j)] = kBrkSpec[j].def;
         for (int j = 0; j < GR_COUNT; ++j) st["gran." + std::to_string(j)] = kGrSpec[j].def;
@@ -1075,6 +1091,7 @@ struct Control {
         auto tail = [&](size_t from) { return std::atoi(k.c_str() + from); };
         if (k == "samp.sel") { lo = 0; hi = kPads - 1; return true; }
         if (k == "rec.src") { lo = 0; hi = 20; return true; }
+        if (k == "rec.stems") { lo = 0; hi = 1; return true; }
         if (k.rfind("samp.p", 0) == 0) { const size_t d = k.find('.', 6); return spec(kSampSpec, SA_COUNT, d == std::string::npos ? -1 : tail(d + 1)); }
         if (k.rfind("brk.", 0) == 0) return spec(kBrkSpec, BK_COUNT, std::isdigit(static_cast<unsigned char>(k[4])) ? tail(4) : -1);
         if (k.rfind("gran.", 0) == 0) return spec(kGrSpec, GR_COUNT, std::isdigit(static_cast<unsigned char>(k[5])) ? tail(5) : -1);
@@ -1429,7 +1446,7 @@ struct Control {
         }
         if (learn_ >= 0) learnStop(); comboOff();
         std::map<std::string, float> keepF; std::map<std::string, std::string> keepS;   // el montaje MIDI no cambia
-        for (auto& [k, v] : st) if (k.rfind("midi.", 0) == 0) keepF[k] = v;
+        for (auto& [k, v] : st) if (k.rfind("midi.", 0) == 0 || k == "rec.stems") keepF[k] = v;   // el montaje (MIDI) y si se graba multipista no cambian
         for (auto& [k, v] : ss) if (k.rfind("midi.", 0) == 0) keepS[k] = v;
         const std::string keep = file; file = f; load(); file = keep;
         for (auto& [k, v] : keepF) st[k] = v; for (auto& [k, v] : keepS) ss[k] = v;
@@ -1437,6 +1454,7 @@ struct Control {
         au.cmds.push({K_ALLOFF, 0, 0, 0, 0});   // notas sueltas de la configuración anterior, fuera
         pushAll(); mapDirty = true; dirty = true; dirtyAt = std::chrono::steady_clock::now();
         srv.broadcast("state " + stateJson()); srv.broadcast("memmsg loaded " + n);
+        if (trec.recording.load()) trec.cmdLog(au.absFrame.load(), "S " + stateJson());   // live.freon: la memoria entera, en su momento
         std::printf("Memoria cargada: %s\n", n.c_str()); std::fflush(stdout);
     }
     void memDel(const std::string& raw) {
@@ -1474,16 +1492,33 @@ struct Control {
         if (ok) std::rename(tmp.c_str(), f.c_str()); else std::remove(tmp.c_str());
     }
     // --- grabación de lives (fase 1: estéreo del máster). Ver GRABACION.md y src/recorder.h
-    rec::Recorder trec; std::mutex trecMx_; std::vector<std::string> trecMsgs_; std::string trecLast_; int trecTick_ = 0;
+    rec::Recorder trec; std::mutex trecMx_; std::vector<std::string> trecMsgs_; std::string trecLast_; int trecTick_ = 0, evOffWait_ = 0;
     std::string recDir() const { return base + "/grabaciones"; }
     void trecStart() {
         std::error_code ec; std::filesystem::create_directories(recDir(), ec);
         const int n = rec::Recorder::repairAll(recDir()); if (n) { std::printf("Grabación: %d toma(s) que quedaron abiertas, reparadas\n", n); std::fflush(stdout); }
         trec.onEvent = [this](const std::string& m) { std::lock_guard<std::mutex> lk(trecMx_); trecMsgs_.push_back(m); };
-        trec.start(&au.dring, static_cast<uint32_t>(au.sr), recDir());
+        trec.start(&au.dring, &au.sring, &au.evr, static_cast<uint32_t>(au.sr), recDir());
     }
     uint64_t recFreeMB() const { std::error_code ec; const auto sp = std::filesystem::space(recDir(), ec); return ec ? 0 : sp.available / (1024 * 1024); }
-    void trecToggle() { if (trec.recording.load()) trec.cmdStop(); else if (recFreeMB() < 500) srv.broadcast("trecmsg error not enough disk space"); else trec.cmdStart(); }
+    void trecToggle() {
+        if (trec.recording.load()) { au.evOn = false; trec.cmdStop(); return; }
+        const bool stems = st["rec.stems"] >= 0.5f;
+        if (recFreeMB() < (stems ? 3000u : 500u)) { srv.broadcast(std::string("trecmsg error not enough disk space") + (stems ? " for multitrack (3 GB)" : "")); return; }
+        rec::TakeInfo ti; ti.stems = stems; ti.build = __DATE__ " " __TIME__;
+        // pistas, en el orden del anillo de pistas (Audio::kStemCh): entradas (mono, siempre), canales y retornos (estéreo)
+        for (int q = 0; q < 4; ++q) { ti.names.push_back("Input " + std::to_string(q + 1)); ti.width.push_back(1); ti.always.push_back(true); }
+        for (int i = 0; i < NCH; ++i) {
+            std::string n = kChNames[i];
+            if (i >= CH_T0 && i < CH_T0 + 3) { const int e = static_cast<int>(st["t" + std::to_string(i - CH_T0 + 2) + ".eng"]); n = "T" + std::to_string(i - CH_T0 + 1) + " " + (e >= 0 && e < E_COUNT ? kEng[e].name : ""); }
+            if (i >= CH_IN) n = "Channel " + n;   // «Input 1» ya es la entrada sin procesar
+            ti.names.push_back(n); ti.width.push_back(2); ti.always.push_back(false);
+        }
+        for (int f = 0; f < NSEND; ++f) { const int t = std::clamp(static_cast<int>(st["fx" + std::to_string(f) + ".type"]), 0, FX_COUNT - 1); ti.names.push_back(std::string("FX ") + "ABCD"[f] + " " + kFx[t].name); ti.width.push_back(2); ti.always.push_back(false); }
+        for (auto& n : ti.names) for (char& c : n) if (c == '/' || c == '\\' || c == ':') c = '-';
+        ti.stemDelay = au.mlim.delay();   // el limitador del máster retrasa la salida 1,5 ms
+        au.evOn = true; ti.state = stateJson(); trec.cmdStart(std::move(ti));
+    }
     std::string takesJson() {
         std::vector<std::string> names; std::error_code ec;
         for (const auto& e : std::filesystem::directory_iterator(recDir(), ec)) if (e.is_directory()) names.push_back(e.path().filename().string());
@@ -1513,7 +1548,8 @@ struct Control {
         for (const auto& m : msgs) { srv.broadcast("trecmsg " + m); if (m.rfind("saved", 0) == 0) srv.broadcast("trecs " + takesJson()); }
         if (++trecTick_ % 8) return;   // ~0,5 s
         const bool on = trec.recording.load(); const uint64_t free = recFreeMB();
-        if (on && free < 300) { trec.cmdStop(); srv.broadcast("trecmsg error disk almost full: recording stopped"); }
+        if (on) evOffWait_ = 0; else if (au.evOn.load() && ++evOffWait_ > 6) au.evOn = false;   // una toma que no llegó a abrirse: sin registro
+        if (on && free < 300) { au.evOn = false; trec.cmdStop(); srv.broadcast("trecmsg error disk almost full: recording stopped"); }
         const std::string s = std::string(on ? "1" : "0") + " " + std::to_string(static_cast<long>(trec.frames.load() / std::max(1.0f, au.sr))) + " " + std::to_string(trec.gaps.load()) + " " +
                               std::to_string(free) + " " + std::to_string(trec.lastMinutes.load()) + " " + (trec.savingLast.load() ? "1" : "0");
         if (s != trecLast_) { trecLast_ = s; srv.broadcast("trec " + s); }
@@ -1548,7 +1584,7 @@ struct Control {
             if (f[0] == 'p') { const size_t d = f.find('.'); if (d == std::string::npos) return false; c.b = static_cast<int16_t>(std::atoi(f.c_str() + 1)); c.c = static_cast<int16_t>(std::atoi(f.c_str() + d + 1)); return true; }
             c.c = static_cast<int16_t>(std::atoi(f.c_str())); return true;
         }
-        if (k == "rec.src") return false;
+        if (k == "rec.src" || k == "rec.stems") return false;
         if (k.rfind("d.l", 0) == 0) {
             if (k.size() < 6) return false;
             c.k = K_LANE; c.a = static_cast<int16_t>(k[3] - '0'); const std::string f = k.substr(5);
@@ -1621,7 +1657,7 @@ struct Control {
         else if (op == "panic") au.cmds.push({K_ALLOFF, 0, 0, 0, 0});
         else if (op == "trec") {   // grabación de lives: toggle | start | stop | mark [texto] | last | list | del NOMBRE
             std::string w; is >> w; std::string rest; std::getline(is, rest); if (!rest.empty() && rest[0] == ' ') rest.erase(0, 1);
-            if (w == "toggle") trecToggle(); else if (w == "start") { if (!trec.recording.load()) trecToggle(); } else if (w == "stop") trec.cmdStop();
+            if (w == "toggle") trecToggle(); else if (w == "start") { if (!trec.recording.load()) trecToggle(); } else if (w == "stop") { au.evOn = false; trec.cmdStop(); }
             else if (w == "mark") trec.cmdMark(rest); else if (w == "last") trec.cmdSaveLast(); else if (w == "del") trecDel(rest);
             else if (w == "list") srv.send(client, "trecs " + takesJson());
         }

@@ -1106,7 +1106,8 @@ function buildRec(box) {
   const last = keyBtn("Save last 15 min", "", () => sendRaw("trec last")); last.id = "lastKey";
   box.append(el("div", { class: "card", id: "recCard" }, el("h3", {}, "Recordings"),
     el("p", { class: "hint" }, "● Rec (top) records the stereo master as it sounds, 24-bit WAV with its start time (Pro Tools: Spot). Freon always keeps the last 15 minutes: if something went well and you weren't recording, Save last. ◆ drops a marker (saved in marcas.txt). Without a screen, on the mixer channel: note 56 Rec/Stop, 57 marker, 58 save last. A power cut loses only the last few seconds. ▶ plays a take here, on this phone or computer (not through the Pi)."),
-    el("div", { class: "scrow" }, last, el("span", { class: "hint", id: "recState" }, "…")),
+    el("div", { class: "scrow" }, last, toggleKey("rec.stems", "Multitrack", (v) => topMsg("Recording", v ? "multitrack on (next take)" : "multitrack off")), el("span", { class: "hint", id: "recState" }, "…")),
+    el("p", { class: "hint" }, "Each take also keeps live.freon (everything you played and moved, sample-accurate, to replay and fix it later) and the interface inputs that were used. Multitrack adds one WAV per mixer channel after its fader, plus the effect returns; they add up to the mix (groups and master effects aside). Channels that stay silent are not kept. About 11 GB per hour: better on an SSD."),
     el("div", { class: "takes", id: "takeList" })));
   drawTrec(); drawTakes();
 }

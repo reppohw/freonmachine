@@ -127,6 +127,7 @@ struct LookLimiter {
     static constexpr int MAXD = 128;
     float thrDb = 0.0f, sr = 48000, lastGrDb = 0;
     void reset() { prepare(sr); w = bw = qH = qN = 0; t = 0; env = 1; for (int i = 0; i < MAXD; ++i) { dL[i] = dR[i] = 0; qV[i] = 1; qT[i] = 0; } }
+    int delay() const { return D; }   // muestras de retraso que añade al máster
     void prepare(float s) { sr = s; D = std::clamp(static_cast<int>(0.0015f * sr), 8, MAXD - 1); relC = 1.0f - std::exp(-1.0f / (0.08f * sr)); for (float& v : box) v = 1.0f; sum = D; }
     void process(float* L, float* R, int n) {
         const bool on = thrDb < -0.05f; const float thr = std::pow(10.0f, thrDb / 20.0f); float minG = 1.0f;

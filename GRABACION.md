@@ -142,3 +142,26 @@ Cada fase se prueba en la Pi con el live cargado (CPU, cortes y una grabación l
   - Repetir la hora con la Scarlett 4i4 (audio real), mirando cortes.
   - Comprobar la RAM de «lo último» (~260 MB fijos con mlockall).
   - Probar la nota 56 desde una controladora.
+
+## Registro de la interpretación y multipista hechos (17-11-2026)
+
+**Cada toma deja ahora:**
+- `master.wav`, como antes.
+- `live.freon`: el registro de la interpretación (abajo).
+- `Input 1-4.wav`: las entradas de la interfaz tal cual, solo las que sonaron. Hacen falta para regenerar el live.
+- Con **Multitrack** encendido (Settings › Recordings): un WAV estéreo por canal del mezclador, después del fader («Kick», «Snare», «T1 DX7»…), y los retornos de efectos («FX A Hall reverb»…). Las pistas que no sonaron (por debajo de −80 dB) se borran al parar.
+- **Alineación:** las pistas empiezan en la misma muestra que el máster (comprobado con un bombo: el mismo golpe cae en la misma muestra, ±1) y miden lo mismo. Se retrasan los 1,5 ms del limitador del máster.
+- **Suma:** las pistas suman la mezcla, salvo los grupos y los efectos del máster (filtros, distorsión, limitador).
+- El ajuste Multitrack no cambia al cargar una memoria, igual que el MIDI.
+
+**live.freon** (texto, una línea por cosa; la primera cifra es la muestra desde el inicio de la toma):
+- Cabecera: `{"v":1,"sr":48000,"start":…,"build":…,"stems":…}`.
+- `0 S {…}`: estado completo al empezar (como una memoria). `S` en otro momento: se cargó una memoria.
+- `F c K A B C V`: una orden que aplicó el motor, como sus `Cmd` (`Kind` y campos). Cubre todo lo que cambia el sonido: web, controladoras, Oxi (CC), presets, memorias y combinaciones.
+- `F m S D1 D2`: un mensaje MIDI que aplicó el motor (notas del Oxi, reloj…).
+- `F t BPM`: el tempo que usó el motor (al empezar y cada vez que cambia).
+- `F s CLAVE VALOR`: cambio de un archivo (sample de un pad, break).
+- `F mark TEXTO`: marca.
+- Se apunta en el hilo de audio, en un anillo sin bloqueos, justo al aplicarse, así que no se escapa nada. Si alguna vez se perdieran eventos, aparece una línea `# N events lost`.
+
+**Pendiente:** fase 3, regenerar desde live.freon (render sin tiempo real), la prueba de cancelación y exportar MIDI para Pro Tools y Ableton. Mejor después de simplificar motores y baterías.

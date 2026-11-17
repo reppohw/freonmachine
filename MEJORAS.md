@@ -151,7 +151,8 @@
 - [x] **Contador de uso** por parámetro (Settings › Most touched, `usos.json`), para elegir la primera vista de las controladoras.
 - [x] (Ya existía) Batería en 3 canales (Kick, Snare, Drums rest) y entradas Input 1-4 como canales: el monotron va por una de ellas.
 - [x] Grabación de lives, fase 1 (estéreo, «lo último», marcas, descarga): ver GRABACION.md. Probada en el Mac; falta 1 hora en la Pi.
-- [ ] Grabación fases 2-6: interpretación regenerable, multipista al SSD, MIDI para Pro Tools/Ableton, streaming.
+- [x] Grabación: registro de la interpretación (live.freon), entradas y multipista (17-11). Ver GRABACION.md.
+- [ ] Grabación: regenerar desde live.freon y exportar MIDI (Pro Tools/Ableton); streaming.
 
 ## Filtro ladder de código abierto (17-11-2026)
 - [x] **Ladder «Improved»** (D'Angelo y Välimäki, ICASSP 2013; código de MoogLadders, licencia tipo ISC) como opción en el Moog y el Phatty (parámetro Ladder, grupo Filter). Classic sigue por defecto, así que nada cambia hasta elegirlo.
