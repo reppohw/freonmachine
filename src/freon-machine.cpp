@@ -294,11 +294,14 @@ struct Audio {
         recL.assign(static_cast<size_t>(sr * 30), 0.0f); recR.assign(static_cast<size_t>(sr * 30), 0.0f);
         if (dring.buf.empty()) dring.init(1u << 21, 2);          // grabación de lives: máster, ~44 s de margen a 48 kHz (16 MB)
         if (sring.buf.empty()) sring.init(1u << 19, kStemCh);    // pistas: ~11 s (88 MB)
+        if (rin.buf.empty()) rin.init(1u << 18, 4);              // entradas grabadas al reproducir: ~5 s
     }
     // grabación de lives (src/recorder.h): máster, pistas (entradas, canales después del fader, retornos) y eventos.
     // absFrame: muestras procesadas desde el arranque; es el reloj común de los tres
     static constexpr int kStemCh = 4 + 2 * NCH + 2 * NSEND;
     rec::DiskRing dring, sring; rec::EvRing evr; std::atomic<bool> evOn{false}; std::atomic<uint64_t> absFrame{0};
+    // reproducción de live.freon: eventos con su muestra (rq) y entradas grabadas (rin, desde la muestra rpInFrom)
+    rec::RpRing rq; rec::DiskRing rin; std::atomic<bool> rpOn{false}; std::atomic<uint64_t> rpInFrom{~0ull};
     float logBpm = -1; bool evWas = false; float zeroBuf[BLK] = {};
     // notas de los módulos de directo
     void liveNote(int m, int n, int v) {
@@ -395,6 +398,16 @@ struct Audio {
             case K_REC: if (c.v >= 0.5f) { if (recState == 0) { recSrc = c.b; recLen = 0; recState = 1; } } else if (recState == 1) recState = 2; break;   // mientras se guarda la anterior (3), no empieza otra
         }
     }
+    // un evento de live.freon (reproducción). La grabación de la sampler (K_REC) no se repite: no es reproducible
+    void applyRp(const rec::RpEv& e, bool log) {
+        const uint64_t f = absFrame.load(std::memory_order_relaxed);
+        switch (e.t) {
+        case 'c': { const Cmd c{static_cast<Kind>(e.k), e.a, e.b, e.c, e.v}; if (c.k == K_REC) break; apply(c); if (log) evr.push({f, 'c', e.k, e.a, e.b, e.c, e.v}); break; }
+        case 'm': { const Midi m{static_cast<unsigned char>(e.a), static_cast<unsigned char>(e.b), static_cast<unsigned char>(e.c), 0.0}; handleMidi(m); if (log) evr.push({f, 'm', 0, e.a, e.b, e.c, 0.0f}); break; }
+        case 't': clkBpm.store(e.v); break;
+        case 'P': ticks = static_cast<long>(e.ticks); running = e.a != 0; sinceTick = 0; if (e.v > 20) clkBpm.store(e.v); if (running && mp[MP_CLOCK] >= 0.5f) pos = ticks / 6.0; break;   // reloj al saltar a un punto
+        }
+    }
     void handleMidi(const Midi& m) {
         // Reloj: tras Start, el primer pulso es la posición 0
         if (m.s == 0xF8) { ++ticks; sinceTick = 0; if (running && mp[MP_CLOCK] >= 0.5f) pos = ticks / 6.0; return; }
@@ -447,12 +460,20 @@ struct Audio {
         while (ne < 512 && midi.pop(m)) evs[ne++] = m;
         // con una ráfaga de eventos, rejilla más ancha: trozos diminutos no se pueden repartir entre núcleos
         const int grid = ne > 8 ? ~31 : ~7;
-        int done = 0;
-        for (int e = 0; e <= ne; ++e) {
-            int at = n;
-            if (e < ne) { at = static_cast<int>((evs[e].t - blockStart) * sr); at = std::clamp(at & grid, done, n); }
+        // reproducción de live.freon: los eventos de este bloque, cada uno en su muestra exacta
+        const uint64_t ab0 = absFrame.load(std::memory_order_relaxed);
+        rec::RpEv rps[1024]; int nr = 0;
+        if (rpOn.load(std::memory_order_acquire)) { while (nr < 1024) { const rec::RpEv* f = rq.front(); if (!f || f->abs >= ab0 + static_cast<uint64_t>(n)) break; rps[nr++] = *f; rq.pop(); } }
+        else while (rq.front()) rq.pop();   // parada: lo que quedara en la cola, fuera
+        int done = 0, ie = 0, ir = 0;
+        for (;;) {
+            const int atM = ie < ne ? std::clamp(static_cast<int>((evs[ie].t - blockStart) * sr) & grid, done, n) : n + 1;
+            const int atR = ir < nr ? std::clamp(static_cast<int>(rps[ir].abs > ab0 ? rps[ir].abs - ab0 : 0), done, n) : n + 1;
+            const int at = std::min({atM, atR, n});
             while (done < at) { const int k = std::min(BLK, at - done); chunk(out + static_cast<size_t>(done) * oc, oc, in ? in + static_cast<size_t>(done) * ic : nullptr, ic, k); done += k; }
-            if (e < ne) { handleMidi(evs[e]); if (evl) evr.push({absFrame.load(std::memory_order_relaxed), 'm', 0, evs[e].s, evs[e].d1, evs[e].d2, 0.0f}); }
+            if (ir < nr && atR <= atM) { applyRp(rps[ir++], evl); continue; }
+            if (ie < ne) { handleMidi(evs[ie]); if (evl) evr.push({absFrame.load(std::memory_order_relaxed), 'm', 0, evs[ie].s, evs[ie].d1, evs[ie].d2, 0.0f}); ++ie; continue; }
+            break;
         }
         // interfaz de 16 bits (la Behringer): dither TPDF de ±1 bit antes de que RtAudio redondee, para que las colas muy
         // bajas de las reverbs no suenen granuladas. Con 24 bits o más no hace falta
@@ -497,7 +518,13 @@ struct Audio {
         }
         sub.render(mono, k, subTone, subGlide, subVol); std::copy(mono, mono + k, st[CH_SUB].L); std::copy(mono, mono + k, st[CH_SUB].R);
         for (int q = 0; q < 4; ++q) { const int c = inMap[q].load(std::memory_order_relaxed); if (in && c >= 0 && c < ic) for (int i = 0; i < k; ++i) inRaw[q][i] = in[i * ic + c]; else std::fill(inRaw[q], inRaw[q] + k, 0.0f); }
-        for (int q = 0; q < std::min(ic, 4); ++q) { Strip& s = st[CH_IN + q]; std::copy(inRaw[q], inRaw[q] + k, s.L); std::copy(inRaw[q], inRaw[q] + k, s.R); }
+        const bool rpIn = rpOn.load(std::memory_order_relaxed);
+        if (rpIn) {   // reproducción: las entradas grabadas sustituyen a las de la interfaz (desde su muestra de inicio)
+            const uint64_t a0 = absFrame.load(std::memory_order_relaxed), from = rpInFrom.load(std::memory_order_relaxed);
+            for (auto& q : inRaw) std::fill(q, q + k, 0.0f);
+            if (a0 + static_cast<uint64_t>(k) > from) { const int off = from > a0 ? static_cast<int>(from - a0) : 0; float* d[4] = {inRaw[0] + off, inRaw[1] + off, inRaw[2] + off, inRaw[3] + off}; rin.pull(d, k - off); }
+        }
+        for (int q = 0; q < (rpIn ? 4 : std::min(ic, 4)); ++q) { Strip& s = st[CH_IN + q]; std::copy(inRaw[q], inRaw[q] + k, s.L); std::copy(inRaw[q], inRaw[q] + k, s.R); }
         {   // la voz va después: lee las pistas
             const float* ins[4] = {inRaw[0], inRaw[1], inRaw[2], inRaw[3]};
             const float* trk[3] = {st[CH_T0].L, st[CH_T0 + 1].L, st[CH_T0 + 2].L};
@@ -1554,6 +1581,133 @@ struct Control {
                               std::to_string(free) + " " + std::to_string(trec.lastMinutes.load()) + " " + (trec.savingLast.load() ? "1" : "0");
         if (s != trecLast_) { trecLast_ = s; srv.broadcast("trec " + s); }
     }
+    // --- reproducción de un live (live.freon): paso 1 de «reproducir y corregir». Ver GRABACION.md
+    // Se carga el estado de partida, se salta al punto elegido (menos el pre-roll) aplicando solo el último valor de cada
+    // parámetro, y desde ahí cada evento va al motor con su muestra exacta (Audio::rq). La web sigue a los knobs. Al parar
+    // vuelve el estado de antes. Las notas y el reloj del Oxi se ignoran mientras tanto; las controladoras siguen mandando.
+    struct PEv { uint64_t f; char t; uint8_t k; int16_t a, b, c; float v; uint32_t str; };   // str: índice en rpStr_ ('S' estado, 's' texto)
+    std::vector<PEv> rpEv_; std::vector<std::string> rpStr_; std::string rpTake_, rpStatus_; uint64_t rpLen_ = 0;
+    bool rpActive_ = false; uint64_t rpAbs0_ = 0; size_t rpNext_ = 0, rpMir_ = 0; int rpTick_ = 0; rec::InputPlayer rpIn_;
+    std::unordered_map<uint64_t, std::string> rpKey_;   // orden (k,a,b,c) → parámetro de la pantalla
+    static uint64_t cmdKey(int k, int a, int b, int c) { return static_cast<uint64_t>(static_cast<uint16_t>(k)) << 48 | static_cast<uint64_t>(static_cast<uint16_t>(a)) << 32 | static_cast<uint64_t>(static_cast<uint16_t>(b)) << 16 | static_cast<uint16_t>(c); }
+    std::string rpPrevFile() const { return base + "/cache/replay-antes.json"; }
+    // carga un estado completo (de un archivo) como una memoria, pero sin apagar los efectos de actuación: tal cual era
+    void loadStateFile(const std::string& f) {
+        if (learn_ >= 0) learnStop(); comboOff();
+        std::map<std::string, float> keepF; std::map<std::string, std::string> keepS;
+        for (auto& [k, v] : st) if (k.rfind("midi.", 0) == 0 || k == "rec.stems") keepF[k] = v;
+        for (auto& [k, v] : ss) if (k.rfind("midi.", 0) == 0) keepS[k] = v;
+        const std::string keep = file; file = f; load(); file = keep;
+        for (auto& [k, v] : keepF) st[k] = v; for (auto& [k, v] : keepS) ss[k] = v;
+        pushAll(); mapDirty = true; dirty = true; dirtyAt = std::chrono::steady_clock::now();
+    }
+    void loadStateString(const std::string& js) {
+        const std::string f = base + "/cache/replay-estado.json"; std::error_code ec; std::filesystem::create_directories(base + "/cache", ec);
+        { std::ofstream o(f, std::ios::binary); o << js; }
+        loadStateFile(f);
+    }
+    bool rpLoad(const std::string& take) {
+        if (take.empty() || take.find('/') != std::string::npos || take.find("..") != std::string::npos) return false;
+        std::ifstream in(recDir() + "/" + take + "/live.freon", std::ios::binary); if (!in) return false;
+        rpEv_.clear(); rpStr_.clear(); std::string line;
+        while (std::getline(in, line)) {
+            if (line.empty() || line[0] == '#' || line[0] == '{') continue;
+            const size_t sp = line.find(' '); if (sp == std::string::npos) continue;
+            const uint64_t f = std::strtoull(line.c_str(), nullptr, 10); const size_t sp2 = line.find(' ', sp + 1);
+            const std::string ty = line.substr(sp + 1, sp2 == std::string::npos ? std::string::npos : sp2 - sp - 1), rest = sp2 == std::string::npos ? "" : line.substr(sp2 + 1);
+            PEv e{f, 0, 0, 0, 0, 0, 0.0f, 0};
+            if (ty == "c") { int k, a, b, c; float v; if (std::sscanf(rest.c_str(), "%d %d %d %d %f", &k, &a, &b, &c, &v) != 5) continue; e.t = 'c'; e.k = static_cast<uint8_t>(k); e.a = static_cast<int16_t>(a); e.b = static_cast<int16_t>(b); e.c = static_cast<int16_t>(c); e.v = v; }
+            else if (ty == "m") { int a, b, c; if (std::sscanf(rest.c_str(), "%d %d %d", &a, &b, &c) != 3) continue; e.t = 'm'; e.a = static_cast<int16_t>(a); e.b = static_cast<int16_t>(b); e.c = static_cast<int16_t>(c); }
+            else if (ty == "t") { e.t = 't'; e.v = std::strtof(rest.c_str(), nullptr); }
+            else if (ty == "S" || ty == "s") { e.t = ty[0]; e.str = static_cast<uint32_t>(rpStr_.size()); rpStr_.push_back(rest); }
+            else continue;
+            rpEv_.push_back(e);
+        }
+        std::stable_sort(rpEv_.begin(), rpEv_.end(), [](const PEv& x, const PEv& y) { return x.f < y.f; });
+        std::error_code ec; const uint64_t sz = std::filesystem::file_size(recDir() + "/" + take + "/master.wav", ec);
+        rpLen_ = !ec && sz > static_cast<uint64_t>(rec::kData) ? (sz - rec::kData) / 6 : (rpEv_.empty() ? 0 : rpEv_.back().f);
+        rpKey_.clear(); for (auto& [k, v] : st) { Cmd c; if (toCmd(k, v, c)) rpKey_[cmdKey(c.k, c.a, c.b, c.c)] = k; }
+        rpTake_ = take;
+        std::printf("Reproducción: %s, %zu eventos, %.1f s\n", take.c_str(), rpEv_.size(), rpLen_ / au.sr); std::fflush(stdout);
+        return !rpEv_.empty();
+    }
+    static bool rpAction(int k) { return k == K_NOTE || k == K_ALLOFF || k == K_REC; }   // órdenes que son golpes, no valores
+    // el parámetro que mueve la orden pasa a la pantalla (sin volver a mandarlo al motor, salvo los que tienen efectos aparte)
+    void rpMirror(const std::string& k, float v) {
+        if (k == "d.kit" || k == "brk.0" || k == "samp.sel" || (k.size() > 3 && (k.compare(k.size() - 3, 3, ".ch") == 0 || k.compare(k.size() - 4, 4, ".eng") == 0))) { set(k, v, -1); return; }
+        auto it = st.find(k); if (it == st.end() || it->second == v) return;
+        it->second = v; webPend_[k] = v; queueFb(k);
+    }
+    void rpStart(const std::string& take, double point, double pre) {
+        if (!rpActive_) { std::error_code ec; std::filesystem::create_directories(base + "/cache", ec); std::ofstream o(rpPrevFile(), std::ios::binary); o << stateJson(); }
+        if (take != rpTake_ || rpEv_.empty()) if (!rpLoad(take)) { srv.broadcast("rpmsg error no live.freon in that take"); return; }
+        au.rpOn = false; rpIn_.stop(); rpActive_ = false;
+        std::this_thread::sleep_for(std::chrono::milliseconds(60));   // el audio vacía la cola y deja de leer entradas
+        au.rin.r.store(au.rin.w.load());
+        au.cmds.push({K_ALLOFF, 0, 0, 0, 0});
+        const uint64_t Fs = static_cast<uint64_t>(std::max(0.0, point - pre) * au.sr);
+        // salto: último estado completo antes de Fs y, encima, el último valor de cada parámetro hasta Fs
+        size_t iS = 0; for (size_t i = 0; i < rpEv_.size() && rpEv_[i].f <= Fs; ++i) if (rpEv_[i].t == 'S') iS = i;
+        if (rpEv_[iS].t == 'S') loadStateString(rpStr_[rpEv_[iS].str]);
+        std::unordered_map<uint64_t, std::pair<const PEv*, float>> lastC; std::map<std::string, std::string> lastS;
+        long ticks = 0; bool running = false; float bpm = 0; size_t i = 0;
+        for (; i < rpEv_.size() && rpEv_[i].f < Fs; ++i) {
+            const PEv& e = rpEv_[i];
+            if (e.t == 'm') { const int s0 = e.a; if (s0 == 0xF8) ++ticks; else if (s0 == 0xFA) { ticks = -1; running = true; } else if (s0 == 0xFB) running = true; else if (s0 == 0xFC) running = false; else if (s0 == 0xF2) ticks = (static_cast<long>(e.b) | static_cast<long>(e.c) << 7) * 6 - 1; }
+            else if (e.t == 't') bpm = e.v;
+            if (i <= iS) continue;
+            if (e.t == 'c' && !rpAction(e.k)) lastC[cmdKey(e.k, e.a, e.b, e.c)] = {&e, e.v};
+            else if (e.t == 's') { const std::string& r = rpStr_[e.str]; const size_t sp = r.find(' '); if (sp != std::string::npos) lastS[r.substr(0, sp)] = r.substr(sp + 1); }
+        }
+        for (auto& [k, v] : lastS) sset(k, v, -1);
+        for (auto& [key, pv] : lastC) { auto it = rpKey_.find(key); if (it != rpKey_.end()) set(it->second, pv.second, -1); else au.cmds.push({static_cast<Kind>(pv.first->k), pv.first->a, pv.first->b, pv.first->c, pv.second}); }
+        // arranque: dentro de 0,2 s (para que el motor aplique antes el estado), con el reloj donde estaba
+        const uint64_t a0 = au.absFrame.load() + static_cast<uint64_t>(0.2 * au.sr);
+        rpAbs0_ = a0 - Fs; rpNext_ = rpMir_ = i;
+        au.rq.push({a0, 'P', 0, static_cast<int16_t>(running ? 1 : 0), 0, 0, bpm, ticks});
+        au.rpInFrom = a0; rpIn_.start(&au.rin, recDir() + "/" + take, Fs);
+        au.rpOn = true; rpActive_ = true; rpTick_ = 0;
+        srv.broadcast("state " + stateJson()); srv.broadcast("rpmsg playing " + take);
+        std::printf("Reproducción: desde %.2f s (pre-roll %.1f s)\n", point, pre); std::fflush(stdout);
+        rpPoll();
+    }
+    void rpStop(bool restore = true) {
+        if (!rpActive_) return;
+        au.rpOn = false; rpActive_ = false; rpIn_.stop();
+        std::this_thread::sleep_for(std::chrono::milliseconds(60));
+        au.cmds.push({K_ALLOFF, 0, 0, 0, 0});
+        if (restore && std::filesystem::exists(rpPrevFile())) loadStateFile(rpPrevFile());
+        srv.broadcast("state " + stateJson()); srv.broadcast("rplay 0 0 0"); rpStatus_.clear(); srv.broadcast("rpmsg stopped");
+        std::printf("Reproducción: parada, estado de antes restaurado\n"); std::fflush(stdout);
+    }
+    // en el bucle de control: programa lo que viene (medio segundo por delante) y pasa a la pantalla lo que ya sonó
+    void rpPoll() {
+        if (!rpActive_) return;
+        const uint64_t now = au.absFrame.load(), horizon = now + static_cast<uint64_t>(0.5 * au.sr);
+        while (rpNext_ < rpEv_.size() && rpAbs0_ + rpEv_[rpNext_].f < horizon) {
+            const PEv& e = rpEv_[rpNext_]; const uint64_t a = rpAbs0_ + e.f;
+            if (e.t == 'c' || e.t == 'm' || e.t == 't') { if (!au.rq.push({a, static_cast<uint8_t>(e.t), e.k, e.a, e.b, e.c, e.v, 0})) break; }
+            ++rpNext_;
+        }
+        while (rpMir_ < rpEv_.size() && rpAbs0_ + rpEv_[rpMir_].f <= now) {
+            const PEv& e = rpEv_[rpMir_++];
+            if (e.t == 'c' && !rpAction(e.k)) { auto it = rpKey_.find(cmdKey(e.k, e.a, e.b, e.c)); if (it != rpKey_.end()) rpMirror(it->second, e.v); }
+            else if (e.t == 's') { const std::string& r = rpStr_[e.str]; const size_t sp = r.find(' '); if (sp != std::string::npos) sset(r.substr(0, sp), r.substr(sp + 1), -1); }
+            else if (e.t == 'S') loadStateString(rpStr_[e.str]);   // en el live se cargó una memoria
+        }
+        const double pos = now > rpAbs0_ ? static_cast<double>(now - rpAbs0_) / au.sr : 0.0, len = rpLen_ / au.sr;
+        if (pos > len + 0.5) { rpStop(); return; }   // se acabó el live
+        if (++rpTick_ % 4 == 0) { char b[96]; std::snprintf(b, sizeof b, "1 %.2f %.2f ", pos, len); rpStatus_ = b + rpTake_; srv.broadcast("rplay " + rpStatus_); }
+    }
+    std::string rpInfo(const std::string& take) {   // duración y marcas de una toma (para la línea de tiempo)
+        std::error_code ec; const uint64_t sz = std::filesystem::file_size(recDir() + "/" + take + "/master.wav", ec);
+        const double len = !ec && sz > static_cast<uint64_t>(rec::kData) ? static_cast<double>(sz - rec::kData) / 6.0 / au.sr : 0.0;
+        std::string o = "{\"take\":" + jstr(take.c_str()) + ",\"len\":" + jnum(static_cast<float>(len)) + ",\"live\":" + (std::filesystem::exists(recDir() + "/" + take + "/live.freon") ? "true" : "false") + ",\"marks\":[";
+        std::ifstream m(recDir() + "/" + take + "/marcas.txt"); std::string line; bool first = true;
+        while (std::getline(m, line)) { int h = 0, mi = 0; double sec = 0; const size_t tab = line.find('\t'); if (tab == std::string::npos || std::sscanf(line.c_str(), "%d:%d:%lf", &h, &mi, &sec) != 3) continue;
+            o += (first ? "" : ",") + std::string("[") + jnum(static_cast<float>(h * 3600 + mi * 60 + sec)) + "," + jstr(line.substr(tab + 1).c_str()) + "]"; first = false; }
+        return o + "]}";
+    }
     void useLoad() {   // [["clave",n],…]
         std::ifstream in(useFile()); std::string js((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
         for (size_t p = 0; (p = js.find("[\"", p)) != std::string::npos;) {
@@ -1651,7 +1805,7 @@ struct Control {
             std::string spec = specJson(); spec.pop_back(); spec += "," + mixSpecJson() + ",\"outs\":" + std::to_string(au.outCh) + ",\"ins\":" + std::to_string(au.inCh) + "}";
             spec.pop_back(); spec += "," + liveSpecJson() + "}";
             midiSeen_ = ~0u;   // que el monitor MIDI se reenvíe a la pantalla nueva
-            srv.send(client, "spec " + spec); srv.send(client, "files " + filesJson()); srv.send(client, "state " + stateJson()); srv.send(client, "memlist " + memList()); srv.send(client, "cblearn " + std::to_string(learn_)); srv.send(client, "trec " + trecLast_); srv.send(client, "trecs " + takesJson());
+            srv.send(client, "spec " + spec); srv.send(client, "files " + filesJson()); srv.send(client, "state " + stateJson()); srv.send(client, "memlist " + memList()); srv.send(client, "cblearn " + std::to_string(learn_)); srv.send(client, "trec " + trecLast_); srv.send(client, "trecs " + takesJson()); if (rpActive_) srv.send(client, "rplay " + rpStatus_);
         }
         else if (op == "kb") { int t, n, v; if (is >> t >> n >> v) au.cmds.push({K_NOTE, static_cast<int16_t>(t), static_cast<int16_t>(n), static_cast<int16_t>(v), 0}); }
         else if (op == "panic") au.cmds.push({K_ALLOFF, 0, 0, 0, 0});
@@ -1660,6 +1814,12 @@ struct Control {
             if (w == "toggle") trecToggle(); else if (w == "start") { if (!trec.recording.load()) trecToggle(); } else if (w == "stop") { au.evOn = false; trec.cmdStop(); }
             else if (w == "mark") trec.cmdMark(rest); else if (w == "last") trec.cmdSaveLast(); else if (w == "del") trecDel(rest);
             else if (w == "list") srv.send(client, "trecs " + takesJson());
+        }
+        else if (op == "rplay") {   // reproducir un live: start SEG PREROLL TOMA | stop | info TOMA
+            std::string w; is >> w;
+            if (w == "start") { double sec = 0, pre = 0; is >> sec >> pre; std::string t; std::getline(is, t); if (!t.empty() && t[0] == ' ') t.erase(0, 1); rpStart(t, std::max(0.0, sec), std::clamp(pre, 0.0, 60.0)); }
+            else if (w == "stop") rpStop();
+            else if (w == "info") { std::string t; std::getline(is, t); if (!t.empty() && t[0] == ' ') t.erase(0, 1); srv.send(client, "rpinfo " + rpInfo(t)); }
         }
         else if (op == "home") { std::string w; is >> w; if (w == "save") memSave(kHome); else goHome(); }
         else if (op == "usage") { std::string w; is >> w; if (w == "reset") { use_.clear(); useDirty_ = true; useSave(); } srv.send(client, "usage " + useJson()); }
@@ -2200,7 +2360,7 @@ struct Control {
                     l += " s"; for (auto& sp : au.gran.segPk) l += " " + jnum(std::round(sp.load() * 100) / 100);
                     srv.broadcast(l);
                 }
-                if (au.recState.load() == 2) finishRec(); recSavedCheck(); lpdTick(); trecPoll();
+                if (au.recState.load() == 2) finishRec(); recSavedCheck(); lpdTick(); trecPoll(); rpPoll();
                 // monitor MIDI: puertos abiertos y último mensaje
                 { const unsigned c = gMidiCount.load();
                   std::string ports; { std::lock_guard<std::mutex> lk(gMidiNamesMx); for (size_t i = 0; i < gMidiNames.size(); ++i) { if (i) ports += " | "; ports += gMidiNames[i]; } }
@@ -2474,6 +2634,8 @@ struct MidiHub {
     static void cb(double dt, std::vector<unsigned char>* m, void* u) {
         if (!m || m->empty()) return;
         auto* p = static_cast<Port*>(u); MidiHub& h = *p->hub; const unsigned char st = (*m)[0];
+        // reproduciendo un live: las notas y el reloj vienen del archivo; los del Oxi se ignoran (los knobs, no)
+        if (h.au->rpOn.load(std::memory_order_relaxed) && ((st >= 0xF8 && st <= 0xFC) || st == 0xF2 || (st & 0xF0) == 0x90 || (st & 0xF0) == 0x80)) return;
         const double t = monoNow();
         std::lock_guard<std::mutex> lk(h.mx);
         h.clockAge += dt;

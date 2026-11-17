@@ -45,6 +45,26 @@ struct DiskRing {
         }
         w.store(wr + static_cast<uint64_t>(n), std::memory_order_release);
     }
+    // para la reproducción (al revés: escribe un hilo de lectura, lee el audio)
+    size_t space() const { return static_cast<size_t>(mask + 1 - (w.load(std::memory_order_relaxed) - r.load(std::memory_order_acquire))); }
+    size_t avail() const { return static_cast<size_t>(w.load(std::memory_order_acquire) - r.load(std::memory_order_relaxed)); }
+    size_t pull(float* const* dst, int n) {   // hilo de audio: copia hasta n tramas, un puntero por canal
+        if (buf.empty()) return 0;
+        const uint64_t rd = r.load(std::memory_order_relaxed), wr = w.load(std::memory_order_acquire);
+        const size_t m = static_cast<size_t>(std::min<uint64_t>(wr - rd, static_cast<uint64_t>(n)));
+        for (size_t i = 0; i < m; ++i) { const float* f = &buf[static_cast<size_t>((rd + i) & mask) * static_cast<size_t>(ch)]; for (int c = 0; c < ch; ++c) if (dst[c]) dst[c][i] = f[c]; }
+        r.store(rd + m, std::memory_order_release); return m;
+    }
+};
+
+// --- reproducción de live.freon: eventos con su muestra absoluta del motor, de un escritor (control) a un lector (audio)
+struct RpEv { uint64_t abs; uint8_t t; uint8_t k; int16_t a, b, c; float v; int64_t ticks; };   // t: 'c' orden · 'm' MIDI (a,b,c) · 't' tempo · 'P' reloj (ticks, a = en marcha, v = tempo)
+struct RpRing {
+    static constexpr size_t N = 1 << 16; RpEv buf[N]; std::atomic<uint64_t> w{0}, r{0};
+    bool push(const RpEv& e) { const uint64_t wr = w.load(std::memory_order_relaxed); if (wr - r.load(std::memory_order_acquire) >= N) return false; buf[wr & (N - 1)] = e; w.store(wr + 1, std::memory_order_release); return true; }
+    size_t size() const { return static_cast<size_t>(w.load(std::memory_order_acquire) - r.load(std::memory_order_acquire)); }
+    const RpEv* front() const { const uint64_t rd = r.load(std::memory_order_relaxed); return rd == w.load(std::memory_order_acquire) ? nullptr : &buf[rd & (N - 1)]; }   // hilo de audio
+    void pop() { r.store(r.load(std::memory_order_relaxed) + 1, std::memory_order_release); }
 };
 
 // eventos del motor para live.freon: orden (Cmd), nota/mensaje MIDI o tempo
@@ -97,6 +117,38 @@ inline bool repairWav(const std::string& f) {
     }
     std::fclose(fp); return fixed;
 }
+
+// Lee las entradas grabadas («Input 1-4.wav», 24 bits mono) desde una muestra y las va dejando en un anillo de 4 canales
+// que el audio consume en lugar de la interfaz. Hilo propio: el disco nunca toca el audio
+class InputPlayer {
+public:
+    ~InputPlayer() { stop(); }
+    void start(DiskRing* ring, const std::string& takeDir, uint64_t fromFrame) {
+        stop(); ring_ = ring; quit_ = false;
+        for (int q = 0; q < 4; ++q) {
+            fp_[q] = std::fopen((takeDir + "/Input " + std::to_string(q + 1) + ".wav").c_str(), "rb");
+            if (fp_[q] && std::fseek(fp_[q], kData + static_cast<long>(fromFrame * 3), SEEK_SET) != 0) { std::fclose(fp_[q]); fp_[q] = nullptr; }
+        }
+        fill(); th_ = std::thread([this] { while (!quit_) { fill(); std::this_thread::sleep_for(std::chrono::milliseconds(20)); } });
+    }
+    void stop() { quit_ = true; if (th_.joinable()) th_.join(); for (auto*& f : fp_) if (f) { std::fclose(f); f = nullptr; } }
+    bool any() const { for (auto* f : fp_) if (f) return true; return false; }
+private:
+    void fill() {   // hasta dejar el anillo casi lleno; lo que no haya (sin archivo o acabado) son ceros
+        if (!ring_) return;
+        for (;;) {
+            const size_t n = std::min<size_t>(4096, ring_->space()); if (n < 1024) return;
+            for (int q = 0; q < 4; ++q) {
+                ch_[q].assign(n, 0.0f);
+                if (fp_[q]) { raw_.resize(n * 3); const size_t got = std::fread(raw_.data(), 3, n, fp_[q]); for (size_t i = 0; i < got; ++i) { int32_t v = raw_[3 * i] | raw_[3 * i + 1] << 8 | raw_[3 * i + 2] << 16; if (v & 0x800000) v -= 0x1000000; ch_[q][i] = static_cast<float>(v) / 8388608.0f; } }
+            }
+            const float* p[4] = {ch_[0].data(), ch_[1].data(), ch_[2].data(), ch_[3].data()};
+            ring_->push(p, static_cast<int>(n));
+        }
+    }
+    DiskRing* ring_ = nullptr; FILE* fp_[4] = {}; std::thread th_; std::atomic<bool> quit_{true};
+    std::vector<float> ch_[4]; std::vector<uint8_t> raw_;
+};
 
 // Lo que el hilo de control da al empezar una toma
 struct TakeInfo {

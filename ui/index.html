@@ -74,6 +74,7 @@ button, select, input { font: inherit; color: inherit; }
 .takefiles { display: grid; gap: 4px; padding: 6px 0 2px 1.4em; }
 .takefile { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
 .takeplay { padding: 4px 0 8px; }
+#rpPos { flex: 1 1 100%; width: 100%; }
 @keyframes blink { 50% { border-color: var(--led); } }
 .keys { display: grid; gap: 5px; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
 select, input[type="number"] { background: var(--oled-bg); color: var(--oled); border: 1px solid var(--line-2); border-radius: var(--r); padding: 5px 6px; font-size: 11.5px; min-height: 28px; max-width: 100%; }
@@ -288,6 +289,9 @@ function connect() {
       v.slice(0, 40).forEach(([k, n]) => c.append(el("span", { class: "memitem" }, el("b", {}, String(n)), " ", k))); } }
     else if (op === "trec") { if (rest) { const [on, secs, gaps, free, lastMin, saving] = rest.split(" ").map(Number); TREC = { on: !!on, secs, gaps, free, lastMin, saving: !!saving }; drawTrec(); } }
     else if (op === "trecs") { TAKES = JSON.parse(rest); drawTakes(); }
+    else if (op === "rpinfo") { RP.info = JSON.parse(rest); RP.pos = 0; drawReplay(); }
+    else if (op === "rplay") { const sp1 = rest.split(" "); RP.on = sp1[0] === "1"; if (RP.on) { RP.pos = +sp1[1]; RP.len = +sp1[2]; RP.take = sp1.slice(3).join(" "); if (!RP.info || RP.info.take !== RP.take) sendRaw(`rplay info ${RP.take}`); } drawReplay(); }
+    else if (op === "rpmsg") { const [w, ...n] = rest.split(" "); topMsg("Replay", `${w} ${n.join(" ")}`); }
     else if (op === "trecmsg") { const [w, ...n] = rest.split(" "); topMsg("Recording", `${w} ${n.join(" ")}`); }
     else if (op === "memmsg") { const [w, ...n] = rest.split(" "); topMsg("Memories", `${w} ${n.join(" ")}`); }
     else if (op === "state") { ST = JSON.parse(rest); ready = true; build(); }
@@ -1103,6 +1107,7 @@ function drawTakes() {
       const pl = keyBtn("▶", "", (e) => { e.preventDefault(); playTake(det, url("master.wav"), `${t.n} · master`); }); pl.title = "Play the master here";
       sum.append(pl, el("a", { href: url("master.wav"), download: `${t.n} master.wav`, title: "Download the master" }, "⬇ master"));
     }
+    if (t.f.some(([f]) => f === "live.freon")) { const rp = keyBtn("⟲ Replay", "", (e) => { e.preventDefault(); sendRaw(`rplay info ${t.n}`); }); rp.title = "Play this live back through Freon, from any point, to fix it"; sum.append(rp); }
     const del = confirmKey("×", "Delete?", () => sendRaw(`trec del ${t.n}`), "danger"); del.addEventListener("click", (e) => e.preventDefault()); sum.append(del);
     det.append(sum);
     const list = el("div", { class: "takefiles" });
@@ -1124,14 +1129,42 @@ function playTake(row, url, name) {
   const a = el("audio", { id: "takePlayer", controls: "", preload: "metadata", src: url, "aria-label": `Play ${name}` }); a.dataset.url = url; a.style.width = "100%";
   row.after(el("div", { class: "takeplay" }, a)); a.play().catch(() => {});
 }
+// --- reproducir un live (live.freon): elegir un punto (o una marca), pre-roll y ▶. Al parar vuelve tu estado de antes
+let RP = { info: null, on: false, pos: 0, len: 0, take: "", drag: false, pre: 4 };
+function drawReplay() {
+  const box = $("#replayBox"); if (!box) return;
+  if (!RP.info) { box.hidden = true; return; }
+  box.hidden = false; const len = RP.info.len || RP.len || 0;
+  if (!box.firstChild) {
+    const pos = el("input", { type: "range", min: "0", max: "1", step: "0.1", value: "0", id: "rpPos", "aria-label": "Point of the live to play from" });
+    pos.addEventListener("input", () => { RP.drag = true; RP.pos = +pos.value; $("#rpTime").textContent = hms(RP.pos); });
+    pos.addEventListener("change", () => { RP.drag = false; });
+    const pre = el("select", { id: "rpPre", "aria-label": "Pre-roll" }); [[0, "No pre-roll"], [2, "Pre-roll 2 s"], [4, "Pre-roll 4 s"], [8, "Pre-roll 8 s"], [16, "Pre-roll 16 s"]].forEach(([v, n]) => pre.append(el("option", { value: v }, n)));
+    pre.value = String(RP.pre); pre.addEventListener("change", () => { RP.pre = +pre.value; });
+    box.append(el("h3", { id: "rpTitle" }, "Replay"),
+      el("p", { class: "hint" }, "Freon plays the live back exactly as you played it: notes, knobs, presets and tempo, with the recorded inputs. Pick a point (or a marker), choose a pre-roll and press ▶. The Oxi's notes are ignored meanwhile (stop it); your controllers still work. ■ brings back what you had before."),
+      el("div", { class: "scrow" }, pos), el("div", { class: "scrow" }, el("b", { id: "rpTime" }, "0:00"), el("span", { class: "hint", id: "rpLen" }, ""), pre,
+        keyBtn("▶ Play from here", "", () => sendRaw(`rplay start ${RP.pos.toFixed(2)} ${RP.pre} ${RP.info.take}`)), keyBtn("■ Stop", "danger", () => sendRaw("rplay stop")),
+        keyBtn("Close", "", () => { if (RP.on) sendRaw("rplay stop"); RP.info = null; drawReplay(); })),
+      el("div", { class: "scrow", id: "rpMarks" }));
+  }
+  $("#rpTitle").textContent = `Replay · ${RP.info.take}` + (RP.on ? " · playing" : "");
+  const pos = $("#rpPos"); pos.max = String(Math.max(1, len));
+  if (RP.on && !RP.drag) pos.value = String(RP.pos);
+  $("#rpTime").textContent = hms(RP.on && !RP.drag ? RP.pos : +pos.value); $("#rpLen").textContent = "/ " + hms(len);
+  const mk = $("#rpMarks"); mk.textContent = "";
+  (RP.info.marks || []).forEach(([sec, label]) => mk.append(keyBtn(`◆ ${hms(sec)} ${label}`, "", () => { RP.pos = sec; pos.value = String(sec); $("#rpTime").textContent = hms(sec); })));
+  if (!RP.info.live) mk.append(el("span", { class: "hint" }, "This take has no live.freon (recorded before it existed)"));
+}
 function buildRec(box) {
   const last = keyBtn("Save last 15 min", "", () => sendRaw("trec last")); last.id = "lastKey";
   box.append(el("div", { class: "card", id: "recCard" }, el("h3", {}, "Recordings"),
     el("p", { class: "hint" }, "● Rec (top) records the stereo master as it sounds, 24-bit WAV with its start time (Pro Tools: Spot). Freon always keeps the last 15 minutes: if something went well and you weren't recording, Save last. ◆ drops a marker (saved in marcas.txt). Without a screen, on the mixer channel: note 56 Rec/Stop, 57 marker, 58 save last. A power cut loses only the last few seconds. ▶ plays a take here, on this phone or computer (not through the Pi)."),
     el("div", { class: "scrow" }, last, toggleKey("rec.stems", "Multitrack", (v) => topMsg("Recording", v ? "multitrack on (next take)" : "multitrack off")), el("span", { class: "hint", id: "recState" }, "…")),
     el("p", { class: "hint" }, "Each take also keeps live.freon (everything you played and moved, sample-accurate, to replay and fix it later) and the interface inputs that were used. Multitrack adds one WAV per mixer channel after its fader, plus the effect returns; they add up to the mix (groups and master effects aside). Channels that stay silent are not kept. About 11 GB per hour: better on an SSD."),
+    el("div", { class: "card", id: "replayBox", hidden: "" }),
     el("div", { class: "takes", id: "takeList" })));
-  drawTrec(); drawTakes();
+  drawTrec(); drawTakes(); drawReplay();
 }
 function buildMem(box) {
   const name = el("input", { type: "text", placeholder: "name", "aria-label": "Memory name", maxlength: 40, style: "width:160px" });

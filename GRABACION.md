@@ -172,3 +172,21 @@ Cada fase se prueba en la Pi con el live cargado (CPU, cortes y una grabación l
 - La RAM del programa sube a ~520 MB, por los 88 MB del anillo de pistas.
 
 **Pendiente:** fase 3, regenerar desde live.freon (render sin tiempo real), la prueba de cancelación y exportar MIDI para Pro Tools y Ableton. Mejor después de simplificar motores y baterías.
+
+## Reproducir un live (paso 1 de «reproducir y corregir», 18-11-2026)
+
+- **En la web:** Settings › Recordings › ⟲ Replay en una toma con live.freon. Se elige un punto con la barra o una marca (◆), el pre-roll (0, 2, 4, 8 o 16 s) y ▶ Play from here. ■ Stop devuelve el estado de antes. Close cierra el panel.
+- **Cómo funciona:**
+  - Al empezar se guarda el estado actual en `cache/replay-antes.json`, y al parar (o al acabar el live) vuelve.
+  - **Salto a un punto:** se carga el último estado completo (el del inicio, o una memoria que se cargara en el live). Encima va solo el último valor de cada parámetro hasta ese punto, y el reloj (pulsos, en marcha y tempo) se recalcula, para que breaks y efectos a tempo arranquen en su sitio.
+  - **Desde ahí:** el control programa los eventos medio segundo por delante en una cola (`Audio::rq`), y el motor aplica cada uno en su muestra exacta, igual que el MIDI. La web sigue a los knobs: la orden se traduce a su parámetro con `toCmd` al revés.
+  - **Entradas:** las grabadas (`Input N.wav`) las lee un hilo aparte (`rec::InputPlayer`) y sustituyen a las de la interfaz.
+  - **Mientras tanto:** se ignoran las notas, el reloj y Start/Stop que lleguen por MIDI. Los knobs de las controladoras siguen mandando (base del paso 2). La grabación de la sampler (K_REC) no se repite.
+  - **Rec mientras se reproduce:** graba una toma nueva con su propio live.freon. Es la forma de regenerar un live (paso 3).
+- **Probado en el Mac:**
+  - Reproduciendo un live mientras se graba otro, las 36 notas caen en la misma muestra relativa que en el original (desfase 0) y con los mismos valores.
+  - La web vio moverse el knob 11 veces, como en la grabación.
+  - Al saltar a una marca con pre-roll, el knob toma el último valor grabado antes de ese punto.
+  - Al parar vuelve el estado de antes.
+- **El sonido no se cancela restando** (prueba de cancelación). Los osciladores de los sintes giran libres, como en un analógico, y cada nota empieza con otra fase; además, LFOs, chorus, deriva y ruido no repiten. La envolvente de nivel coincide (mediana 1,6 dB por ventana de 20 ms). Es el mismo live tocado otra vez, no una copia del audio.
+- **Siguiente (paso 2):** corregir encima. Lo que toques mientras suena pasa a ser tuyo (se calla lo grabado de ese parámetro), y al parar: guardar como versión nueva o descartar.
