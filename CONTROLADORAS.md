@@ -174,6 +174,8 @@ Programado desde Freon Machine (copia del original en `controladoras/lpd8-origin
 
 La voz ya no está en el LPD8.
 
+**Grabación de lives (canal del mezclador, cualquier controladora):** nota 56 = Rec/Stop, 57 = marca, 58 = guardar los últimos 15 min. Ver GRABACION.md.
+
 **Home sin pantalla (cualquier programa):** pulsar CC y mantener a la vez los pads 1 y 8 durante 2 s. Mientras, los pads se van llenando de blanco; si se sueltan antes, no pasa nada. Al cumplirse, Freon carga la memoria «Home» y los 8 pads destellan en blanco; en rojo si aún no hay ninguna Home guardada. La Home se guarda desde la web (Settings › Memories, o el botón ⌂ Home de arriba para volver). Al pulsarlos, esos dos pads hacen también lo suyo en el banco CC: en Breaks eligen el break 1 y el 8, y en Máster el pad 1 quita los efectos. Da igual, porque la Home lo deja todo como lo guardaste.
 
 ## Controladoras futuras (idea, sin comprar): BCR32 + Launch Control XL 3 + LPD8

@@ -6,7 +6,7 @@ Objetivo: grabar un live entero sin preocuparse de nada, y poder después:
 3. Tener el live **como interpretación** (notas, knobs, cambios) para **volver a reproducirlo y corregirlo**: una nota mal, un preset que no quedó bien, un knob que se pasó.
 4. Más adelante, **emitirlo en directo** (streaming) con una cámara, por ejemplo la del móvil.
 
-Nada de esto está hecho todavía. Lo que hay hoy es la grabación al sampler: graba la entrada, la mezcla o el máster a la memoria (como mucho unos segundos) y la guarda como sample.
+**Estado:** fase 1 (estéreo) hecha y probada en el Mac el 17-11-2026; falta la prueba larga en la Pi. Aparte sigue la grabación al sampler (unos segundos a un pad).
 
 ---
 
@@ -117,5 +117,24 @@ Cada fase se prueba en la Pi con el live cargado (CPU, cortes y una grabación l
   - WAV de 24 bits con marca de tiempo (BWF). Pro Tools coloca cada pista con «Spot»; Ableton, desde el inicio.
   - Sin RF64: si una toma pasa de ~3 h (cerca de los 4 GB por archivo), se abre un archivo nuevo.
   - El MIDI exportado es estándar, con los knobs como CC (Pro Tools no importa automatización de plugins desde MIDI).
-- **Arranque con el Play del Oxi:** opción apagada por defecto; se graba cuando Jorge pulsa Rec.
+- **Sin arranque con el Play del Oxi:** Jorge usa el Play/Stop del Oxi musicalmente (parones). Se graba solo con el botón Rec (web, o un botón de controladora, por ejemplo de la Launch Control XL).
 - **Guardar lo último:** 15 minutos en estéreo (~350 MB de RAM), cambiable en Settings.
+
+## Fase 1 hecha (17-11-2026)
+
+- **Código:** `src/recorder.h` (anillo, hilo de escritura, WAV, «lo último», reparación) y su conexión en `freon-machine.cpp` (`trec…`). El servidor web sirve `/rec/TOMA/ARCHIVO` por trozos (`src/server.h`).
+- **Tomas:** `grabaciones/AAAA-MM-DD HH-MM-SS/master.wav` (24 bits, BWF con la hora de inicio) y `marcas.txt`. «Lo último» crea `… (last N min)/master.wav`. Si una toma pasa de 3,5 GB sigue en `master 2.wav`.
+- **Controles:**
+  - Web: ● Rec arriba (en marcha muestra el tiempo; parar pide un segundo toque), ◆ marca, y la tarjeta Settings › Recordings (guardar lo último, espacio libre, descargar, borrar).
+  - Canal del mezclador: nota 56 Rec/Stop, 57 marca, 58 guardar lo último. La luz de «grabando» (nota 96) se enciende.
+- **Seguridad:** no arranca con menos de 500 MB libres y para sola por debajo de 300 MB. Si el disco no llega, se meten ceros del mismo largo y una marca «Gap».
+- **Probado en el Mac** (sin tarjeta, `--sin-audio`):
+  - WAV correcto: 24 bits, 48 kHz, hora BWF y marca en su sitio.
+  - La descarga es idéntica byte a byte, y un intento de salir de la carpeta da 404.
+  - Matando el motor a la fuerza en mitad de una toma, al arrancar queda reparada.
+  - «Lo último» guarda lo que haya.
+  - El motor entero gasta ~3 % de CPU.
+- **Pendiente en la Pi:**
+  - Grabar 1 hora con el live cargado, mirando CPU, cortes y huecos.
+  - Comprobar la RAM de «lo último» (~260 MB fijos con mlockall).
+  - Probar la nota 56 desde una controladora.

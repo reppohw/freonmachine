@@ -16,6 +16,8 @@
 #include <cstring>
 #include <fstream>
 #include <functional>
+#include <memory>
+#include <cctype>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -60,6 +62,7 @@ public:
     std::function<void(int client, const std::string&)> onMessage;
     std::function<void(int client)> onOpen;
     std::string root = "ui";
+    std::string recRoot;   // /rec/TOMA/ARCHIVO se sirve desde aquí, por trozos (las tomas pueden ocupar GB)
 
     bool listenOn(const std::string& host, int port) {
         lfd_ = ::socket(AF_INET, SOCK_STREAM, 0);
@@ -75,7 +78,7 @@ public:
     static constexpr size_t kMaxIn = 64 * 1024, kMaxHeader = 16 * 1024, kMaxOut = 512 * 1024;
     void poll(int ms) {
         std::vector<pollfd> p; p.push_back({lfd_, POLLIN, 0});
-        for (auto& c : cl_) p.push_back({c.fd, static_cast<short>(POLLIN | (c.out.size() > c.outOff ? POLLOUT : 0)), 0});
+        for (auto& c : cl_) p.push_back({c.fd, static_cast<short>(POLLIN | (c.out.size() > c.outOff || c.fileLeft ? POLLOUT : 0)), 0});
         if (::poll(p.data(), static_cast<nfds_t>(p.size()), ms) <= 0) return;
         if (p[0].revents & POLLIN) {
             const int fd = accept(lfd_, nullptr, nullptr);
@@ -99,13 +102,13 @@ public:
             if (c->in.size() > (c->ws ? kMaxIn + 16 : kMaxHeader)) { drop(c->fd); continue; }   // mensaje o cabecera demasiado grandes
             if (!c->ws) handleHttp(*c); else handleFrames(*c);
         }
-        for (auto& c : cl_) if (c.fd >= 0 && c.closeAfter && c.outOff >= c.out.size()) drop(c.fd);
+        for (auto& c : cl_) if (c.fd >= 0 && c.closeAfter && c.outOff >= c.out.size() && !c.fileLeft) drop(c.fd);
         // conexiones calladas: las que no piden nada en 10 s fuera; las de la pantalla reciben un ping cada 30 s (el navegador
         // contesta solo) y, si en 90 s no ha llegado nada, fuera. Así 16 aparatos dormidos no pueden dejar la web sin huecos
         const auto now = Clock::now();
         for (auto& c : cl_) {
             if (c.fd < 0) continue;
-            if (!c.ws) { if (now - c.last > std::chrono::seconds(10) && !c.closeAfter) drop(c.fd); continue; }
+            if (!c.ws) { if (now - c.last > std::chrono::seconds(c.fileLeft ? 60 : 10) && (!c.closeAfter || c.fileLeft)) drop(c.fd); continue; }   // una descarga parada 60 s, fuera
             if (now - c.last > std::chrono::seconds(90)) { drop(c.fd); continue; }
             if (now - c.pinged > std::chrono::seconds(30)) { c.pinged = now; rawSend(c, std::string("\x89\x00", 2)); }
         }
@@ -117,10 +120,20 @@ public:
 
 private:
     using Clock = std::chrono::steady_clock;
-    struct Client { int fd; bool ws; std::string in; int id; std::string out; size_t outOff; bool closeAfter; Clock::time_point last, pinged; };
+    struct Client { int fd; bool ws; std::string in; int id; std::string out; size_t outOff; bool closeAfter; Clock::time_point last, pinged;
+                    std::shared_ptr<std::ifstream> file = {}; uint64_t fileLeft = 0; };
     Client* find(int fd) { for (auto& c : cl_) if (c.fd == fd && fd >= 0) return &c; return nullptr; }
     void drop(int fd) { for (auto& c : cl_) if (c.fd == fd && fd >= 0) { ::close(c.fd); c.fd = -1; } }
     void flush(Client& c) {
+        for (;;) {
+        // descarga en curso: se rellena la cola de 256 KB en 256 KB, solo cuando se ha vaciado
+        if (c.fd >= 0 && c.fileLeft && c.outOff >= c.out.size()) {
+            c.out.clear(); c.outOff = 0; const size_t n = static_cast<size_t>(std::min<uint64_t>(c.fileLeft, 256 * 1024));
+            c.out.resize(n); c.file->read(&c.out[0], static_cast<std::streamsize>(n));
+            const size_t got = static_cast<size_t>(c.file->gcount()); c.out.resize(got); c.fileLeft = got ? c.fileLeft - got : 0;
+            if (!got) { drop(c.fd); return; }
+        }
+        const size_t before = c.outOff;
         while (c.fd >= 0 && c.outOff < c.out.size()) {
 #ifdef MSG_NOSIGNAL
             const ssize_t n = ::send(c.fd, c.out.data() + c.outOff, c.out.size() - c.outOff, MSG_NOSIGNAL);
@@ -131,8 +144,18 @@ private:
             if (n <= 0) { drop(c.fd); return; }
             c.outOff += static_cast<size_t>(n);
         }
+        if (c.outOff > before && c.fileLeft) c.last = Clock::now();
+        if (c.fd < 0 || c.outOff < c.out.size() || !c.fileLeft) break;   // el socket está lleno, o no hay más archivo
+        }
+        if (c.fd < 0) return;
         if (c.outOff >= c.out.size()) { c.out.clear(); c.outOff = 0; }
-        else if (c.outOff > 65536) { c.out.erase(0, c.outOff); c.outOff = 0; }
+        else if (c.outOff > 65536 && !c.fileLeft) { c.out.erase(0, c.outOff); c.outOff = 0; }
+    }
+    static std::string urlDecode(const std::string& s) {
+        std::string o; for (size_t i = 0; i < s.size(); ++i) {
+            if (s[i] == '%' && i + 2 < s.size() && std::isxdigit(static_cast<unsigned char>(s[i + 1])) && std::isxdigit(static_cast<unsigned char>(s[i + 2]))) { o += static_cast<char>(std::stoi(s.substr(i + 1, 2), nullptr, 16)); i += 2; }
+            else o += s[i] == '+' ? ' ' : s[i];
+        } return o;
     }
     void rawSend(Client& c, const std::string& s) {
         if (c.fd < 0) return;
@@ -173,6 +196,18 @@ private:
         std::string path = req.substr(req.find(' ') + 1); path = path.substr(0, path.find(' ')); path = path.substr(0, path.find('?'));
         if (path == "/") path = "/index.html";
         if (path.find("..") != std::string::npos) path = "/404";
+        if (path.rfind("/rec/", 0) == 0 && !recRoot.empty()) {   // tomas grabadas: descarga por trozos, sin cargarlas en memoria
+            const std::string rel = urlDecode(path.substr(5));
+            auto f = std::make_shared<std::ifstream>(recRoot + "/" + rel, std::ios::binary | std::ios::ate);
+            if (rel.find("..") != std::string::npos || rel.empty() || !*f) { rawSend(c, "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"); c.closeAfter = true; return; }
+            const uint64_t size = static_cast<uint64_t>(f->tellg()); f->seekg(0);
+            std::string fname = rel.substr(rel.find('/') + 1), take = rel.substr(0, rel.find('/'));
+            std::string dl = take + " " + fname; for (char& ch : dl) if (ch == '"' || ch == '/' || ch == '\\') ch = '_';
+            const std::string ext = rel.substr(rel.rfind('.') + 1);
+            const std::string type = ext == "wav" ? "audio/wav" : ext == "txt" ? "text/plain; charset=utf-8" : "application/octet-stream";
+            c.out += "HTTP/1.1 200 OK\r\nContent-Type: " + type + "\r\nContent-Length: " + std::to_string(size) + "\r\nContent-Disposition: attachment; filename=\"" + dl + "\"\r\nConnection: close\r\n\r\n";
+            c.file = f; c.fileLeft = size; c.closeAfter = true; c.last = Clock::now(); flush(c); return;
+        }
         std::ifstream f(root + path, std::ios::binary);
         if (!f) { rawSend(c, "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"); c.closeAfter = true; return; }
         std::stringstream ss; ss << f.rdbuf(); const std::string body = ss.str();

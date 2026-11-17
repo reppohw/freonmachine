@@ -18,3 +18,4 @@ cache/
 memorias/
 # cuántas veces tocas cada parámetro (de cada máquina)
 usos.json*
+grabaciones/

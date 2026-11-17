@@ -150,7 +150,8 @@
 - [x] **Home:** tu punto de partida, la memoria «Home». Se guarda desde la web y se vuelve a ella con ⌂ Home (arriba, también en el móvil) o sin pantalla con el LPD8 (CC, pads 1 y 8 mantenidos 2 s, con luces). Probado en el Mac; en la Pi está pendiente, porque no respondía.
 - [x] **Contador de uso** por parámetro (Settings › Most touched, `usos.json`), para elegir la primera vista de las controladoras.
 - [x] (Ya existía) Batería en 3 canales (Kick, Snare, Drums rest) y entradas Input 1-4 como canales: el monotron va por una de ellas.
-- [ ] Grabación de lives: ver GRABACION.md (estudio, 17-11).
+- [x] Grabación de lives, fase 1 (estéreo, «lo último», marcas, descarga): ver GRABACION.md. Probada en el Mac; falta 1 hora en la Pi.
+- [ ] Grabación fases 2-6: interpretación regenerable, multipista al SSD, MIDI para Pro Tools/Ableton, streaming.
 
 ## Filtro ladder de código abierto (17-11-2026)
 - [x] **Ladder «Improved»** (D'Angelo y Välimäki, ICASSP 2013; código de MoogLadders, licencia tipo ISC) como opción en el Moog y el Phatty (parámetro Ladder, grupo Filter). Classic sigue por defecto, así que nada cambia hasta elegirlo.

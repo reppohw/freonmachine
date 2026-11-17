@@ -49,6 +49,7 @@
 #include "voice.h"
 #include "params.h"
 #include "server.h"
+#include "recorder.h"
 #ifdef __linux__
 #include <ifaddrs.h>
 #include <netinet/in.h>
@@ -291,7 +292,9 @@ struct Audio {
         for (int c = 0; c < NCH; ++c) st[c].baseG = chBaseGain(c, c >= CH_T0 && c < CH_T0 + 3 ? (c == CH_T0 ? E_JUNO : c == CH_T0 + 1 ? E_ACID : E_MOOG) : -1);
         samp.prepare(sr); brk.prepare(sr); gran.prepare(sr); voz.prepare(sr);
         recL.assign(static_cast<size_t>(sr * 30), 0.0f); recR.assign(static_cast<size_t>(sr * 30), 0.0f);
+        if (dring.buf.empty()) dring.init(1u << 21);   // grabación de lives: ~44 s de margen a 48 kHz (16 MB)
     }
+    rec::DiskRing dring;   // salida del máster hacia la grabación (la vacía el hilo de rec::Recorder)
     // notas de los módulos de directo
     void liveNote(int m, int n, int v) {
         switch (m) {
@@ -607,6 +610,7 @@ struct Audio {
         auto oc1 = [](float x) { return safeClip(x); };
         for (int i = 0; i < k; ++i) { L[i] = oc1(L[i]); R[i] = oc1(R[i]); mpk = std::max(mpk, std::max(std::fabs(L[i]), std::fabs(R[i]))); }
         pk[NCH + NGRP] = mpk;
+        dring.push(L, R, k);   // grabación de lives y «lo último»: tal como sale (sin la pre-escucha)
         // --- pre-escucha: salidas 3-4 si las hay; si no, según el modo
         bool anyCue = false; for (auto& s : st) anyCue |= s.p[SP_CUE] >= 0.5f; for (auto& g : grp) anyCue |= g.p[SP_CUE] >= 0.5f;
         const float cl = mp[MP_CUELVL]; const int mode = static_cast<int>(mp[MP_CUEMODE]);
@@ -1458,6 +1462,51 @@ struct Control {
         if (o) ok = std::fclose(o) == 0 && ok;
         if (ok) std::rename(tmp.c_str(), f.c_str()); else std::remove(tmp.c_str());
     }
+    // --- grabación de lives (fase 1: estéreo del máster). Ver GRABACION.md y src/recorder.h
+    rec::Recorder trec; std::mutex trecMx_; std::vector<std::string> trecMsgs_; std::string trecLast_; int trecTick_ = 0;
+    std::string recDir() const { return base + "/grabaciones"; }
+    void trecStart() {
+        std::error_code ec; std::filesystem::create_directories(recDir(), ec);
+        const int n = rec::Recorder::repairAll(recDir()); if (n) { std::printf("Grabación: %d toma(s) que quedaron abiertas, reparadas\n", n); std::fflush(stdout); }
+        trec.onEvent = [this](const std::string& m) { std::lock_guard<std::mutex> lk(trecMx_); trecMsgs_.push_back(m); };
+        trec.start(&au.dring, static_cast<uint32_t>(au.sr), recDir());
+    }
+    uint64_t recFreeMB() const { std::error_code ec; const auto sp = std::filesystem::space(recDir(), ec); return ec ? 0 : sp.available / (1024 * 1024); }
+    void trecToggle() { if (trec.recording.load()) trec.cmdStop(); else if (recFreeMB() < 500) srv.broadcast("trecmsg error not enough disk space"); else trec.cmdStart(); }
+    std::string takesJson() {
+        std::vector<std::string> names; std::error_code ec;
+        for (const auto& e : std::filesystem::directory_iterator(recDir(), ec)) if (e.is_directory()) names.push_back(e.path().filename().string());
+        std::sort(names.rbegin(), names.rend());
+        std::string o = "["; bool first = true;
+        for (const auto& n : names) {
+            o += (first ? "" : ",") + std::string("{\"n\":") + jstr(n.c_str()) + ",\"f\":["; first = false; bool f1 = true;
+            std::vector<std::pair<std::string, uint64_t>> fs;
+            for (const auto& f : std::filesystem::directory_iterator(recDir() + "/" + n, ec)) if (f.is_regular_file()) fs.push_back({f.path().filename().string(), f.file_size(ec)});
+            std::sort(fs.begin(), fs.end());
+            for (const auto& [fn, sz] : fs) {   // [archivo, bytes, segundos (solo los WAV)]
+                const double secs = fn.size() > 4 && fn.compare(fn.size() - 4, 4, ".wav") == 0 && sz > static_cast<uint64_t>(rec::kData) ? static_cast<double>(sz - rec::kData) / (6.0 * au.sr) : 0.0;
+                o += (f1 ? "" : ",") + std::string("[") + jstr(fn.c_str()) + "," + std::to_string(sz) + "," + jnum(static_cast<float>(secs)) + "]"; f1 = false;
+            }
+            o += "]}";
+        }
+        return o + "]";
+    }
+    void trecDel(const std::string& n) {
+        if (n.empty() || n.find('/') != std::string::npos || n.find("..") != std::string::npos || n[0] == '.') return;
+        if (trec.recording.load() && n == trec.takeName()) { srv.broadcast("trecmsg error can't delete the take being recorded"); return; }
+        std::error_code ec; std::filesystem::remove_all(recDir() + "/" + n, ec); srv.broadcast("trecs " + takesJson());
+    }
+    // en el bucle de control: avisos del hilo de grabación y estado para la web
+    void trecPoll() {
+        std::vector<std::string> msgs; { std::lock_guard<std::mutex> lk(trecMx_); msgs.swap(trecMsgs_); }
+        for (const auto& m : msgs) { srv.broadcast("trecmsg " + m); if (m.rfind("saved", 0) == 0) srv.broadcast("trecs " + takesJson()); }
+        if (++trecTick_ % 8) return;   // ~0,5 s
+        const bool on = trec.recording.load(); const uint64_t free = recFreeMB();
+        if (on && free < 300) { trec.cmdStop(); srv.broadcast("trecmsg error disk almost full: recording stopped"); }
+        const std::string s = std::string(on ? "1" : "0") + " " + std::to_string(static_cast<long>(trec.frames.load() / std::max(1.0f, au.sr))) + " " + std::to_string(trec.gaps.load()) + " " +
+                              std::to_string(free) + " " + std::to_string(trec.lastMinutes.load()) + " " + (trec.savingLast.load() ? "1" : "0");
+        if (s != trecLast_) { trecLast_ = s; srv.broadcast("trec " + s); }
+    }
     void useLoad() {   // [["clave",n],…]
         std::ifstream in(useFile()); std::string js((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
         for (size_t p = 0; (p = js.find("[\"", p)) != std::string::npos;) {
@@ -1555,10 +1604,16 @@ struct Control {
             std::string spec = specJson(); spec.pop_back(); spec += "," + mixSpecJson() + ",\"outs\":" + std::to_string(au.outCh) + ",\"ins\":" + std::to_string(au.inCh) + "}";
             spec.pop_back(); spec += "," + liveSpecJson() + "}";
             midiSeen_ = ~0u;   // que el monitor MIDI se reenvíe a la pantalla nueva
-            srv.send(client, "spec " + spec); srv.send(client, "files " + filesJson()); srv.send(client, "state " + stateJson()); srv.send(client, "memlist " + memList()); srv.send(client, "cblearn " + std::to_string(learn_));
+            srv.send(client, "spec " + spec); srv.send(client, "files " + filesJson()); srv.send(client, "state " + stateJson()); srv.send(client, "memlist " + memList()); srv.send(client, "cblearn " + std::to_string(learn_)); srv.send(client, "trec " + trecLast_); srv.send(client, "trecs " + takesJson());
         }
         else if (op == "kb") { int t, n, v; if (is >> t >> n >> v) au.cmds.push({K_NOTE, static_cast<int16_t>(t), static_cast<int16_t>(n), static_cast<int16_t>(v), 0}); }
         else if (op == "panic") au.cmds.push({K_ALLOFF, 0, 0, 0, 0});
+        else if (op == "trec") {   // grabación de lives: toggle | start | stop | mark [texto] | last | list | del NOMBRE
+            std::string w; is >> w; std::string rest; std::getline(is, rest); if (!rest.empty() && rest[0] == ' ') rest.erase(0, 1);
+            if (w == "toggle") trecToggle(); else if (w == "start") { if (!trec.recording.load()) trecToggle(); } else if (w == "stop") trec.cmdStop();
+            else if (w == "mark") trec.cmdMark(rest); else if (w == "last") trec.cmdSaveLast(); else if (w == "del") trecDel(rest);
+            else if (w == "list") srv.send(client, "trecs " + takesJson());
+        }
         else if (op == "home") { std::string w; is >> w; if (w == "save") memSave(kHome); else goHome(); }
         else if (op == "usage") { std::string w; is >> w; if (w == "reset") { use_.clear(); useDirty_ = true; useSave(); } srv.send(client, "usage " + useJson()); }
         else if (op == "mem") {   // mem list | mem save NOMBRE | mem load NOMBRE | mem del NOMBRE
@@ -2022,6 +2077,9 @@ struct Control {
         else if (n >= 32 && n < 32 + NCH) button(a, "c" + std::to_string(n - 32) + ".cue", down);
         else if (n >= 60 && n < 60 + NGRP) button(a, "g" + std::to_string(n - 60) + ".mute", down);
         else if (n == 62) { if (down) toggle("solo.mode"); }
+        else if (n == 56) { if (down) trecToggle(); }            // grabación de lives: Rec / Stop
+        else if (n == 57) { if (down) trec.cmdMark(""); }        // marca
+        else if (n == 58) { if (down) trec.cmdSaveLast(); }      // guardar los últimos 15 min
         else if (n >= 48 && n < 56 && down) { if (shift[ch]) snapSave(n - 48); else snapLoad(n - 48); }
         else if (n >= 64 && n < 64 + kCombos) { if (down && shift[ch]) comboSave(n - 64); else if (!shift[ch]) comboPress(n - 64, down); }
     }
@@ -2033,7 +2091,7 @@ struct Control {
         clipHold = std::max(0.0f, clipHold - dt);
         const bool clk = au.clkPub.load(); if (clk) hadClock = true;
         const bool lost = hadClock && !clk && au.runPub.load();
-        const int v[9] = {au.recState.load() != 0, clk, clipHold > 0, au.cpu.load() > 70.0f, lost, saveErr || audioStalled, st["brk.on"] >= 0.5f, st["gran.on"] >= 0.5f, st["voz.on"] >= 0.5f};
+        const int v[9] = {au.recState.load() != 0 || trec.recording.load(), clk, clipHold > 0, au.cpu.load() > 70.0f, lost, saveErr || audioStalled, st["brk.on"] >= 0.5f, st["gran.on"] >= 0.5f, st["voz.on"] >= 0.5f};
         for (int i = 0; i < 9; ++i) {
             if (ledInit && ledState[i] == v[i]) continue;
             ledState[i] = v[i]; sendMidi({static_cast<unsigned char>(0x90 | mc), static_cast<unsigned char>(96 + i), static_cast<unsigned char>(v[i] ? 127 : 0)});
@@ -2095,7 +2153,7 @@ struct Control {
                     l += " s"; for (auto& sp : au.gran.segPk) l += " " + jnum(std::round(sp.load() * 100) / 100);
                     srv.broadcast(l);
                 }
-                if (au.recState.load() == 2) finishRec(); recSavedCheck(); lpdTick();
+                if (au.recState.load() == 2) finishRec(); recSavedCheck(); lpdTick(); trecPoll();
                 // monitor MIDI: puertos abiertos y último mensaje
                 { const unsigned c = gMidiCount.load();
                   std::string ports; { std::lock_guard<std::mutex> lk(gMidiNamesMx); for (size_t i = 0; i < gMidiNames.size(); ++i) { if (i) ports += " | "; ports += gMidiNames[i]; } }
@@ -2626,12 +2684,13 @@ int main(int argc, char** argv) {
         for (const std::string& old : {base + "/groovebox-estado.json", base + "/../groovebox/groovebox-estado.json"})
             if (std::filesystem::exists(old)) { const std::string nf = ctl.file; ctl.file = old; ctl.load(); ctl.file = nf; ctl.dirty = true; std::printf("Estado recogido de %s\n", old.c_str()); break; }
     if (!ctl.dirty) ctl.load();
-    ctl.useLoad();
+    ctl.useLoad(); ctl.trecStart();
     ctl.performanceOff(); marca("cargar estado");
     ctl.pushAll(); marca("aplicar estado");
     gMixCh = ctl.mixCh();
     ctl.powerOffEnabled = hasArg(argc, argv, "--apagado-midi");
     ctl.srv.root = argStr(argc, argv, "--ui", base + "/ui");
+    ctl.srv.recRoot = ctl.recDir();
     const int port = argInt(argc, argv, "--port", 8080);
     const std::string host = argStr(argc, argv, "--host", "127.0.0.1");
     if (!ctl.srv.listenOn(host, port)) { std::printf("No se pudo abrir el puerto %d (¿ya hay otra Freon Machine abierta?).\n", port); return 1; }
