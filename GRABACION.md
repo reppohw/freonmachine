@@ -109,10 +109,13 @@ Lo más sencillo y sólido:
 
 Cada fase se prueba en la Pi con el live cargado (CPU, cortes y una grabación larga) antes de pasar a la siguiente.
 
-## Preguntas para Jorge
+## Decisiones (17-11-2026)
 
-1. **Disco:** ¿te parece bien un SSD por USB para el multipista? ¿Qué capacidad tiene la tarjeta SD de la Pi, y cuánta RAM tiene la Pi (4 u 8 GB)?
-2. **Multipista:** ¿pistas antes del fader (rehaces el nivel en el DAW) o después (suman exactamente la mezcla)? Propongo antes, con opción.
-3. **DAW para corregir:** ¿Ableton, Reaper, Logic? Cambia los detalles del MIDI que exportamos (cómo van los knobs).
-4. **Arranque:** ¿grabar siempre que el Oxi dé Play, o solo cuando tú lo pidas?
-5. **«Guardar lo último»:** ¿cuántos minutos te parecen útiles?
+- **Pi:** 8 GB de RAM y tarjeta SD de 64 GB. El estéreo va a la SD; el multipista, al SSD por USB (sin SSD no se activa y avisa). Más adelante, quizá un disco interno.
+- **Multipista después del fader:** las pistas sumadas dan exactamente la mezcla.
+- **DAW:** Pro Tools o Ableton.
+  - WAV de 24 bits con marca de tiempo (BWF). Pro Tools coloca cada pista con «Spot»; Ableton, desde el inicio.
+  - Sin RF64: si una toma pasa de ~3 h (cerca de los 4 GB por archivo), se abre un archivo nuevo.
+  - El MIDI exportado es estándar, con los knobs como CC (Pro Tools no importa automatización de plugins desde MIDI).
+- **Arranque con el Play del Oxi:** opción apagada por defecto; se graba cuando Jorge pulsa Rec.
+- **Guardar lo último:** 15 minutos en estéreo (~350 MB de RAM), cambiable en Settings.
