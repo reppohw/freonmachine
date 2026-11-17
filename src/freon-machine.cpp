@@ -2775,7 +2775,9 @@ int main(int argc, char** argv) {
     { std::error_code ec; std::filesystem::remove(sysBack, ec); }
     std::atomic<bool> restart{false};
     std::atomic<bool> fakeStop{false};
-    const auto startFake = [&]() { fakeStop = false; fake = std::thread([&]() { std::vector<float> b(512); while (!gQuit && !fakeStop) { au->process(b.data(), 2, nullptr, 0, 256); std::this_thread::sleep_for(std::chrono::microseconds(256 * 1000000 / rate)); } }); };
+    const auto startFake = [&]() { fakeStop = false; fake = std::thread([&]() {   // reloj sin interfaz: cada bloque a su hora exacta (esperar un tiempo fijo tras calcular iba ~4 % lento)
+        std::vector<float> b(512); const auto per = std::chrono::nanoseconds(256LL * 1000000000LL / rate); auto next = std::chrono::steady_clock::now();
+        while (!gQuit && !fakeStop) { au->process(b.data(), 2, nullptr, 0, 256); next += per; const auto now = std::chrono::steady_clock::now(); if (next < now - std::chrono::milliseconds(100)) next = now; std::this_thread::sleep_until(next); } }); };
     ctl.sysStatus = [&]() { return std::to_string(cpuTempC()) + " " + piThrottled() + " " + std::to_string(au->xruns.load()) + " " + jnum(au->cpu.load()) + " " + jnum(au->cpuPeak.exchange(0.0f)) + " " + (audioNote.empty() ? std::string("-") : audioNote) + " " + std::to_string(au->late.load()); };   // 3.º: cortes de verdad (los avisa la interfaz); 6.º: interfaz de reserva (default/auto/none); 7.º: bloques lentos (con colchón, no siempre se oyen)
     ctl.sysInfo = [&]() {
         std::string o = "{\"outs\":["; std::string in = "\"ins\":[", mid = "\"midi\":[", off = "\"midioff\":["; bool fo = true, fi = true, fm = true;

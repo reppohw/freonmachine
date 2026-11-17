@@ -135,7 +135,10 @@ Cada fase se prueba en la Pi con el live cargado (CPU, cortes y una grabación l
   - Matando el motor a la fuerza en mitad de una toma, al arrancar queda reparada.
   - «Lo último» guarda lo que haya.
   - El motor entero gasta ~3 % de CPU.
+- **Probado en la Pi (17-11, sin interfaz, con el reloj interno):**
+  - 1 hora grabando con notas cada minuto: ningún hueco, CPU estable ~10 %, memoria fija 389 MB (incluye los 15 min de «lo último»), WAV de 1 GB con cabecera correcta y sonido hasta el final.
+  - La toma duró un 3,6 % menos que el reloj, porque el reloj del modo sin interfaz iba lento. Corregido: 60 s de reloj dan ahora 61 s de toma, contando el segundo que tardé en empezar a cronometrar.
 - **Pendiente en la Pi:**
-  - Grabar 1 hora con el live cargado, mirando CPU, cortes y huecos.
+  - Repetir la hora con la Scarlett 4i4 (audio real), mirando cortes.
   - Comprobar la RAM de «lo último» (~260 MB fijos con mlockall).
   - Probar la nota 56 desde una controladora.
