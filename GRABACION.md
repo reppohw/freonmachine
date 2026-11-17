@@ -188,5 +188,6 @@ Cada fase se prueba en la Pi con el live cargado (CPU, cortes y una grabación l
   - La web vio moverse el knob 11 veces, como en la grabación.
   - Al saltar a una marca con pre-roll, el knob toma el último valor grabado antes de ese punto.
   - Al parar vuelve el estado de antes.
+- **Probado en la Pi (18-11):** una toma de 6 s reproducida desde una marca con 1 s de pre-roll. Las 24 notas desde ese punto salen con desfase 0 y los mismos valores, y al acabar vuelve el estado de antes.
 - **El sonido no se cancela restando** (prueba de cancelación). Los osciladores de los sintes giran libres, como en un analógico, y cada nota empieza con otra fase; además, LFOs, chorus, deriva y ruido no repiten. La envolvente de nivel coincide (mediana 1,6 dB por ventana de 20 ms). Es el mismo live tocado otra vez, no una copia del audio.
 - **Siguiente (paso 2):** corregir encima. Lo que toques mientras suena pasa a ser tuyo (se calla lo grabado de ese parámetro), y al parar: guardar como versión nueva o descartar.
