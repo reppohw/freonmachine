@@ -64,9 +64,15 @@ button, select, input { font: inherit; color: inherit; }
 .key.rec[aria-pressed="true"] { animation: blink 0.8s steps(2) infinite; }
 .recbar { display: inline-flex; gap: 4px; }
 .takes { display: grid; gap: 6px; margin-top: 8px; }
-.take { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; padding: 6px 0; border-top: 1px solid #2a2a2a; }
-.take b { flex: 1 1 100%; font-weight: 600; }
+.take { padding: 6px 0; border-top: 1px solid #2a2a2a; }
+.take > summary { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; cursor: pointer; list-style: none; }
+.take > summary::-webkit-details-marker { display: none; }
+.take > summary::before { content: "▸"; color: var(--oled); width: 1em; }
+.take[open] > summary::before { content: "▾"; }
+.take > summary b { flex: 1 1 auto; font-weight: 600; min-width: 12em; }
 .take a { color: var(--oled); }
+.takefiles { display: grid; gap: 4px; padding: 6px 0 2px 1.4em; }
+.takefile { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
 .takeplay { padding: 4px 0 8px; }
 @keyframes blink { 50% { border-color: var(--led); } }
 .keys { display: grid; gap: 5px; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
@@ -1080,18 +1086,34 @@ function drawTrec() {
   const st = $("#recState"); if (st) st.textContent = (TREC.on ? `Recording · ${hms(TREC.secs)}` : "Not recording") + (TREC.gaps ? ` · ${TREC.gaps} gaps (disk too slow)` : "") + ` · free ${fmtMB(TREC.free * 1048576)} (~${Math.floor(TREC.free / 1000)} h of stereo)`;
   const lk = $("#lastKey"); if (lk) { lk.textContent = TREC.saving ? "Saving…" : `Save last ${Math.max(1, TREC.lastMin)} min`; lk.disabled = TREC.saving; }
 }
+// tomas: una fila plegable por toma. Cerrada: nombre, duración, ▶/⬇ del máster, cuántas pistas, borrar. Abierta: todo lo demás
+const takeOpen = new Set();   // las que el usuario dejó abiertas (se conservan al redibujar)
 function drawTakes() {
   const box = $("#takeList"); if (!box) return; box.textContent = "";
   if (!TAKES.length) { box.append(el("span", { class: "hint" }, "No recordings yet")); return; }
   TAKES.forEach(t => {
-    const row = el("div", { class: "take" }, el("b", {}, t.n));
-    t.f.forEach(([f, size, secs]) => {
-      const url = `/rec/${encodeURIComponent(t.n)}/${encodeURIComponent(f)}`;
-      if (f.endsWith(".wav")) row.append(keyBtn("▶", "", () => playTake(row, url, `${t.n} · ${f}`)));
-      row.append(el("a", { href: url, download: `${t.n} ${f}` }, f), el("span", { class: "hint" }, fmtMB(size) + (secs ? " · " + hms(secs) : "")));
+    const url = (f) => `/rec/${encodeURIComponent(t.n)}/${encodeURIComponent(f)}`;
+    const master = t.f.find(([f]) => f === "master.wav"), tracks = t.f.filter(([f]) => f.endsWith(".wav") && f !== "master.wav" && !/^master \d+\.wav$/.test(f));
+    const total = t.f.reduce((a, [, size]) => a + size, 0);
+    const det = el("details", { class: "take" }); if (takeOpen.has(t.n)) det.open = true;
+    det.addEventListener("toggle", () => { if (det.open) takeOpen.add(t.n); else takeOpen.delete(t.n); });
+    const sum = el("summary", {}, el("b", {}, t.n),
+      el("span", { class: "hint" }, (master && master[2] ? hms(master[2]) + " · " : "") + (tracks.length ? `${tracks.length} track${tracks.length > 1 ? "s" : ""} · ` : "") + fmtMB(total)));
+    if (master) {
+      const pl = keyBtn("▶", "", (e) => { e.preventDefault(); playTake(det, url("master.wav"), `${t.n} · master`); }); pl.title = "Play the master here";
+      sum.append(pl, el("a", { href: url("master.wav"), download: `${t.n} master.wav`, title: "Download the master" }, "⬇ master"));
+    }
+    const del = confirmKey("×", "Delete?", () => sendRaw(`trec del ${t.n}`), "danger"); del.addEventListener("click", (e) => e.preventDefault()); sum.append(del);
+    det.append(sum);
+    const list = el("div", { class: "takefiles" });
+    t.f.filter(([f]) => f !== "master.wav").forEach(([f, size, secs]) => {
+      const row = el("div", { class: "takefile" });
+      if (f.endsWith(".wav")) row.append(keyBtn("▶", "", () => playTake(row, url(f), `${t.n} · ${f}`)));
+      row.append(el("a", { href: url(f), download: `${t.n} ${f}` }, f.replace(/\.wav$/, "")), el("span", { class: "hint" }, fmtMB(size) + (secs ? " · " + hms(secs) : "")));
+      list.append(row);
     });
-    row.append(confirmKey("×", "Delete?", () => sendRaw(`trec del ${t.n}`), "danger"));
-    box.append(row);
+    if (!list.childNodes.length) list.append(el("span", { class: "hint" }, "Only the master"));
+    det.append(list); box.append(det);
   });
 }
 // escuchar una toma en este aparato (móvil u ordenador): un solo reproductor, bajo la toma elegida. Sale por el navegador, no por la Pi
