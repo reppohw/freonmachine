@@ -181,5 +181,5 @@ La voz ya no está en el LPD8.
 - **BCR32 (instrumentos):** 4 filas × 8 encoders. Vista principal: batería, T2, T3 y T4, con 8 parámetros cada uno. Vista ampliada: un instrumento en los 32 encoders. Al pulsar un encoder, el parámetro vuelve a su valor de fábrica.
 - **Launch Control XL 3 (mezclador, todo en la primera vista):** canales bombo, caja, resto, T2, T3, T4, breaks y monotron (una entrada de la interfaz). Faders = nivel; knobs = gain (trim), envío 1 (reverb) y envío 2 (delay); botones = encender el canal y cue. Sin mute ni solo.
 - **Qué va en la primera vista:** se decide con los datos de Settings › Most touched (`usos.json`), no a ojo.
-- **Antes de que lleguen:** batería en 3 buses (bombo, caja, resto) y canal del monotron.
+- **Ya existe en el mezclador:** la batería sale en 3 canales (Kick, Snare, Drums rest) y el monotron entra por un canal Input 1-4.
 - **Home:** tendrá su gesto propio en cada controladora, igual que en el LPD8.
