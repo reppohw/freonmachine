@@ -362,12 +362,17 @@ inline std::string jstr(const char* s) {
 inline std::string jnum(float v) { char b[32]; std::snprintf(b, sizeof b, "%.6g", v); return b; }
 
 // Descripción completa para la pantalla
+// Lo que la pantalla ofrece (17-11-2026, Jorge simplifica): sintes Moog, 303, Juno, DX7, chiptune y Phatty; envíos A y B.
+// Wavetable, SuperSaw y Modal siguen en el código (una memoria que los use suena igual), pero no se ofrecen; si en un
+// tiempo no se echan de menos, se borran. Los envíos C y D tampoco: sin señal no gastan nada.
+constexpr bool kEngHidden[E_COUNT] = {false, false, false, false, false, true, true, true, false};
+constexpr int kSendsShown = 2;
 inline std::string specJson() {
-    std::string o = "{\"engines\":[";
+    std::string o = "{\"sends\":" + std::to_string(kSendsShown) + ",\"engines\":[";
     for (int e = 0; e < E_COUNT; ++e) {
         const EngSpec& s = kEng[e];
         if (e) o += ",";
-        o += "{\"key\":" + jstr(s.key) + ",\"name\":" + jstr(s.name) + ",\"desc\":" + jstr(s.desc) + ",\"params\":[";
+        o += "{\"key\":" + jstr(s.key) + ",\"name\":" + jstr(s.name) + ",\"desc\":" + jstr(s.desc) + (kEngHidden[e] ? ",\"hidden\":true" : "") + ",\"params\":[";
         for (int i = 0; i < s.np; ++i) {
             const PSpec& p = s.p[i];
             if (i) o += ",";

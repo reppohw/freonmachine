@@ -498,7 +498,7 @@ function buildInst() {
     const act = el("span", { class: "act", title: "Lights up when notes arrive" }); p.act = act;
     const seg = el("div", { class: "seg", role: "group" });
     if (ti === 0) SPEC.kits.forEach((n, k) => seg.append(el("button", { class: "key plain", "aria-pressed": String(ST["d.kit"] === k), onclick: () => { send("d.kit", k); build(); } }, n)));
-    else SPEC.engines.forEach((e, k) => seg.append(el("button", { class: "key plain", "aria-pressed": String(ST[T + ".eng"] === k), onclick: () => { send(T + ".eng", k); build(); } }, e.name)));
+    else SPEC.engines.forEach((e, k) => (e.hidden && ST[T + ".eng"] !== k) || seg.append(el("button", { class: "key plain", "aria-pressed": String(ST[T + ".eng"] === k), onclick: () => { send(T + ".eng", k); build(); } }, e.name)));
     card.append(el("div", { class: "chead" }, act, el("div", { class: "cname" }, el("b", {}, TN[ti]), el("span", {}, `T${ti + 1} · MIDI channel ${ST[T + ".ch"] || "off"}`)), seg, keyBtn("Test", "", () => test(ti)),
       ...(ti === 0 ? [confirmKey("Reset kit", "Sure?", () => { sendRaw("drreset all"); oled(0, "Drums", "all sounds reset"); }, "danger")] : [])));
     p.o1 = el("span", { class: "o1" }); p.o2 = el("span", { class: "o2 dim" });
@@ -741,6 +741,8 @@ function liveStatus(p) {
 // --- Mixer: every channel parameter in view
 const mixUI = { meters: [], grRead: null, tempo: null };
 const DIST = ["Fuzz", "Bitcrusher"];
+// envíos que se ofrecen (A reverb, B delay); C y D siguen en el motor, ocultos. Si alguno oculto tiene señal, se enseña
+function nSends() { const n = SPEC.sends || 4; for (let f = 3; f >= n; f--) if (Object.keys(ST).some(k => /^[cg]\d+\.s\d$/.test(k) && k.endsWith("s" + f) && ST[k] > 0.001)) return f + 1; return n; }
 function chName(i) { if (i >= 4 && i <= 6) { const t = i - 3; return SPEC.engines[ST[`t${t + 1}.eng`]].name; } return SPEC.channels[i]; }
 function chSub(i) { return i < 3 ? "Drums" : i === 3 ? "Sub" : i <= 6 ? `Track ${i - 2}` : i <= 10 ? "Live" : (i - 11 < SPEC.ins ? "Input" : "No input"); }
 function vfader(k, label) {
@@ -782,7 +784,7 @@ function stripEl(id, title, sub, grp, cls) {
   s.append(a, selK(P + "sc", scPairs, "Sidechain"));
   a = sk(); kn(a, P + "scAmt", "SC amount", 0, 1, 0.01, PCT, 0.5, "sm"); kn(a, P + "scRel", "SC release", 0.02, 1, 0.01, (v) => Math.round(v * 1000) + " ms", 0.25, "sm"); s.append(a);
   s.append(el("div", { class: "sec" }, "Sends"));
-  a = sk(); for (let f = 0; f < 4; f++) kn(a, P + "s" + f, "Send " + "ABCD"[f], 0, 1, 0.01, PCT, 0, "sm"); s.append(a);
+  a = sk(); for (let f = 0; f < nSends(); f++) kn(a, P + "s" + f, "Send " + "ABCD"[f], 0, 1, 0.01, PCT, 0, "sm"); s.append(a);
   const fd = vfader(P + "lvl", `Volume of ${title}`);
   s.append(el("div", { class: "frow" }, meterEl(), fd.f), fd.read, el("div", { class: "tms" }, msBtn(P + "mute", "Mute", "m"), msBtn(P + "solo", "Solo", "s"), msBtn(P + "cue", "Cue", "c")), el("div", { class: "sfoot", title }, grp ? "Group " + title : title));
   return s;
@@ -840,7 +842,7 @@ function buildPerf() {
 }
 function buildFx() {
   const box = $("#fxSlots"); box.textContent = "";
-  for (let f = 0; f < 4; f++) {
+  for (let f = 0; f < nSends(); f++) {
     const F = `fx${f}.`, type = ST[F + "type"], spec = SPEC.fx[type], k2 = el("div", { class: "knobs" });
     const s = el("select", { "aria-label": `Effect on send ${"ABCD"[f]}` }); SPEC.fx.forEach((x, i) => s.append(el("option", { value: i }, x.name))); s.value = String(type);
     s.addEventListener("change", () => { const t = Number(s.value); send(F + "type", t); SPEC.fx[t].params.forEach((p, i) => send(F + "p" + i, p.def)); buildMix(); });
