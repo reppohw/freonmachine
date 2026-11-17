@@ -164,4 +164,11 @@ Cada fase se prueba en la Pi con el live cargado (CPU, cortes y una grabación l
 - `F mark TEXTO`: marca.
 - Se apunta en el hilo de audio, en un anillo sin bloqueos, justo al aplicarse, así que no se escapa nada. Si alguna vez se perdieran eventos, aparece una línea `# N events lost`.
 
+**Probado en la Pi (17-11, con la USB Audio CODEC y el Oxi tocando):**
+- 3 minutos de multipista con notas en las 4 pistas: 0 cortes, CPU del audio ~3,5 % (pico 4,2 %), 46 °C, ningún hueco.
+- Se guardaron 8 pistas más el máster, todas del mismo largo.
+- La SD escribió 6,4 MB/s sostenidos sin problema (unos 23 GB por hora con todas las pistas abiertas; al parar se borran las mudas).
+- live.freon: 65 000 eventos en 3 min (~35 MB/h). La mayoría son knobs movidos por LFOs del Oxi (unos 200/s), el reloj MIDI y las notas.
+- La RAM del programa sube a ~520 MB, por los 88 MB del anillo de pistas.
+
 **Pendiente:** fase 3, regenerar desde live.freon (render sin tiempo real), la prueba de cancelación y exportar MIDI para Pro Tools y Ableton. Mejor después de simplificar motores y baterías.
