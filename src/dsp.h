@@ -170,4 +170,38 @@ struct BQ {
     float process(float x) { const float y = b0 * x + z1; z1 = b1 * x - a1 * y + z2; z2 = b2 * x - a2 * y; return y; }
 };
 
+// Ladder «mejorado» de D'Angelo y Välimäki («An Improved Virtual Analog Model of the Moog Ladder Filter», ICASSP 2013):
+// sale del análisis del circuito y se comparó con una simulación Ngspice; conserva mejor la autooscilación. Adaptado de
+// ImprovedModel.h (colección MoogLadders), con su aviso de licencia:
+//   Copyright 2012 Stefano D'Angelo <zanga.mail@gmail.com>
+//   Permission to use, copy, modify, and/or distribute this software for any purpose with or without fee is hereby
+//   granted, provided that the above copyright notice and this permission notice appear in all copies.
+//   THIS SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL
+//   IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+//   INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+//   ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE
+//   OF THIS SOFTWARE.
+// Cambios para Freon: float, misma forma de uso que los ladder de Huovilainen (set(corte, res 0..1) y process), salida en
+// la etapa que se pida (1-4 polos; la realimentación siempre de la 4.ª), entrada escalada para que sature a la par que el
+// ladder clásico y signo corregido (el modelo invierte la señal).
+struct DVLadder {
+    // el integrador del modelo es explícito: a 96 kHz se desafina por encima de ~3 kHz. Por eso da 2 pasos por muestra
+    // (192 kHz) y el corte lleva una corrección medida (autooscilación = corte, error < 1 % hasta 9,5 kHz; por encima
+    // se queda en ~10 kHz, que ya es el filtro abierto). Cuesta unas 3 veces el clásico
+    float sr = 96000.0f, resQ = 0.0f, g = 0.0f, V[4] = {}, dV[4] = {}, tV[4] = {};
+    static constexpr float kVt2 = 2.0f * 0.312f, kIn = 0.76f;   // 2·VT y escala de entrada (≈ la saturación del clásico)
+    void reset() { for (int i = 0; i < 4; ++i) V[i] = dV[i] = tV[i] = 0.0f; }
+    void set(float fc, float res) {
+        const float sr2 = 2.0f * sr, fn = std::clamp(fc / sr, 0.0f, 0.1f), corr = 1.0f + fn * (4.2711f + fn * (-58.711f + fn * 880.46f));
+        const float f = std::clamp(fc * corr, 10.0f, 0.115f * sr2), x = kPi * f / sr2;   // más arriba la afinación vuelve a bajar
+        g = 4.0f * kPi * 0.312f * f * (1.0f - x) / (1.0f + x) / (2.0f * sr2);   // ya dividido por 2·fs (paso trapezoidal)
+        resQ = 4.0f * res;
+    }
+    void step(float x) {
+        const float d0 = -g * (std::tanh((x * kIn + resQ * V[3]) / kVt2) + tV[0]); V[0] += d0 + dV[0]; dV[0] = d0; tV[0] = std::tanh(V[0] / kVt2);
+        for (int k = 1; k < 4; ++k) { const float d = g * (tV[k - 1] - tV[k]); V[k] += d + dV[k]; dV[k] = d; tV[k] = std::tanh(V[k] / kVt2); }
+    }
+    float process(float x, int poles = 3) { step(x); step(x); return -V[std::clamp(poles, 0, 3)] / kIn; }
+};
+
 }  // namespace gb

@@ -26,6 +26,7 @@ struct PhattyParams {
     float glide = 0.05f, lfoRate = 3.0f, modAmt = 0.0f, modWheel = 0.0f, vel = 0.3f, volume = 0.75f;
     int   modSrc = 0, modDst = 0;              // fuente: 0 tri, 1 cuadrada, 2 sierra, 3 rampa, 4 env. filtro, 5 osc 2, 6 S&H, 7 ruido
                                                // destino: 0 afinación, 1 filtro, 2 forma de onda, 3 osc 2
+    int   ladder = 0;                          // 0 clásico (Huovilainen), 1 mejorado (D'Angelo-Välimäki)
     bool  sync = false, glideOn = false;
 };
 
@@ -54,7 +55,7 @@ class PhattyVoice {
 public:
     PhattyParams p;
     void prepare(float s) {
-        sr_ = s; srOs_ = 2.0f * s; lad_.sr = srOs_; lad_.reset(); dec_.setup(sr_); fenv_.sr = aenv_.sr = sr_;
+        sr_ = s; srOs_ = 2.0f * s; lad_.sr = dvl_.sr = srOs_; lad_.reset(); dvl_.reset(); dec_.setup(sr_); fenv_.sr = aenv_.sr = sr_;
         for (Smoother* m : {&sCut_, &sRes_, &sVol_, &sOl_}) m->setup(sr_, 6.0f);
         sCut_.y = p.cutoff; sRes_.y = p.reso; sVol_.y = p.volume; sOl_.y = p.overload; held_ = 0;
     }
@@ -100,7 +101,8 @@ public:
             // filtro: corte × seguimiento de teclado × envolvente (bipolar, ±5 octavas) × modulación (±4 octavas)
             const float cut = sCut_.process(p.cutoff), res = sRes_.process(p.reso), ol = sOl_.process(p.overload), vol = sVol_.process(p.volume);
             const float oct = (note1 - 60.0f) / 12.0f * kt + p.egAmt * 5.0f * fe * (0.6f + 0.4f * vs) + (p.modDst == 1 ? m * 4.0f : 0.0f);
-            if (oct != octK_ || cut != cutK_ || res != resK_) { octK_ = oct; cutK_ = cut; resK_ = res; lad_.set(cut * std::exp2(oct), res * 1.08f); }
+            const bool dv = p.ladder == 1; if (dv != dvK_) { dvK_ = dv; lad_.reset(); dvl_.reset(); cutK_ = -1; }   // al cambiar de modelo, sin restos del otro
+            if (oct != octK_ || cut != cutK_ || res != resK_) { octK_ = oct; cutK_ = cut; resK_ = res; if (dv) dvl_.set(cut * std::exp2(oct), res * 1.08f); else lad_.set(cut * std::exp2(oct), res * 1.08f); }
             const float drive = 1.0f + ol * 9.0f, comp = 1.0f / std::sqrt(drive);
             const float w1 = std::clamp(p.wave1 + wm, 0.0f, 1.0f), w2 = std::clamp(p.wave2 + wm, 0.0f, 1.0f);
             float os[2];
@@ -111,7 +113,7 @@ public:
                 const float a = wave(w1, ph1_, dt1), b = wave(w2, ph2_, dt2); o2last_ = b;
                 const float mix = (p.lvl1 * a + p.lvl2 * b) * 0.5f;
                 const float x = softClip(mix * drive) * comp * 1.4f;   // Overload: la entrada del filtro se satura
-                o = lad_.process(x, p.poles) * (1.0f + 0.7f * lad_.resQ) * 0.8f;
+                o = (dv ? dvl_.process(x, p.poles) * (1.0f + 0.7f * dvl_.resQ) : lad_.process(x, p.poles) * (1.0f + 0.7f * lad_.resQ)) * 0.8f;
             }
             float y = dec_.process(os[0], os[1]) * ae * vol * vol * vs;
             const float hp = y - hpX_ + 0.9995f * hpY_; hpX_ = y; hpY_ = hp;
@@ -131,7 +133,7 @@ private:
     float sr_ = 48000.0f, srOs_ = 96000.0f, ph1_ = 0, ph2_ = 0.37f, lfo_ = 0, shVal_ = 0, o2last_ = 0;
     float semi_ = 36.0f, target_ = 36.0f, vel_ = 0.8f, n1K_ = -1e9f, n2K_ = -1e9f, f1K_ = 0, f2K_ = 0, octK_ = -1e9f, cutK_ = -1, resK_ = -1;
     float hpX_ = 0, hpY_ = 0; bool played_ = false; int stack_[16] = {}, held_ = 0;
-    PhattyLadder lad_; Decim2 dec_; Env fenv_, aenv_; Noise noise_; Smoother sCut_, sRes_, sVol_, sOl_;
+    PhattyLadder lad_; DVLadder dvl_; bool dvK_ = false; Decim2 dec_; Env fenv_, aenv_; Noise noise_; Smoother sCut_, sRes_, sVol_, sOl_;
 };
 
 }  // namespace gb

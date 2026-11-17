@@ -150,3 +150,11 @@
 - [x] **Home:** tu punto de partida, la memoria «Home». Se guarda desde la web y se vuelve a ella con ⌂ Home (arriba, también en el móvil) o sin pantalla con el LPD8 (CC, pads 1 y 8 mantenidos 2 s, con luces). Probado en el Mac; en la Pi está pendiente, porque no respondía.
 - [x] **Contador de uso** por parámetro (Settings › Most touched, `usos.json`), para elegir la primera vista de las controladoras.
 - [ ] Batería en 3 buses (bombo, caja, resto) y canal del monotron por una entrada de la interfaz (para el mezclador de la Launch Control XL 3).
+
+## Filtro ladder de código abierto (17-11-2026)
+- [x] **Ladder «Improved»** (D'Angelo y Välimäki, ICASSP 2013; código de MoogLadders, licencia tipo ISC) como opción en el Moog y el Phatty (parámetro Ladder, grupo Filter). Classic sigue por defecto, así que nada cambia hasta elegirlo.
+  - El original se desafina por encima de ~3 kHz a 96 kHz (integrador explícito). Ahora da 2 pasos por muestra y lleva una corrección de corte medida: autooscila en la nota pedida, con error < 1 % hasta 9,5 kHz; por encima se queda en ~10 kHz. Estable en un barrido forzado de 10 s.
+  - Mismo nivel que Classic en todos los presets (±0,1 dB). La diferencia de sonido crece con la resonancia.
+  - CPU en el Mac: ~2,8 % de un núcleo por voz (Classic ~1 %). **Pendiente medirlo en la Pi.**
+- [ ] Que Jorge compare Classic e Improved a oído, sobre todo con resonancia alta; si gana Improved, pasa a ser el de fábrica.
+- [ ] Calibrar las curvas del Phatty (corte, envolventes, resonancia) grabando su Slim Phatty real.

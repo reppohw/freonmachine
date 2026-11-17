@@ -26,6 +26,7 @@ struct MoogParams {
     float volume = 0.8f;
     float vintage = 0.0f;                    // al estilo del Prophet-5 rev4: deriva lenta y diferencias entre notas (0 = estable)
     float feedback = 0.0f;                   // la salida vuelve al mezclador (el truco del Minimoog para engordar el grave)
+    int   ladder = 0;                        // 0 clásico (Huovilainen), 1 mejorado (D'Angelo-Välimäki)
     bool glideOn = true, o3lfo = false, modFilt = false, modPitch = false, retrig = false;
 };
 
@@ -66,7 +67,7 @@ public:
 
     void prepare(float sampleRate) {
         sr_ = sampleRate; srOs_ = 2.0f * sr_;
-        lad_.sr = srOs_; lad_.reset(); dec_.setup(sr_);
+        lad_.sr = dvl_.sr = srOs_; lad_.reset(); dvl_.reset(); dec_.setup(sr_);
         fenv_.sr = aenv_.sr = sr_;
         for (Smoother* s : {&sCut_, &sEmph_, &sDrv_, &sVol_}) s->setup(sr_, 6.0f);
         sCut_.y = p.cutoff; sEmph_.y = p.emph; sDrv_.y = p.drive; sVol_.y = p.volume;
@@ -131,7 +132,8 @@ public:
             if (p.modFilt) fc *= std::exp2(mod * 3.0f);
             // Emphasis: 0..1 → resonancia del ladder; pasado ~90 % autooscila, como el Minimoog
             const float k = emph * 1.12f, dg = 1.0f + drv * 5.0f, dcomp = 1.0f / std::sqrt(dg);
-            if (fc != lfcK_ || k != lkK_) { lfcK_ = fc; lkK_ = k; lad_.set(fc, k); }
+            const bool dv = p.ladder == 1; if (dv != dvK_) { dvK_ = dv; lad_.reset(); dvl_.reset(); lfcK_ = -1; }   // al cambiar de modelo, sin restos del otro
+            if (fc != lfcK_ || k != lkK_) { lfcK_ = fc; lkK_ = k; if (dv) dvl_.set(fc, k); else lad_.set(fc, k); }
 
             float os[2];
             for (float& o : os) {
@@ -146,7 +148,7 @@ public:
                 m = softClip(m * 0.45f * dg) * dcomp * 1.6f;
                 // el ladder pierde graves y volumen al subir la resonancia (aunque el filtro esté abierto): se compensa el 70 %,
                 // normalizado a Emphasis 0,45 (el valor de los presets), así que ahí suena igual que antes y ya no se hunde al subirla
-                o = lad_.process(m) * 2.2f * (1.0f + 0.7f * lad_.resQ) * (1.0f / 2.41f); fbLast_ = o;
+                o = (dv ? dvl_.process(m) * (1.0f + 0.7f * dvl_.resQ) : lad_.process(m) * (1.0f + 0.7f * lad_.resQ)) * 2.2f * (1.0f / 2.41f); fbLast_ = o;
             }
             float y = dec_.process(os[0], os[1]);
             y *= ae * vol * vol * 0.9f * vs;
@@ -177,7 +179,7 @@ private:
     float walkTo_[3] = {}, nT2_ = 1, nT3_ = 1, nCut_ = 1, nEnv_ = 1, fbLast_ = 0; int walkT_ = 0; uint32_t seed_ = 4321;
     float hpX_ = 0.0f, hpY_ = 0.0f;
     int stack_[16] = {}, held_ = 0;
-    HuovLadder lad_; Decim2 dec_; Env fenv_, aenv_; Noise noise_;
+    HuovLadder lad_; DVLadder dvl_; bool dvK_ = false; Decim2 dec_; Env fenv_, aenv_; Noise noise_;
     Smoother sCut_, sEmph_, sDrv_, sVol_;
 };
 

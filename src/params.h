@@ -49,7 +49,7 @@ inline const EngSpec kEng[E_COUNT] = {
       {"Velocity", -1, 1, 0.01f, 0, 'b', false, nullptr, "Envelope"},
       {"Algorithm", 0, 32, 1, 0, 'n', false, "Patch|1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16|17|18|19|20|21|22|23|24|25|26|27|28|29|30|31|32", "Envelope"}},
      0, {}},
-    {"moog", "Moog", "Mono: 3 oscillators, overdriven mixer, 24 dB ladder at 2×, filter and amp envelopes, osc 3 modulation and glide. Vintage: analog drift and note-to-note differences; Feedback: output back into the mixer for a fatter low end", 31,
+    {"moog", "Moog", "Mono: 3 oscillators, overdriven mixer, 24 dB ladder at 2×, filter and amp envelopes, osc 3 modulation and glide. Vintage: analog drift and note-to-note differences; Feedback: output back into the mixer for a fatter low end. Ladder: Classic (Huovilainen) or Improved (D'Angelo-Välimäki, closer to the circuit, more CPU)", 32,
      {{"Octave", -2, 2, 1, 0, 'i', false, "oct", "Oscillators"}, {"Wave 1", 0, 4, 1, 1, 'n', false, "Tri|Saw|Square|Pulse|Narrow", "Oscillators"},
       {"Wave 2", 0, 4, 1, 1, 'n', false, "Tri|Saw|Square|Pulse|Narrow", "Oscillators"}, {"Osc 2 semi", -24, 24, 1, 0, 't', false, nullptr, "Oscillators"}, {"Osc 2 fine", -100, 100, 1, 7, 'c', false, nullptr, "Oscillators"},
       {"Wave 3", 0, 4, 1, 1, 'n', false, "Tri|Saw|Square|Pulse|Narrow", "Oscillators"}, {"Osc 3 semi", -24, 24, 1, -12, 't', false, nullptr, "Oscillators"}, {"Osc 3 fine", -100, 100, 1, -3, 'c', false, nullptr, "Oscillators"},
@@ -63,7 +63,8 @@ inline const EngSpec kEng[E_COUNT] = {
       {"Sustain", 0, 1, 0.01f, 0.8f, 'p', false, nullptr, "Amp envelope"}, {"Release", 0.01f, 8, 0, 0.2f, 's', true, nullptr, "Amp envelope"},
       {"Osc 3 mod", 0, 1, 0.01f, 0, 'p', false, nullptr, "Mod & output"}, {"Glide", 0.005f, 1, 0, 0.06f, 's', true, nullptr, "Mod & output"},
       {"Velocity", 0, 1, 0.01f, 0.6f, 'p', false, nullptr, "Mod & output"}, {"Volume", 0, 1, 0.01f, 0.75f, 'p', false, nullptr, "Mod & output"},
-      {"Vintage", 0, 1, 0.01f, 0, 'p', false, nullptr, "Character"}, {"Feedback", 0, 1, 0.01f, 0, 'p', false, nullptr, "Character"}},
+      {"Vintage", 0, 1, 0.01f, 0, 'p', false, nullptr, "Character"}, {"Feedback", 0, 1, 0.01f, 0, 'p', false, nullptr, "Character"},
+      {"Ladder", 0, 1, 1, 0, 'n', false, "Classic|Improved", "Filter"}},
      5, {{"Glide", true}, {"Osc 3 as LFO", false}, {"Mod → filter", false}, {"Mod → pitch", false}, {"Retrigger", false}}},
     {"acid", "303", "TB-303 style mono with Devilfish extras. Accent at velocity 100+, slide with overlapping notes", 16,
      {{"Cutoff", 0, 1, 0.01f, 0.35f, 'p', false, nullptr, "303"}, {"Resonance", 0, 1, 0.01f, 0.65f, 'p', false, nullptr, "303"}, {"Env mod", 0, 1, 0.01f, 0.5f, 'p', false, nullptr, "303"},
@@ -108,7 +109,7 @@ inline const EngSpec kEng[E_COUNT] = {
       {"Exciter level", 0, 1, 0.01f, 0.8f, 'p', false, nullptr, "Exciter"}, {"Noise", 0, 1, 0.01f, 0.1f, 'p', false, nullptr, "Exciter"},
       {"Release", 0, 1, 0.01f, 0.3f, 'p', false, nullptr, "Output"}, {"Spread", 0, 1, 0.01f, 0.5f, 'p', false, nullptr, "Output"}, {"Velocity", 0, 1, 0.01f, 0.7f, 'p', false, nullptr, "Output"}, {"Volume", 0, 1, 0.01f, 0.75f, 'p', false, nullptr, "Output"}},
      0, {}},
-    {"phatty", "Phatty", "Moog Slim Phatty style mono: 2 oscillators with continuous wave (tri → saw → square → pulse), sync, ladder filter with 1-4 poles and Overload, bipolar filter EG, two ADSR, glide and its modulation section (Mod Amount is the depth the mod wheel reaches)", 29,
+    {"phatty", "Phatty", "Moog Slim Phatty style mono: 2 oscillators with continuous wave (tri → saw → square → pulse), sync, ladder filter with 1-4 poles and Overload, bipolar filter EG, two ADSR, glide and its modulation section (Mod Amount is the depth the mod wheel reaches). Ladder: Classic (Huovilainen) or Improved (D'Angelo-Välimäki, closer to the circuit, more CPU)", 30,
      {{"Osc 1 octave", 0, 3, 1, 1, 'n', false, "16'|8'|4'|2'", "Oscillators"}, {"Osc 1 wave", 0, 1, 0.01f, 0.33f, 'p', false, nullptr, "Oscillators"}, {"Osc 1 level", 0, 1, 0.01f, 1, 'p', false, nullptr, "Oscillators"},
       {"Osc 2 octave", 0, 3, 1, 1, 'n', false, "16'|8'|4'|2'", "Oscillators"}, {"Osc 2 freq", -7, 7, 0, 0, 't', false, nullptr, "Oscillators"}, {"Osc 2 wave", 0, 1, 0.01f, 0.33f, 'p', false, nullptr, "Oscillators"},
       {"Osc 2 level", 0, 1, 0.01f, 0.8f, 'p', false, nullptr, "Oscillators"},
@@ -121,7 +122,8 @@ inline const EngSpec kEng[E_COUNT] = {
       {"Glide", 0.001f, 5, 0, 0.05f, 's', true, nullptr, "Modulation"}, {"LFO rate", 0.2f, 50, 0, 3, 'f', true, "Hz", "Modulation"},
       {"Mod source", 0, 7, 1, 0, 'n', false, "Triangle|Square|Saw|Ramp|Filter EG|Osc 2|S&H|Noise", "Modulation"}, {"Mod dest", 0, 3, 1, 0, 'n', false, "Pitch|Filter|Wave|Osc 2", "Modulation"},
       {"Mod amount", 0, 1, 0.01f, 0, 'p', false, nullptr, "Modulation"}, {"Mod wheel", 0, 1, 0.01f, 0, 'p', false, nullptr, "Modulation"},
-      {"Velocity", 0, 1, 0.01f, 0.3f, 'p', false, nullptr, "Output"}, {"Volume", 0, 1, 0.01f, 0.75f, 'p', false, nullptr, "Output"}},
+      {"Velocity", 0, 1, 0.01f, 0.3f, 'p', false, nullptr, "Output"}, {"Volume", 0, 1, 0.01f, 0.75f, 'p', false, nullptr, "Output"},
+      {"Ladder", 0, 1, 1, 0, 'n', false, "Classic|Improved", "Filter"}},
      2, {{"Sync", false}, {"Glide", false}}},
 };
 
@@ -312,7 +314,7 @@ struct MeloEngines {
                 case 6: p.semi3 = v; break; case 7: p.fine3 = v; break; case 8: p.lvl1 = v; break; case 9: p.lvl2 = v; break; case 10: p.lvl3 = v; break; case 11: p.noise = v; break; case 12: p.drive = v; break;
                 case 13: p.cutoff = v; break; case 14: p.emph = v; break; case 15: p.contour = v; break; case 16: p.kbd = iv; break;
                 case 17: p.fA = v; break; case 18: p.fD = v; break; case 19: p.fS = v; break; case 20: p.fR = v; break; case 21: p.A = v; break; case 22: p.D = v; break; case 23: p.S = v; break; case 24: p.R = v; break;
-                case 25: p.mod = v; break; case 26: p.glide = v; break; case 27: p.vel = v; break; case 28: p.volume = v; break; case 29: p.vintage = v; break; case 30: p.feedback = v; break;
+                case 25: p.mod = v; break; case 26: p.glide = v; break; case 27: p.vel = v; break; case 28: p.volume = v; break; case 29: p.vintage = v; break; case 30: p.feedback = v; break; case 31: p.ladder = iv; break;
                 case 32: p.glideOn = b; break; case 33: p.o3lfo = b; break; case 34: p.modFilt = b; break; case 35: p.modPitch = b; break; case 36: p.retrig = b; break; }
             break; }
         case E_ACID: { auto& p = acid.p;
@@ -346,7 +348,7 @@ struct MeloEngines {
                 case 6: p.lvl2 = v; break; case 7: p.cutoff = v; break; case 8: p.reso = v; break; case 9: p.egAmt = v; break; case 10: p.kbd = v; break; case 11: p.overload = v; break; case 12: p.poles = iv; break;
                 case 13: p.fA = v; break; case 14: p.fD = v; break; case 15: p.fS = v; break; case 16: p.fR = v; break; case 17: p.A = v; break; case 18: p.D = v; break; case 19: p.S = v; break; case 20: p.R = v; break;
                 case 21: p.glide = v; break; case 22: p.lfoRate = v; break; case 23: p.modSrc = iv; break; case 24: p.modDst = iv; break; case 25: p.modAmt = v; break; case 26: p.modWheel = v; break;
-                case 27: p.vel = v; break; case 28: p.volume = v; break; case 32: p.sync = b; break; case 33: p.glideOn = b; break; }
+                case 27: p.vel = v; break; case 28: p.volume = v; break; case 29: p.ladder = iv; break; case 32: p.sync = b; break; case 33: p.glideOn = b; break; }
             break; }
         }
     }
