@@ -292,6 +292,8 @@ manda lo que suena, los golpes, el reloj del Oxi y los knobs. La página solo es
 - **Empieza con Mayús+S** desde el ordenador (puede empezar a escribir antes del play).
 - **Momentos grandes solos y a compás:** FU-GA-DE-FRE-ÓN, cantad conmigo, el logo con estrobo, el logo de gas y las cartelas, tras los drops y en lo más alto. El ASCII se mueve a tempo con el reloj del Oxi.
 - **Acaba sola:** la subida de tempo del final lanza la despedida, y el Stop del Oxi, el negro y el R.I.P. Un Stop a mitad no acaba nada.
+- **Escenas sin Terminal:** lluvia de neveras, FUGA DE FREÓN en letras gigantes, cuchillos contra cubitos y la nevera persiguiendo a la banda. Salen solas; la tecla **V** lanza una (o la quita).
+- **Todo reacciona:** las letras del Terminal saltan, ondulan, se congelan o se rompen y caen; las notas de los sintes son carámbanos en su altura; filtro, reso y efectos del máster cambian la imagen.
 - Las teclas de la nevera (clímax, coro, gas, logo, fotos, final...) siguen funcionando, pero no hacen falta.
 - Si se recarga la página a mitad, sigue en el mismo punto del show.
 - La tecla **D** enseña los datos, también los de la Freon.

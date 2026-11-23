@@ -265,6 +265,7 @@ struct Audio {
     // visuales (ui/nevera.html): copia del máster y golpes, solo mientras hay una pantalla de visuales conectada.
     // vhit: bits 0-7 sonidos de batería, 8-11 pistas, 12 sampler. posPub: posición del reloj en semicorcheas
     rec::DiskRing vring; std::atomic<bool> visOn{false}; std::atomic<uint32_t> vhit{0}; std::atomic<double> posPub{0};
+    std::atomic<int> vnote[NT] = {};   // última nota de cada pista (los visuales la colocan por su altura)
     int outCh = 2, inCh = 0;
     // rutas de la interfaz (de Ajustes): par de la salida principal, par del cue (-2 automático, -1 ninguno) y canal de la interfaz de cada entrada (-1 ninguno)
     // se cambian en marcha desde Ajustes (sin reiniciar): el audio las lee una vez por bloque
@@ -351,7 +352,7 @@ struct Audio {
         if (t < 0 || t >= NT) return;
         act[t] = 1; vhit.fetch_or(1u << (8 + t), std::memory_order_relaxed);
         if (t == 0) { const int l = drums.noteOn(n, v); if (l >= 0 && !drums.lane[static_cast<size_t>(l)].mute) { dact[l] = 1; vhit.fetch_or(1u << l, std::memory_order_relaxed); } return; }
-        held[t].add(n);
+        held[t].add(n); vnote[t].store(n, std::memory_order_relaxed);
         mel[t].noteOn(n, v);
         if (subMode == 1 && t == subSrc) { subHeld.add(n); subUpdate(); }
     }
@@ -1939,7 +1940,8 @@ struct Control {
         vfeed_.run(au.vring, [this](const std::string& spec) {
             char b[160]; std::snprintf(b, sizeof b, "vis %u %d %.3f %.2f %d %d ", au.vhit.exchange(0), static_cast<int>(au.sr), au.posPub.load(),
                                        static_cast<double>(au.bpmPub.load()), au.runPub.load() ? 1 : 0, au.clkPub.load() ? 1 : 0);
-            const std::string msg = b + spec;
+            char nt[48]; std::snprintf(nt, sizeof nt, " %d %d %d", au.vnote[1].load(), au.vnote[2].load(), au.vnote[3].load());
+            const std::string msg = b + spec + nt;
             for (int c : visCl_) srv.send(c, msg);
         });
     }
