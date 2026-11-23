@@ -2599,7 +2599,7 @@ function asciiTick(dt, kick) {
   // nivel de gas que llena la pantalla: a mano (G) hasta arriba; solo, crece en el acto 4 y con las subidas
   const auto = !stabbed ? 0 : a === 3 ? 0.1 + 0.3 * Math.max(0, (p - 0.75) * 4) : a === 2 ? 0.06 : 0;   // el gas sube, pero deja ver cuchillos y hielo (G = hasta arriba)
   const storm = now < (AS.stormUntil || 0);
-  const floodT = AS.floodManual || storm ? 1.05 : Math.min(1, auto + (now - AS.buildT < 14 ? 0.35 * Math.min(1, (now - AS.buildT) / 10) : 0));
+  const floodT = AS.floodManual || storm ? 1.05 : Math.min(1, Math.max(AS.riseFlood || 0, auto + (now - AS.buildT < 14 ? 0.35 * Math.min(1, (now - AS.buildT) / 10) : 0)));
   AS.flood += (floodT - AS.flood) * Math.min(1, dt * (floodT > AS.flood ? (storm ? 0.6 : 0.12) : 0.12));
   AS.gasPow = (AS.gasPow || 0) + (((storm || AS.floodManual) ? 1 : 0) - (AS.gasPow || 0)) * Math.min(1, dt * ((storm || AS.floodManual) ? 0.8 : 0.15));   // densidad del gas, con fundido lento
   if (AS.flood > 0.05 && Math.random() < dt * 30 * AS.flood) gasAt(Math.random() * AS.cols, AS.rows * (1 - AS.flood * 0.8), 2, 0.8, -Math.PI / 2);
@@ -2684,11 +2684,18 @@ function asciiDraw(a, p, stabbed, E) {
     rowsB.push(anyB ? sb : ''); rowsF.push(anyF ? sf : '');
   }
   const off = () => glitch && Math.random() < 0.15 ? (Math.random() * 16 - 8) * AS.cw : 0;
+  const wob = AS.wob > 0.02 ? AS.wob * AS.cw : 0, wt = AS.t * 23;                 // resonancia: cada fila vibra
+  const shx = AS.shake > 0.02 ? (Math.random() - 0.5) * AS.shake * AS.cw * 2 : 0, shy = AS.shake > 0.02 ? (Math.random() - 0.5) * AS.shake * AS.ch : 0;   // riser: tiembla
+  const ox = y => off() + shx + (wob ? Math.sin(y * 0.5 + wt) * wob : 0);
+  const kb = AS.knobB ?? 1;
   const bl = now - (AS.blastT ?? -99);
   if (bl < 4.2) { cx.globalAlpha = Math.min(1, bl / 0.15, (4.2 - bl) / 1.2) * (AS.lp.length ? 0.95 : 1); cx.fillStyle = '#000'; cx.fillRect(0, 0, innerWidth, innerHeight);
     cx.fillStyle = document.body.classList.contains('flash') ? '#000' : AS.color; }
-  cx.globalAlpha = (bl < 4.2 ? 1 : 0.42 * AS.dim * (focus ? 0.3 : 1) * (1 - gp) + 0.6 * gp); rowsB.forEach((s, y) => s && cx.fillText(s, off(), y * AS.ch));
-  cx.globalAlpha = 0.95; rowsF.forEach((s, y) => s && cx.fillText(s, off(), y * AS.ch));
+  const aB = bl < 4.2 ? 1 : Math.min(1, (0.42 * AS.dim * (focus ? 0.3 : 1) * (1 - gp) + 0.6 * gp) * kb);
+  if (AS.echo > 0.05 && bl >= 4.2) { cx.globalAlpha = aB * 0.45 * AS.echo; const ex = AS.echo * 5 * AS.cw, ey = AS.echo * 1.5 * AS.ch; rowsB.forEach((s, y) => s && cx.fillText(s, ox(y) + ex, y * AS.ch + ey + shy)); }   // eco del Delay
+  const rk = AS.rowSkip || 1;
+  cx.globalAlpha = aB; rowsB.forEach((s, y) => s && y % rk === 0 && cx.fillText(s, ox(y), y * AS.ch + shy));
+  cx.globalAlpha = Math.min(1, 0.95 * Math.max(0.55, kb)); rowsF.forEach((s, y) => s && cx.fillText(s, ox(y), y * AS.ch + shy));
   for (const l of AS.labels) { cx.globalAlpha = l.a; cx.fillText(l.txt, Math.round(l.x) * AS.cw, Math.round(l.y) * AS.ch); }
   cx.globalAlpha = 1;
 }
@@ -2907,6 +2914,7 @@ volumen    ${st.loudDb.toFixed(1)} dBFS · ganancia ${CFG.gainDb > 0 ? '+' : ''}
 percentil  ${(st.pct * 100).toFixed(0)}% (2 s) · clímax ${((st.cpct || 0) * 100).toFixed(0)}% (8 s / 5 min)   aguante ${st.aboveFor.toFixed(1)} s
 bombo      ${st.kickPresent ? 'SÍ' : 'no'}  on ${st.kickOnFor.toFixed(1)} s · off ${st.kickOffFor.toFixed(1)} s
 bpm        ${st.bpm.toFixed(1)}  conf ${st.bpmConf.toFixed(2)}${midi.bpm ? '  midi ' + midi.bpm.toFixed(1) : ''}
+mandos     ${FL.on ? 'filtro T1-T3 ' + (FL.cut < 0 ? '—' : (FL.cut * 100).toFixed(0) + '%') + ' · reso ' + (FL.res * 100).toFixed(0) + '% · ' + ['filt', 'lpf', 'hpf', 'rep', 'gate', 'riser', 'space', 'throw', 'tape', 'drive'].filter(k => Math.abs(+FL.ST['m.' + k]) > 0.02).map(k => k + ' ' + Math.round(FL.ST['m.' + k] * 100)).join(' · ') : '—'}
 freon      ${FL.on ? (FL.lost ? 'SIN DATOS' : 'conectada') + ' · Oxi ' + (FL.run ? 'en marcha' : 'parado') + ' · paso ' + FL.pos.toFixed(1) + ' · ' + FL.bpm + ' bpm' + (FL.ts < 0.99 ? ' · lento ' + FL.ts.toFixed(2) : '') : 'no (escucha la entrada de audio)'}
 graves     ${(st.bassShare * 100).toFixed(0)}%   agudos ${(st.highShare * 100).toFixed(1)}%   ruido ${st.flat.toFixed(2)}
 novedad    ${st.novelty.toFixed(2)}   sin cambios ${st.staleFor.toFixed(0)} s   breakdown ${st.inBreak ? 'SÍ' : 'no'}
@@ -2925,7 +2933,7 @@ ${dbgEvents.join('\n')}`;
    ===================================================================== */
 const FL = { ws: null, on: false, ok: false, q: [], cur: null, sr: 48000, hop: 1 / 60, ST: {}, SPEC: null, lvl: [],
   run: null, clk: false, bpm: 0, pos: 0, step: -1, stopFor: 0, stopAt: -99, lastKick: -99, lastFrame: 0, lost: false,
-  hitsAcc: 0, bh: [], cool: {}, ts: 1, retry: 1000, loudFor: 0, slice: -1, frz: false, riser: false, autoTest: false, knobT: 0 };
+  hitsAcc: 0, bh: [], k: {}, cut: -1, res: 0, cool: {}, ts: 1, retry: 1000, loudFor: 0, slice: -1, frz: false, riser: false, autoTest: false, knobT: 0 };
 const FREON_SERVED = /^https?:$/.test(location.protocol) && !location.search.includes('mic');
 const AUTO = location.search.includes('auto');
 
@@ -3052,6 +3060,12 @@ function flTransport(run) {
 }
 function flEngKey(e) { const n = (FL.SPEC?.engines?.[e]?.name || '').toLowerCase();
   return /303|acid/.test(n) ? 'eng_acid' : /dx/.test(n) ? 'eng_dx' : /juno/.test(n) ? 'eng_juno' : /moog/.test(n) ? 'eng_moog' : /game/.test(n) ? 'eng_gb' : /phatty/.test(n) ? 'eng_phatty' : 'eng'; }
+// posición de un knob de 0 a 1, como se ve en la pantalla de la Freon (los de frecuencia, en escala logarítmica)
+function flNorm(P, v) {
+  if (!P || v === undefined || !isFinite(v)) return -1;
+  const x = P.log && P.min > 0 ? Math.log(v / P.min) / Math.log(P.max / P.min) : (v - P.min) / (P.max - P.min || 1);
+  return Math.max(0, Math.min(1, x));
+}
 function flSet(k, v, old) {
   if (!showStart || finale) return;
   let m;
@@ -3071,13 +3085,14 @@ function flSet(k, v, old) {
   else if ((m = /^t([234])\.(\w+)\.(\d+)$/.exec(k)) && AS.ok) {   // cutoff y resonancia de los sintes: el acid abre la fuga de gas
     const t = +m[1], e = FL.ST['t' + t + '.eng'], E = FL.SPEC?.engines?.[e]; if (!E || E.key !== m[2]) return;
     const i = +m[3]; if (i !== E.layer[0] && i !== E.layer[1]) return;
-    const P = E.params[i], x = (v - P.min) / (P.max - P.min || 1), up = old === undefined || v > old;
-    if (!up || now - FL.knobT < 0.05) return;
+    const P = E.params[i], x = flNorm(P, v), d = old === undefined ? 0 : Math.abs(x - flNorm(P, old));
+    if (now - FL.knobT < 0.05) return;
     FL.knobT = now;
-    const acid = flEngKey(e) === 'eng_acid', n = Math.round((acid ? 6 : 3) * (0.3 + x) * (0.5 + progress()));
+    // cada giro suelta una ráfaga, más grande cuanto más rápido y más abierto (la 303, el doble)
+    const acid = flEngKey(e) === 'eng_acid', n = Math.round((acid ? 14 : 8) * (0.4 + x) * (0.6 + Math.min(4, d * 25)));
     const stabbed = revealed >= 2 || act() >= 3, L = AS.leaks[Math.random() * AS.leaks.length | 0];
-    if (stabbed && L) gasAt(L.x * AS.cols, L.y * AS.rows, n, 1 + x, L.dir);
-    else for (let j = 0; j < n * 2; j++) AS.parts.push({ x: Math.random() * AS.cols, y: -1, vx: (Math.random() - 0.5) * 6, vy: 4 + Math.random() * 8 * (0.5 + x), life: 1, decay: 0.06, snow: true });
+    if (stabbed && L) gasAt(L.x * AS.cols, L.y * AS.rows, n, 1.2 + 1.5 * x, L.dir);
+    else { frostGrow(0.05, 20 + 60 * x); for (let j = 0; j < n * 3; j++) AS.parts.push({ x: Math.random() * AS.cols, y: Math.random() * AS.rows * 0.3, vx: (Math.random() - 0.5) * 10, vy: 6 + Math.random() * 14 * (0.5 + x), life: 1, decay: 0.12, snow: true }); }
   }
 }
 // posición del reloj ahora mismo (semicorcheas), contando lo que ha pasado desde el último paquete
@@ -3113,26 +3128,47 @@ function flTick(dt) {
   if (FL.pend) { if (now > FL.pend.until) FL.pend = null; else if (!typing && flSay(FL.pend.cat, FL.pend.vars, false)) FL.pend = null; }
   // congelar (Space o Throw con Freeze, granular congelado) y tape stop: el dibujo se frena; congelar además escarcha la pantalla
   const frz = (g('m.spFrz') >= 0.5 && g('m.space') > 0.1) || (g('m.thFrz') >= 0.5 && g('m.throw') > 0.1) || (g('gran.frz') >= 0.5 && g('gran.on') >= 0.5);
-  const tape = g('m.tape'), tsT = frz ? 0.15 : tape > 0.05 ? 1 - 0.85 * Math.min(1, tape) : 1;
-  FL.ts += (tsT - FL.ts) * Math.min(1, dt * (tsT < FL.ts ? 6 : 2));
+  // rejilla de semicorcheas: el reloj del Oxi si está en marcha; si no, el tempo de la Freon (los efectos responden igual)
+  const grid = FL.run ? flPosNow() : performance.now() / 1000 * (FL.bpm || 120) / 15;
+  const step = Math.floor(grid), newStep = step !== FL.step; FL.step = step;
+  const sm = (k, x, up = 8, down = 3) => { FL.k[k] = (FL.k[k] || 0) + (x - (FL.k[k] || 0)) * Math.min(1, dt * (x > (FL.k[k] || 0) ? up : down)); return FL.k[k]; };
+  const tape = g('m.tape'), rep = g('m.rep'), gate = g('m.gate'), filt = g('m.filt'), rise = g('m.riser'), space = g('m.space'), thr = g('m.throw'), drive = g('m.drive');
+  // Repeat: la imagen tartamudea (se para en una semicorchea y salta en la siguiente) y falla
+  const stut = rep > 0.1 ? (step % 2 ? 0 : 1.6) : 1;
+  const tsT = frz ? 0.15 : (tape > 0.05 ? 1 - 0.85 * Math.min(1, tape) : 1) * stut;
+  FL.ts = rep > 0.1 ? tsT : FL.ts + (tsT - FL.ts) * Math.min(1, dt * (tsT < FL.ts ? 6 : 2));
   if (frz && AS.ok && AS.frost) frostGrow(dt, 3);
   if (frz && !FL.frz) flSay('freeze');
   if (tape > 0.4 && !FL.tape) flSay('tape');
   FL.frz = frz; FL.tape = tape > 0.4;
-  // riser: es una subida de verdad (cuenta para el drop y para el clímax)
-  const riser = g('m.riser') > 0.25;
+  // Riser: es una subida de verdad (cuenta para el drop y para el clímax); el vapor sube desde abajo y la pantalla tiembla
+  const riser = rise > 0.25;
   if (riser) { if (now - AS.buildT > 10) AS.buildT = now; st.lastBuild = now; if (!FL.riser && !flSay('riser')) ev('buildup', () => say('buildup', { force: true }), 8); }
   FL.riser = riser;
-  // filtro del máster: la imagen se apaga con él
-  const filt = g('m.filt'); if (filt > 0.05 && !st.inBreak) AS.dimT = Math.min(AS.dimT, 1 - 0.5 * Math.min(1, filt));
-  // a tempo, con el reloj de la Freon: Repeat hace fallar la imagen y el Gater es un estrobo a semicorcheas
-  const step = Math.floor(FL.pos), newStep = step !== FL.step; FL.step = step;
-  if (newStep && FL.run && !climaxOn) {
-    const rep = g('m.rep'), gate = g('m.gate');
-    if (rep > 0.2) asciiGlitch(0.04 + 0.1 * rep);
-    if (gate > 0.2 && CFG.strobe) {
+  AS.riseFlood = sm('rise', 0.85 * Math.min(1, rise) + 0.35 * Math.min(1, space));       // Space: neblina que se queda
+  AS.shake = sm('shake', Math.pow(Math.min(1, rise), 1.5) * 1.6, 10, 4);
+  AS.echo = sm('echo', Math.min(1, thr));                                                  // Delay: un eco del dibujo
+  // filtros: el del máster oscurece; el de los sintes que suenan (T1-T3) abre y cierra la imagen; la resonancia la hace vibrar
+  let cut = -1, res = 0;
+  for (const t of [2, 3, 4]) {
+    const E = FL.SPEC?.engines?.[FL.ST['t' + t + '.eng']]; if (!E) continue;
+    if ((FL.lvl[3 + t - 1] ?? 1) > 0.003) FL.k['on' + t] = now;                              // canal T1-T3 con señal en los últimos 2 s
+    const on = now - (FL.k['on' + t] ?? -99) < 2;
+    const nv = i => flNorm(E.params[E.layer[i]], FL.ST['t' + t + '.' + E.key + '.' + E.layer[i]]);
+    const c = nv(0), r = nv(1);
+    if (on && c >= 0) { cut = Math.max(cut, c); res = Math.max(res, r); }
+  }
+  // filtro del máster (−1 paso bajo … +1 paso alto) y sus LPF / HPF: el paso bajo oscurece; el paso alto deja la imagen en líneas sueltas
+  const lp = Math.min(1, Math.max(-filt, g('m.lpf'), 0)), hp = Math.min(1, Math.max(filt, g('m.hpf'), 0));
+  AS.knobB = sm('bright', (cut < 0 ? 1 : 0.45 + 0.85 * cut) * (1 - 0.75 * lp) * (1 - 0.3 * hp) * (1 + 0.35 * Math.min(1, drive)));
+  AS.rowSkip = hp > 0.65 ? 3 : hp > 0.2 ? 2 : 1;
+  AS.wob = sm('wob', cut < 0 ? 0 : Math.pow(res, 2) * 1.4);
+  FL.cut = cut; FL.res = res;
+  if (newStep && !climaxOn && showStart) {
+    if (rep > 0.2) asciiGlitch(0.04 + 0.12 * rep);
+    if (gate > 0.15 && CFG.strobe) {   // Gater: estrobo a semicorcheas (a corcheas si va muy rápido)
       const every = 60 / (FL.bpm || 120) / 4 < 1 / CFG.strobeMaxHz ? 2 : 1;
-      if (step % every === 0) { document.documentElement.style.setProperty('--pulse', dimColor('#ffffff', 0.15 + 0.5 * Math.min(1, gate) * (0.4 + 0.6 * progress()))); document.body.classList.add('pulse'); pulseOff = now + 0.04; }
+      if (step % every === 0) { document.documentElement.style.setProperty('--pulse', dimColor('#ffffff', 0.2 + 0.6 * Math.min(1, gate) * (0.5 + 0.5 * progress()))); document.body.classList.add('pulse'); pulseOff = now + 0.04; }
     }
   }
   // PULSO: tiempos, corcheas, compases y frases del reloj de la Freon (el ASCII se mueve con ellos)
