@@ -161,3 +161,9 @@
   - CPU en el Mac: ~2,8 % de un núcleo por voz (Classic ~1 %). **Pendiente medirlo en la Pi.**
 - [ ] Que Jorge compare Classic e Improved a oído, sobre todo con resonancia alta; si gana Improved, pasa a ser el de fábrica.
 - [ ] Calibrar las curvas del Phatty (corte, envolventes, resonancia) grabando su Slim Phatty real.
+
+## Scarlett 4i4 (3.ª gen.) en la Pi (23-11-2026)
+- [x] La Pi la reconoce como tarjeta de sonido nada más enchufarla (no hizo falta quitar «Easy Start»). Freon: máster en salidas 1-2, pre-escucha en 3-4, Input 1-4 = entradas 1-4 (la 4i4 da 6 canales de entrada: 4 físicos y 2 de loopback). Buffer 256 (5,3 ms), 48 kHz.
+- [x] Prueba de 46 s con notas en las 4 pistas y multipista: 0 cortes, CPU media 5,3 % (pico 6,3 %), 40 °C.
+- [ ] Jorge: comprobar qué oye por los auriculares de la 4i4 al pulsar cue (si siguen a 3-4 o a 1-2) y probar voz y monotron por las entradas.
+- [ ] Probar buffer 128 (2,7 ms) con un live completo si hace falta menos latencia.
