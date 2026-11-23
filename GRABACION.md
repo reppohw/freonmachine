@@ -210,4 +210,5 @@ Cada fase se prueba en la Pi con el live cargado (CPU, cortes y una grabación l
   - Tocando un knob a los 2 s, la web deja de recibir lo grabado y solo ve tus valores.
   - La versión 2 contiene lo original, lo tuyo y la vuelta al valor grabado en el punto de parada.
   - Al reproducirla, la web ve exactamente esa secuencia.
+- **Probado en la Pi (23-11):** pasada de corrección sobre un live de 5 s, tocando el Cutoff a mitad. La versión 2 contiene lo original, el valor nuevo y la vuelta al valor grabado; al reproducirla, la web ve esa secuencia, y al parar vuelve el estado de antes.
 - **Siguiente (paso 3):** regenerar el audio. Hoy ya se puede: Rec mientras se reproduce la versión, desde el principio y sin pre-roll. Falta hacerlo con un botón («Render») y, si hace falta, más rápido que el tiempo real.
