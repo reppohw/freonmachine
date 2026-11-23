@@ -75,6 +75,11 @@ button, select, input { font: inherit; color: inherit; }
 .takefile { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
 .takeplay { padding: 4px 0 8px; }
 #rpPos { flex: 1 1 100%; width: 100%; }
+.rptl { position: relative; padding: 10px 0 4px; }
+.rptl #rpPos { display: block; }
+.rpticks { position: absolute; left: 8px; right: 8px; top: 0; height: 10px; pointer-events: none; }
+.rpticks span { position: absolute; top: 0; width: 2px; height: 10px; margin-left: -1px; background: var(--amber, #f0b000); }
+.rpmark { display: inline-flex; gap: 2px; }
 @keyframes blink { 50% { border-color: var(--led); } }
 .keys { display: grid; gap: 5px; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
 select, input[type="number"] { background: var(--oled-bg); color: var(--oled); border: 1px solid var(--line-2); border-radius: var(--r); padding: 5px 6px; font-size: 11.5px; min-height: 28px; max-width: 100%; }
@@ -1132,7 +1137,10 @@ function drawReplay() {
     pre.value = String(RP.pre); pre.addEventListener("change", () => { RP.pre = +pre.value; });
     box.append(el("h3", { id: "rpTitle" }, "Replay"),
       el("p", { class: "hint" }, "Freon plays the live back exactly as you played it: notes, knobs, presets and tempo, with the recorded inputs. Pick a point (or a marker), choose a pre-roll and press ▶. To fix something, just move it while it plays: from that moment that parameter is yours (its recorded moves go quiet) until you press ■. Then save the pass as a new version, or discard it. The original is never touched. ⏺ Render plays the chosen version from the start and records it as a new take (with multitrack if it's on), in real time; it stops by itself at the end. The Oxi's notes are ignored meanwhile (stop it). ■ brings back what you had before."),
-      el("div", { class: "scrow" }, pos), el("div", { class: "scrow" }, el("b", { id: "rpTime" }, "0:00"), el("span", { class: "hint", id: "rpLen" }, ""), pre,
+      el("div", { class: "rptl" }, pos, el("div", { class: "rpticks", id: "rpTicks", "aria-hidden": "true" })),
+      el("div", { class: "scrow" }, el("input", { type: "text", id: "rpMarkTxt", maxlength: 80, placeholder: "what to fix here…", "aria-label": "Marker text", style: "flex:1 1 10em" }),
+        keyBtn("＋ Marker", "", () => { const t = $("#rpMarkTxt"), at = RP.on && !RP.drag ? RP.pos : +$("#rpPos").value; sendRaw(`rplay mark ${at.toFixed(3)}\t${RP.info.take}\t${t.value.trim() || "Fix"}`); t.value = ""; topMsg("Marker", hms(at)); })),
+      el("div", { class: "scrow" }, el("b", { id: "rpTime" }, "0:00"), el("span", { class: "hint", id: "rpLen" }, ""), pre,
         el("select", { id: "rpVer", "aria-label": "Version of the live" }),
         keyBtn("▶ Play from here", "", () => sendRaw(`rplay start ${RP.pos.toFixed(2)} ${RP.pre} ${RP.ver} ${RP.info.take}`)), keyBtn("■ Stop", "danger", () => sendRaw("rplay stop")),
         keyBtn("⏺ Render", "", () => sendRaw(`rplay render ${RP.ver} ${RP.info.take}`)),
@@ -1152,7 +1160,12 @@ function drawReplay() {
   if (!RP.on && RP.pend.length) pu.append(el("span", { class: "hint" }, "Changed in this pass: " + RP.pend.join(", ")),
     keyBtn("Save as new version", "", () => sendRaw("rplay save")), confirmKey("Discard", "Discard changes?", () => sendRaw("rplay discard"), "danger"));
   const mk = $("#rpMarks"); mk.textContent = "";
-  (RP.info.marks || []).forEach(([sec, label]) => mk.append(keyBtn(`◆ ${hms(sec)} ${label}`, "", () => { RP.pos = sec; pos.value = String(sec); $("#rpTime").textContent = hms(sec); })));
+  const tk = $("#rpTicks"); tk.textContent = "";
+  (RP.info.marks || []).forEach(([sec, label]) => {
+    if (len > 0) tk.append(el("span", { style: `left:${Math.min(100, sec / len * 100).toFixed(2)}%`, title: `${hms(sec)} ${label}` }));
+    mk.append(el("span", { class: "rpmark" }, keyBtn(`◆ ${hms(sec)} ${label}`, "", () => { RP.pos = sec; pos.value = String(sec); $("#rpTime").textContent = hms(sec); }),
+      confirmKey("×", "Delete?", () => sendRaw(`rplay unmark ${sec.toFixed(3)}\t${RP.info.take}`), "danger")));
+  });
   if (!RP.info.live) mk.append(el("span", { class: "hint" }, "This take has no live.freon (recorded before it existed)"));
 }
 // pestaña Record: todo lo de grabar, reproducir y corregir lives

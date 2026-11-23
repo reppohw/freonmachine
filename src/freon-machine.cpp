@@ -1802,6 +1802,23 @@ struct Control {
         std::printf("Reproducción: guardada %s / %s\n", rpTake_.c_str(), ver.c_str()); std::fflush(stdout);
         srv.broadcast("rpend []"); srv.broadcast("rpmsg saved " + ver); srv.broadcast("rpinfo " + rpInfo(rpTake_)); srv.broadcast("trecs " + takesJson());
     }
+    // marcas de una toma desde el panel de Replay (para apuntar qué corregir): se guardan en su marcas.txt, en orden
+    bool rpMarkEdit(const std::string& take, double sec, const std::string& label, bool remove) {
+        if (!safeName(take)) return false;
+        if (trec.recording.load() && trec.takeName() == take) { srv.broadcast("rpmsg error that take is being recorded"); return false; }
+        const std::string f = recDir() + "/" + take + "/marcas.txt";
+        if (!std::filesystem::exists(recDir() + "/" + take)) return false;
+        std::vector<std::pair<double, std::string>> marks;
+        { std::ifstream in(f); std::string line; while (std::getline(in, line)) { int h = 0, m = 0; double x = 0; const size_t tab = line.find('\t');
+            if (tab == std::string::npos || std::sscanf(line.c_str(), "%d:%d:%lf", &h, &m, &x) != 3) continue; marks.push_back({h * 3600 + m * 60 + x, line.substr(tab + 1)}); } }
+        if (remove) marks.erase(std::remove_if(marks.begin(), marks.end(), [&](const auto& mk) { return std::fabs(mk.first - sec) < 0.002; }), marks.end());
+        else { std::string l; for (char c : label) l += (c == '\t' || c == '\n' || c == '\r') ? ' ' : c; if (l.empty()) l = "Mark"; marks.push_back({sec, l.substr(0, 80)}); }
+        std::stable_sort(marks.begin(), marks.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+        const std::string tmp = f + ".tmp"; FILE* o = std::fopen(tmp.c_str(), "wb"); if (!o) return false;
+        for (const auto& [x, l] : marks) { const int h = static_cast<int>(x / 3600), m = static_cast<int>(x / 60) % 60; std::fprintf(o, "%d:%02d:%06.3f\t%s\n", h, m, std::fmod(x, 60.0), l.c_str()); }
+        std::fclose(o); std::error_code ec; std::filesystem::rename(tmp, f, ec);
+        srv.broadcast("rpinfo " + rpInfo(take)); srv.broadcast("trecs " + takesJson()); return true;
+    }
     std::string rpInfo(const std::string& take) {   // duración y marcas de una toma (para la línea de tiempo)
         std::error_code ec; const uint64_t sz = std::filesystem::file_size(recDir() + "/" + take + "/master.wav", ec);
         const double len = !ec && sz > static_cast<uint64_t>(rec::kData) ? static_cast<double>(sz - rec::kData) / 6.0 / au.sr : 0.0;
@@ -1932,6 +1949,12 @@ struct Control {
             }
             else if (w == "stop") rpStop();
             else if (w == "save") rpSave(); else if (w == "discard") rpDiscard();
+            else if (w == "mark" || w == "unmark") {   // mark SEG<tab>TOMA<tab>TEXTO · unmark SEG<tab>TOMA
+                std::string rest; std::getline(is, rest); if (!rest.empty() && rest[0] == ' ') rest.erase(0, 1);
+                const size_t t1 = rest.find('\t'); if (t1 != std::string::npos) { const size_t t2 = rest.find('\t', t1 + 1);
+                    const double sec = std::max(0.0, std::atof(rest.c_str())); const std::string take = rest.substr(t1 + 1, t2 == std::string::npos ? std::string::npos : t2 - t1 - 1);
+                    rpMarkEdit(take, sec, t2 == std::string::npos ? "" : rest.substr(t2 + 1), w == "unmark"); }
+            }
             else if (w == "render") { std::string ver; is >> ver; std::string t; std::getline(is, t); if (!t.empty() && t[0] == ' ') t.erase(0, 1); rpRender(t, ver.empty() ? "live.freon" : ver); }
             else if (w == "info") { std::string t; std::getline(is, t); if (!t.empty() && t[0] == ' ') t.erase(0, 1); srv.send(client, "rpinfo " + rpInfo(t)); }
         }

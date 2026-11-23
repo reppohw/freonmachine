@@ -221,3 +221,9 @@ Cada fase se prueba en la Pi con el live cargado (CPU, cortes y una grabación l
 - **Final:** al terminar el live sigue 3 s más para las colas de reverb y delay. Después para la grabación, el replay y devuelve el estado de antes. ■ Stop lo corta antes, y la toma queda hasta ahí.
 - **Tiempo real:** dura lo que dura el live. Más rápido haría falta un segundo motor fuera del audio en directo; queda para más adelante si hace falta.
 - **Probado en el Mac:** render de una versión 2 de 4,7 s → toma de 7,8 s. Las 24 notas caen en la misma muestra absoluta que en la versión (desfase 0). Origen y nombre correctos.
+
+## Marcas en la línea de tiempo (23-11-2026)
+
+- **En el panel de Replay:** escribe qué corregir («bajar el filtro», «entra tarde»…) y pulsa **＋ Marker**. La marca va al punto de la barra, o al punto que suena si estás reproduciendo.
+- **Dónde se ven:** como rayitas sobre la barra y como botones ◆ para saltar a ellas. Cada una tiene su × para borrarla.
+- **Dónde se guardan:** en `marcas.txt` de la toma, en orden, junto a las ◆ puestas al grabar. No se tocan las de una toma que se está grabando.
