@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<title>FUGA DE FREÓN · LA NEVERA v28 · FREON MACHINE</title>
+<title>FUGA DE FREÓN · LA NEVERA v29 · FREON MACHINE</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
   :root { --fg:#e6e6e6; --bg:#000; --fs:4.1vw; }
@@ -35,6 +35,7 @@
   #log .line.frozen { color:#bfefff; text-shadow:0 0 .25em #7fd4ff; }
   #fall { position:fixed; inset:0; pointer-events:none; z-index:3; overflow:hidden; }
   body.photo #fall, body.climax #fall, body.ended #fall { visibility:hidden; }
+  body.climax.finalChaos #ascii { opacity:.5; } body.ended.finalChaos #ascii { opacity:0; } body.ended.asciiEnd.finalChaos #ascii { opacity:1; }
   #fall .lf { position:fixed; white-space:pre; line-height:1.15; will-change:transform,opacity; }
   body.split #log { right:52vw; font-size:min(var(--fs), 3.9vw); }
   body.logoA #climax { display:none !important; } body.climax.logoA #ascii { opacity:1; }
@@ -1463,7 +1464,7 @@ function addLine(text, { you = false } = {}) {
   const sys = typeof text === 'string' && text[0] === '$';
   if (sys) text = text.slice(1);
   finishTyping();
-  if (LT.cur && !you) { const a = act(); if (!sys && (a >= 2 || st.pct > 0.85 || now - st.lastDrop < 8)) lettersBreak(a >= 3 ? 1.4 : 1); else LT.cur = null; }
+  if (LT.cur && !you) { const a = act(); if (!sys && (story.active ? a >= 3 : a >= 2 || (a >= 1 && st.pct > 0.9) || (a >= 1 && now - st.lastDrop < 8))) lettersBreak(0.6 + 1.2 * IX()); else LT.cur = null; }
   log.querySelectorAll('.cursor').forEach(c => c.remove());
   const lines = [...log.children];
   const before = lines.map(l => l.getBoundingClientRect().top);
@@ -1495,7 +1496,7 @@ function addLine(text, { you = false } = {}) {
 }
 function sayText(text) { if (climaxOn || PC.cur) return false; addLine(text); return true; }
 function say(cat, { force = false, eco = '' } = {}) {
-  if (climaxOn || story.active || finale) return false;
+  if (climaxOn || story.active || finale || PC.cur) return false;   // durante una escena no se gastan frases
   if (act() <= 1 && !/^v[A-Z]/.test(cat) && !cat.startsWith('soft_') && !['lost', 'memory', 'custom', 'people'].includes(cat)) {
     if (!SOFT[cat]) return false;
     cat = SOFT[cat];
@@ -1689,7 +1690,7 @@ function startFinale() {
   climaxOn = true; climaxStart = now; climaxDur = Infinity; climaxNextWord = 0; finale = 1; finaleN = 0;
   finaleQ = L.finaleIntro.slice();
   applyLook();
-  document.body.classList.add('climax');
+  document.body.classList.add('climax', 'finalChaos');
   ev('FINAL');
 }
 function finaleCard() {
@@ -2570,12 +2571,12 @@ function asciiTick(dt, kick) {
     if (c.y > AS.rows - c.s) { c.y = AS.rows - c.s; c.vy *= -0.45; c.vr *= 0.7; c.bounces++; if (c.bounces > 2) { c.dead = true; shatter(c.x, c.y, 10); } } }
   prune(AS.cubes, c => !c.dead, 90);
   // CUCHILLOS que cruzan (tras la puñalada), más en el acto 4 y con la energía
-  if (stabbed && now > AS.nextKnife && (Q || AS.onBeat) && !AS.logoSolo && !PC.cur && Math.random() < D) {
+  if (stabbed && now > AS.nextKnife && (Q || AS.onBeat) && !AS.logoSolo && (!PC.cur || CHAOS() > 0.3) && Math.random() < D) {
     for (let k = 0, nk = a === 3 ? 1 + (sp / 2.5 | 0) : 1; k < nk; k++) spawnKnife(false, sp);   // en el acto 4, varios a la vez
     AS.nextKnife = now + (a === 3 ? 2.0 : 7) / (0.5 + E) / sp / Math.max(0.15, D) * (0.7 + Math.random() * 0.6);
   }
   // acto 4: lluvia de hielo (cubitos y copos) cada vez más intensa
-  if (a === 3 && !AS.logoSolo && !PC.cur) {
+  if (a === 3 && !AS.logoSolo && (!PC.cur || CHAOS() > 0.3)) {
     if (Q ? Math.random() < dt * 0.8 * sp * D : AS.on8 && Math.random() < 0.18 * sp * D) { if (AS.cubes.length < 40) spawnCube(Math.random() * AS.cols, -6); }
     if (kick && Math.random() < 0.5 * D) for (let k = 0; k < 2 + (sp | 0); k++) spawnCube(Math.random() * AS.cols, -6);
     if (Math.random() < dt * 0.25 * sp && AS.flakes.length < 6) AS.flakes.push(bigFlake());
@@ -2590,7 +2591,7 @@ function asciiTick(dt, kick) {
   for (const k of AS.knives) { k.x += k.vx * dt; k.y += k.vy * dt; k.rot += k.vr * dt; k.life -= dt; }
   // notas de los sintes: carámbanos (o cuchillos, tras la puñalada) que cuelgan un instante y caen
   for (const c of AS.ice) { if ((c.hang -= dt) < 0) { c.vy += 70 * dt; c.y += c.vy * dt * sp; } }
-  prune(AS.ice, c => c.y < AS.rows + 5, 70);
+  prune(AS.ice, c => c.y < AS.rows + 5, 12 + 70 * IX() | 0);
   for (const r of AS.rings) { r.r += AS.rows * 0.5 * dt; r.life -= dt * 1.4; }
   prune(AS.rings, r => r.life > 0, 20);
   prune(AS.knives, k => k.life > 0 && k.x > -150 && k.x < AS.cols + 150, 60);
@@ -2633,7 +2634,7 @@ function asciiDraw(a, p, stabbed, E) {
   AS.labels.length = 0;
   gb.globalAlpha = 1; gb.fillStyle = '#000'; gb.fillRect(0, 0, cols, rows);
   gf.globalAlpha = 1; gf.fillStyle = '#000'; gf.fillRect(0, 0, cols, rows);
-  const pump = FL.on && FL.run ? 0.8 + 0.4 * (AS.beatEnv || 0) : 1;   // con el reloj de la Freon, todo el fondo late en cada tiempo
+  const pump = FL.on && FL.run ? 1 + (0.4 * (AS.beatEnv || 0) - 0.2) * IX() : 1;   // con el reloj de la Freon, todo el fondo late en cada tiempo
   const B = 0.75 * Math.min(1.6, AS.boost) * pump;
   // --- FONDO ---
   // nevera gigante que respira (actos 3 y 4), con la puerta entreabierta que late con el bombo
@@ -2910,7 +2911,7 @@ function brain(dt, { kick, silent }) {
     document.body.classList.add('pulse'); pulseOff = now + 0.06;
   }
   if (photoOff) return;
-  if (!silent && now > nextChatter && !typing) {
+  if (!silent && now > nextChatter && !typing && !PC.cur) {
     // en los actos 2 y 3, de vez en cuando, en vez de una frase: una prueba del crimen
     // (no en plena subida ni con la energía arriba: ahí suele venir un clímax)
     if (act() >= 2 && now - lastPhoto > 240 * TS() && now - st.lastBuild > 25 && st.pct < 0.75 && Math.random() < 0.35 && showPhoto()) return;
@@ -3016,7 +3017,7 @@ const FREON_T = {
 // si en ese momento no puede hablar (está escribiendo, hay un hueco corto), lo intenta durante 8 s más
 function flSay(cat, vars = {}, retry = true) {
   if (now - (FL.cool[cat] ?? -999) < 60 * Math.max(0.5, TS())) return false;
-  if (!showStart || story.active || climaxOn || finale || photoOff || typing || now - lastSpoke < CFG.minGap) {
+  if (!showStart || story.active || climaxOn || finale || photoOff || typing || PC.cur || now - lastSpoke < CFG.minGap) {
     if (retry && showStart && !finale) FL.pend = { cat, vars, until: now + 8 };
     return false;
   }
@@ -3179,8 +3180,9 @@ function lettersTick(dt, kick) {
   const tape = FL.on && +FL.ST['m.tape'] > 0.05 ? Math.max(0, 1 - FL.ts) : 0, rise = AS.riseFlood || 0;
   C.line.classList.toggle('frozen', !!FL.frz);
   if (FL.frz) return;                                                         // congelada: quieta
-  if (kick && a >= 1) for (const c of C.chars) if (Math.random() < 0.1 + 0.08 * a) c.vy -= 1.4 + 0.7 * a;   // saltan con el bombo
-  if (FL.snapHit && a >= 2 && Math.random() < 0.35) { const live = C.chars.filter(c => !c.gone && c.c !== ' '); if (live.length > 4) { LT.css = null; lettersFallOne(live[Math.random() * live.length | 0], 0.7); } }   // la caja arranca una letra
+  const ix = IX();
+  if (kick && ix > 0.15) for (const c of C.chars) if (Math.random() < 0.05 + 0.35 * ix) c.vy -= 0.6 + 3.2 * ix + 3 * CHAOS();   // saltan con el bombo
+  if (FL.snapHit && a >= 2 && Math.random() < 0.15 + 0.5 * ix) { const live = C.chars.filter(c => !c.gone && c.c !== ' '); if (live.length > 4) { LT.css = null; lettersFallOne(live[Math.random() * live.length | 0], 0.7); } }   // la caja arranca una letra
   FL.snapHit = false;
   for (let i = 0; i < C.chars.length; i++) {
     const c = C.chars[i]; if (c.gone) continue;
@@ -3197,7 +3199,7 @@ function lettersTick(dt, kick) {
 // el lienzo ASCII da un golpe de zoom con el bombo (más fuerte en cada acto)
 function kickZoom() {
   if (!AS.ok) return;
-  const z = 1 + 0.007 * (act() + 1) * Math.min(1.4, AS.kickAmp || 0);
+  const z = 1 + (0.004 + 0.03 * Math.pow(IX(), 2) + 0.03 * CHAOS()) * Math.min(1.4, AS.kickAmp || 0);
   if (Math.abs(z - (AS.zoom || 1)) > 0.0008) { AS.zoom = z; AS.cv.style.transform = z > 1.0006 ? `scale(${z.toFixed(4)})` : ''; }
 }
 
@@ -3303,6 +3305,11 @@ const PIECE_D = {
     for (const k of P.b) sprite(g, k.x, k.y, q => drawKnife(q, k.L));
   },
 };
+// INTENSIDAD del show: todas las reacciones nuevas pasan por aquí. Empieza muy comedida (0,1), crece despacio
+// y se dispara en el último cuarto; en los últimos minutos (DESCONTROL) todo va a tope y se mezcla.
+const kickLast = () => now - st.lastKickT < 0.03;
+const IX = () => Math.min(1, 0.1 + 0.9 * Math.pow(progress(), 1.6));
+const CHAOS = () => Math.max(0, (progress() - 0.85) / 0.15);   // 0 hasta el 85 % del show; 1 al final
 // posición del reloj ahora mismo (semicorcheas), contando lo que ha pasado desde el último paquete
 function flPosNow() { return FL.run ? FL.pos + Math.min(0.25, (performance.now() - FL.lastFrame) / 1000) * (FL.bpm || 120) / 15 : FL.pos; }
 // MOMENTOS GRANDES: FU-GA-DE-FRE-ÓN, cantad conmigo, el logo con estrobo, el logo de gas y las cartelas SOMOS / FUGA / DE / FREÓN.
@@ -3311,9 +3318,9 @@ function flPosNow() { return FL.run ? FL.pos + Math.min(0.25, (performance.now()
 function flMoment(why, only = null) {
   if (!FL.run || finale || story.active || climaxOn || photoOff || waiting || asciiBusy() || !showStart) return false;
   const a = act(), named = revealed >= 2;
-  if (a < 1 || now - (FL.momentT ?? -999) < (100 - 60 * progress()) * TS()) return false;
+  if (a < 1 || now - (FL.momentT ?? -999) < (110 - 85 * IX() - 10 * CHAOS()) * TS()) return false;
   if (PC.cur) return false;
-  const opts = [['fuga', 3], ['cards', 2], ['neveras', 2], ['letras', 2]];
+  const opts = [['fuga', 3], ['cards', 2], ['letras', 2], ['neveras', a >= 2 ? 2 : 0]];
   if (named) opts.push(['chant', 2], ['logo', 2], ['gaslogo', AS.ok && !AS.lp.length ? 1 : 0], ['duelo', 2]);
   if (named && a >= 3) opts.push(['persecucion', 3]);
   const pool = opts.filter(([k, w]) => w > 0 && k !== FL.lastMoment && (!only || only.includes(k))), tot = pool.reduce((x, [, w]) => x + w, 0);
@@ -3358,7 +3365,7 @@ function flTick(dt) {
   if (riser) { if (now - AS.buildT > 10) AS.buildT = now; st.lastBuild = now; if (!FL.riser && !flSay('riser')) ev('buildup', () => say('buildup', { force: true }), 8); }
   FL.riser = riser;
   AS.riseFlood = sm('rise', 0.85 * Math.min(1, rise) + 0.35 * Math.min(1, space));       // Space: neblina que se queda
-  AS.shake = sm('shake', Math.pow(Math.min(1, rise), 1.5) * 1.6, 10, 4);
+  AS.shake = sm('shake', Math.pow(Math.min(1, rise), 1.5) * (0.4 + 1.6 * IX()) + CHAOS() * 0.4 * (AS.kickAmp || 0), 10, 4);
   AS.echo = sm('echo', Math.min(1, thr));                                                  // Delay: un eco del dibujo
   // filtros: el del máster oscurece; el de los sintes que suenan (T1-T3) abre y cierra la imagen; la resonancia la hace vibrar
   let cut = -1, res = 0;
@@ -3378,13 +3385,13 @@ function flTick(dt) {
   FL.k.rv = Math.min(1.2, (FL.k.rv || 0) * Math.pow(0.25, dt) + dRes * 6);         // mover la reso: vibración
   AS.knobB = sm('bright', (cut < 0 ? 1 : 0.7 + 0.55 * cut) * (1 - 0.75 * lp) * (1 - 0.3 * hp) * (1 + 0.35 * Math.min(1, drive)) + 0.5 * FL.k.mv);
   AS.rowSkip = hp > 0.65 ? 3 : hp > 0.2 ? 2 : 1;
-  AS.wob = sm('wob', cut < 0 ? 0 : FL.k.rv + (res > 0.92 ? 0.12 : 0), 10, 4);
+  AS.wob = sm('wob', cut < 0 ? 0 : (FL.k.rv + (res > 0.92 ? 0.12 : 0)) * (0.35 + 0.65 * IX()), 10, 4);
   FL.cut = cut; FL.res = res;
   if (newStep && !climaxOn && showStart) {
     if (rep > 0.2) asciiGlitch(0.04 + 0.12 * rep);
     if (gate > 0.15 && CFG.strobe) {   // Gater: estrobo a semicorcheas (a corcheas si va muy rápido)
       const every = 60 / (FL.bpm || 120) / 4 < 1 / CFG.strobeMaxHz ? 2 : 1;
-      if (step % every === 0) { document.documentElement.style.setProperty('--pulse', dimColor('#ffffff', 0.2 + 0.6 * Math.min(1, gate) * (0.5 + 0.5 * progress()))); document.body.classList.add('pulse'); pulseOff = now + 0.04; }
+      if (step % every === 0) { document.documentElement.style.setProperty('--pulse', dimColor('#ffffff', 0.1 + 0.75 * Math.min(1, gate) * IX())); document.body.classList.add('pulse'); pulseOff = now + 0.04; }
     }
   }
   // PULSO: tiempos, corcheas, compases y frases del reloj de la Freon (el ASCII se mueve con ellos)
@@ -3397,31 +3404,44 @@ function flTick(dt) {
     if (bar % 16 === 0 && bar > 0) { newLeaks(); asciiGlitch(0.15); }     // cada 16 compases cambia el paisaje
     else if (bar % 4 === 0 && act() >= 2) asciiGlitch(0.05);
     // momentos grandes: en el 1 de una frase de 8 compases con la energía arriba
-    if (bar % 8 === 0 && st.pct > 0.72 && st.kickPresent && Math.random() < 0.35) flMoment('energía');
-    else if (bar % 8 === 0 && st.kickPresent && !typing && Math.random() < 0.22) flMoment('frase', Object.keys(PIECE_T));   // escenas sin terminal
+    const every = CHAOS() > 0.3 ? 4 : 8;
+    if (bar % every === 0 && st.pct > 0.72 - 0.25 * CHAOS() && st.kickPresent && Math.random() < 0.25 + 0.3 * IX()) flMoment('energía');
+    else if (bar % every === 0 && st.kickPresent && !typing && Math.random() < 0.08 + 0.3 * IX()) flMoment('frase', Object.keys(PIECE_T));   // escenas sin terminal
+    if (CHAOS() > 0 && !finale) { asciiGlitch(0.05 + 0.15 * CHAOS()); if (bar % 2 === 0) newLeaks(); }   // descontrol: fallos y fugas nuevas cada compás
     if (FL.dropPend === 0 && now - st.lastDrop < 0.6 && LT.cur) lettersBreak(1.6);
   }
   if (st.lastDrop !== FL.dropSeen) { FL.dropSeen = st.lastDrop; FL.dropPend = now + 0.05; }   // y justo después de un drop
-  if (FL.dropPend && now >= FL.dropPend) { FL.dropPend = 0; if (LT.cur) lettersBreak(1.6); if (Math.random() < 0.6) flMoment('drop'); }   // el drop rompe la frase
+  if (FL.dropPend && now >= FL.dropPend) { FL.dropPend = 0; if (LT.cur && act() >= 1) lettersBreak(0.8 + 1.4 * IX()); if (Math.random() < 0.6) flMoment('drop'); }   // el drop rompe la frase
   if (logoMode && FL.logoUntil && now > FL.logoUntil) { FL.logoUntil = 0; endClimax(true); }
   // manos: cuántos mandos se mueven por segundo
   FL.k.touch = (FL.k.touch || 0) * Math.pow(0.3, dt) + FL.touchN; FL.touchN = 0;
-  if (FL.k.touch > 4 && AS.ok && !finale) for (let i = 0, n = Math.min(6, FL.k.touch / 4 | 0); i < n; i++) AS.parts.push({ x: Math.random() * AS.cols, y: Math.random() * AS.rows, vx: 0, vy: -1, life: 1, decay: 3 });
+  if (FL.k.touch > 4 && AS.ok && !finale) for (let i = 0, n = Math.min(6, FL.k.touch / 4 | 0) * IX() | 0; i < n; i++) AS.parts.push({ x: Math.random() * AS.cols, y: Math.random() * AS.rows, vx: 0, vy: -1, life: 1, decay: 3 });
   if (FL.k.touch > 25) flSay('touch');
   // golpes: caja y palmas sueltan esquirlas; el sampler, cubitos
   const h = FL.hitsAcc; FL.hitsAcc = 0; FL.snapHit = !!(h & 2);
   if (AS.ok && !finale && !AS.logoSolo && h) {
     const a = act(), R = AS.rows, C = AS.cols;
     // notas de T1-T3: cada nota, un carámbano en su sitio (grave a la izquierda, agudo a la derecha)
-    for (let k = 0; k < 3; k++) if ((h & (1 << (9 + k))) && now - (FL.k['nt' + k] ?? -9) > 0.07) {
+    const ix = IX();
+    for (let k = 0; k < 3; k++) if ((h & (1 << (9 + k))) && now - (FL.k['nt' + k] ?? -9) > 0.07 && Math.random() < 0.15 + 0.85 * ix) {
       FL.k['nt' + k] = now; const n = FL.notes ? FL.notes[k] : -1;
       const x = n > 0 ? (Math.min(96, Math.max(24, n)) - 24) / 72 * C * 0.9 + C * 0.05 : Math.random() * C;
-      AS.ice.push({ x: x + (Math.random() - 0.5) * 2, y: -1, len: R * (0.04 + 0.04 * Math.random() + 0.02 * k), vy: 0, hang: 0.18, knife: revealed >= 2 && a >= 2 });
+      AS.ice.push({ x: x + (Math.random() - 0.5) * 2, y: -1, len: R * (0.025 + (0.03 + 0.05 * ix) * Math.random() + 0.02 * k), vy: 0, hang: 0.18, knife: revealed >= 2 && a >= 2 });
     }
-    if (h & 16) AS.rings.push({ x: C * (0.15 + Math.random() * 0.7), y: R * (0.25 + Math.random() * 0.55), r: 1, life: 1 });   // timbal: onda
-    if (h & 136) shatter(Math.random() * C, R * (0.2 + Math.random() * 0.6), 7);                                                // rim y perc: chispas
+    if ((h & 16) && Math.random() < 0.2 + 0.8 * ix) AS.rings.push({ x: C * (0.15 + Math.random() * 0.7), y: R * (0.25 + Math.random() * 0.55), r: 1, life: 1 });   // timbal: onda
+    if ((h & 136) && Math.random() < ix) shatter(Math.random() * C, R * (0.2 + Math.random() * 0.6), 4 + 10 * ix);
+    if ((h & 1) && CHAOS() > 0 && Math.random() < CHAOS() * 0.5) AS.rings.push({ x: C * Math.random(), y: R * Math.random(), r: 1, life: 1 });   // descontrol: cada bombo, ondas                                                // rim y perc: chispas
     if ((h & 6) && a >= 1 && Math.random() < 0.5 * (AS.dens ?? 1)) shatter(Math.random() * AS.cols, AS.rows * (0.3 + Math.random() * 0.5), 6 + a * 4);
     if ((h & (1 << 12)) && now - (FL.cubeT || 0) > 0.25) { FL.cubeT = now; spawnCube(Math.random() * AS.cols, -5); }
+  }
+  // durante el final, cuanto más sube el tempo, más destrozo: explosiones, cuchillos, cubitos y fallos en cada tiempo
+  if (finale === 1 && AS.ok && (AS.onBeat || (!FL.run && kickLast()))) {
+    const ch = Math.min(1, Math.max(0.25, ((FL.bpm || st.bpm || 130) - 120) / 160)), R = AS.rows, C = AS.cols;
+    const x = C * (0.1 + Math.random() * 0.8), y = R * (0.15 + Math.random() * 0.7);
+    if (Math.random() < ch) { burst(x, y, 40 + 120 * ch); shatter(x, y, 20 + 40 * ch); }
+    if (Math.random() < ch * 0.7) spawnKnife(true, 1 + ch, x, y);
+    if (Math.random() < ch) for (let k = 0; k < 2 + 4 * ch; k++) spawnCube(Math.random() * C, -6);
+    asciiGlitch(0.05 + 0.2 * ch); AS.kickAmp = Math.max(AS.kickAmp, 1 + ch);
   }
   // FINAL AUTOMÁTICO, como acaba Fuga de Freón: el tempo se dispara (hasta 300 bpm) → estrobo de despedida;
   // el Stop del Oxi → negro, logo y R.I.P. Un Stop sin la subida no acaba nada (es un recurso más del show).
