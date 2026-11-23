@@ -158,6 +158,9 @@ struct TakeInfo {
     std::vector<bool> always;          // se escribe aunque la toma no lleve multipista (las entradas)
     bool stems = false;                // multipista
     int stemDelay = 0;                 // muestras de retraso del máster respecto a las pistas (el limitador mira por delante)
+    uint64_t startAbs = 0;             // si no es 0: la toma empieza justo en esa muestra del motor (render de un live)
+    std::string suffix;                // se añade al nombre de la carpeta, p. ej. « (render v2)»
+    std::string origin;                // texto para origen.txt (de qué toma y versión sale un render)
     std::string build;                 // versión del programa (para avisar si se regenera con otra)
 };
 
@@ -259,13 +262,19 @@ private:
             const size_t n = static_cast<size_t>(std::min<uint64_t>(wr - rd, kChunk));
             for (size_t i = 0; i < n; ++i) { const float* s = &ring_->buf[static_cast<size_t>((rd + i) & ring_->mask) * 2]; put24(s[0], &tmpB_[6 * i]); put24(s[1], &tmpB_[6 * i + 3]); }
             ring_->r.store(rd + n, std::memory_order_release);
-            writeMaster(tmpB_.data(), n); absM_ += n;
+            const size_t skip = open_ && absM_ < takeAbs_ ? static_cast<size_t>(std::min<uint64_t>(takeAbs_ - absM_, n)) : 0;   // antes del inicio exacto de la toma
+            if (skip) { writeLast(tmpB_.data(), skip); }
+            if (n > skip) writeMaster(tmpB_.data() + skip * 6, n - skip);
+            absM_ += n;
         }
     }
-    void writeMaster(const uint8_t* b, size_t n) {
+    void writeLast(const uint8_t* b, size_t n) {   // «lo último»
         const size_t cap = last_.size() / 6;
         for (size_t i = 0; i < n;) { const size_t pos = static_cast<size_t>(lastW_ % cap), m = std::min(n - i, cap - pos); std::memcpy(&last_[pos * 6], b + i * 6, m * 6); i += m; lastW_ += m; }
         lastMinutes = static_cast<int>(std::min<uint64_t>(lastW_, cap) / (60ull * sr_));
+    }
+    void writeMaster(const uint8_t* b, size_t n) {
+        writeLast(b, n);
         if (!open_ || streams_.empty()) return;
         if (!writeStream(streams_[0], b, n)) return;
         frames.fetch_add(n);
@@ -344,9 +353,11 @@ private:
     void openTake(const std::shared_ptr<TakeInfo>& info) {
         const std::time_t now = std::time(nullptr); localtime_r(&now, &t0_);
         timeRef_ = static_cast<uint64_t>(t0_.tm_hour * 3600 + t0_.tm_min * 60 + t0_.tm_sec) * sr_;   // muestras desde medianoche (BWF)
-        { std::lock_guard<std::mutex> lk(mx_); take_ = stamp(t0_, "%Y-%m-%d %H-%M-%S"); }
+        info_ = info ? info : std::make_shared<TakeInfo>();
+        { std::lock_guard<std::mutex> lk(mx_); take_ = stamp(t0_, "%Y-%m-%d %H-%M-%S") + info_->suffix; }
         takeDir_ = dir_ + "/" + take_; std::error_code ec; std::filesystem::create_directories(takeDir_, ec);
-        takeAbs_ = absM_; frames = 0; gaps = 0; info_ = info ? info : std::make_shared<TakeInfo>();
+        takeAbs_ = std::max(absM_, info_->startAbs); frames = 0; gaps = 0;
+        if (!info_->origin.empty()) { FILE* o = std::fopen((takeDir_ + "/origen.txt").c_str(), "wb"); if (o) { std::fprintf(o, "%s\n", info_->origin.c_str()); std::fclose(o); } }
         streams_.clear();
         Stream m; m.name = "master"; m.nch = 2; streams_.push_back(m);
         int pos = 0;

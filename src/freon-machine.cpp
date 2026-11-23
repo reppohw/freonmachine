@@ -1535,9 +1535,14 @@ struct Control {
     uint64_t recFreeMB() const { std::error_code ec; const auto sp = std::filesystem::space(recDir(), ec); return ec ? 0 : sp.available / (1024 * 1024); }
     void trecToggle() {
         if (trec.recording.load()) { au.evOn = false; trec.cmdStop(); return; }
+        rec::TakeInfo ti; if (!makeTake(ti)) return;
+        au.evOn = true; ti.state = stateJson(); trec.cmdStart(std::move(ti));
+    }
+    // lo común a toda toma: pistas, multipista, versión; false si no hay sitio en el disco
+    bool makeTake(rec::TakeInfo& ti) {
         const bool stems = st["rec.stems"] >= 0.5f;
-        if (recFreeMB() < (stems ? 3000u : 500u)) { srv.broadcast(std::string("trecmsg error not enough disk space") + (stems ? " for multitrack (3 GB)" : "")); return; }
-        rec::TakeInfo ti; ti.stems = stems; ti.build = __DATE__ " " __TIME__;
+        if (recFreeMB() < (stems ? 3000u : 500u)) { srv.broadcast(std::string("trecmsg error not enough disk space") + (stems ? " for multitrack (3 GB)" : "")); return false; }
+        ti.stems = stems; ti.build = __DATE__ " " __TIME__;
         // pistas, en el orden del anillo de pistas (Audio::kStemCh): entradas (mono, siempre), canales y retornos (estéreo)
         for (int q = 0; q < 4; ++q) { ti.names.push_back("Input " + std::to_string(q + 1)); ti.width.push_back(1); ti.always.push_back(true); }
         for (int i = 0; i < NCH; ++i) {
@@ -1549,7 +1554,7 @@ struct Control {
         for (int f = 0; f < NSEND; ++f) { const int t = std::clamp(static_cast<int>(st["fx" + std::to_string(f) + ".type"]), 0, FX_COUNT - 1); ti.names.push_back(std::string("FX ") + "ABCD"[f] + " " + kFx[t].name); ti.width.push_back(2); ti.always.push_back(false); }
         for (auto& n : ti.names) for (char& c : n) if (c == '/' || c == '\\' || c == ':') c = '-';
         ti.stemDelay = au.mlim.delay();   // el limitador del máster retrasa la salida 1,5 ms
-        au.evOn = true; ti.state = stateJson(); trec.cmdStart(std::move(ti));
+        return true;
     }
     std::string takesJson() {
         std::vector<std::string> names; std::error_code ec;
@@ -1595,6 +1600,7 @@ struct Control {
     // paso 2, corregir: parámetros tocados en esta pasada (desde qué muestra) y lo que hiciste con ellos
     struct Punch { uint64_t t0; std::string key; }; struct UEv { uint64_t f; Cmd c; };
     std::unordered_map<uint64_t, Punch> rpPunch_; std::vector<UEv> rpUser_; uint64_t rpStopF_ = 0; bool rpPending_ = false;
+    bool rpRender_ = false;   // paso 3: esta reproducción se está grabando como toma nueva (render)
     bool rpActive_ = false; uint64_t rpAbs0_ = 0; size_t rpNext_ = 0, rpMir_ = 0; int rpTick_ = 0; rec::InputPlayer rpIn_;
     std::unordered_map<uint64_t, std::string> rpKey_;   // orden (k,a,b,c) → parámetro de la pantalla
     static uint64_t cmdKey(int k, int a, int b, int c) { return cmdKeyOf(k, a, b, c); }
@@ -1682,8 +1688,19 @@ struct Control {
         std::printf("Reproducción: desde %.2f s (pre-roll %.1f s)\n", point, pre); std::fflush(stdout);
         rpPoll();
     }
+    // render: reproduce la versión desde el principio y la graba como toma nueva, desde la muestra exacta del inicio
+    void rpRender(const std::string& take, const std::string& ver) {
+        if (trec.recording.load()) { srv.broadcast("rpmsg error stop the current recording first"); return; }
+        rpStart(take, 0, 0, ver); if (!rpActive_) return;
+        rec::TakeInfo ti; if (!makeTake(ti)) { rpStop(); return; }
+        const std::string v = ver == "live.freon" ? "original" : "v" + ver.substr(5, ver.size() - 11);
+        ti.startAbs = rpAbs0_; ti.suffix = " (render " + v + ")"; ti.origin = "Render de " + take + " / " + ver;
+        au.evOn = true; ti.state = stateJson(); trec.cmdStart(std::move(ti)); rpRender_ = true;
+        srv.broadcast("rpmsg rendering " + take + " (" + v + ")");
+    }
     void rpStop(bool restore = true) {
         if (!rpActive_) return;
+        if (rpRender_) { rpRender_ = false; au.evOn = false; trec.cmdStop(); }   // render: la toma termina aquí
         const uint64_t now = au.absFrame.load(); rpStopF_ = std::min(now > rpAbs0_ ? now - rpAbs0_ : 0, rpLen_);
         au.rpOn = false; rpActive_ = false; rpIn_.stop(); au.rpPunchN = 0;
         if (!rpPunch_.empty()) { rpPending_ = true; srv.broadcast("rpend " + rpPunchJson()); }
@@ -1709,8 +1726,8 @@ struct Control {
             else if (e.t == 'S') loadStateString(rpStr_[e.str]);   // en el live se cargó una memoria
         }
         const double pos = now > rpAbs0_ ? static_cast<double>(now - rpAbs0_) / au.sr : 0.0, len = rpLen_ / au.sr;
-        if (pos > len + 0.5) { rpStop(); return; }   // se acabó el live
-        if (++rpTick_ % 4 == 0) { char b[96]; std::snprintf(b, sizeof b, "1 %.2f %.2f ", pos, len); rpStatus_ = b + rpTake_; srv.broadcast("rplay " + rpStatus_); }
+        if (pos > len + (rpRender_ ? 3.0 : 0.5)) { rpStop(); return; }   // se acabó el live (en un render, 3 s más para las colas de reverb y delay)
+        if (++rpTick_ % 4 == 0) { char b[96]; std::snprintf(b, sizeof b, "%d %.2f %.2f ", rpRender_ ? 2 : 1, pos, len); rpStatus_ = b + rpTake_; srv.broadcast("rplay " + rpStatus_); }
     }
     // nombre legible de un parámetro (para la web: «T1 · Cutoff», «Kick · Level»…)
     std::string keyLabel(const std::string& k) {
@@ -1915,6 +1932,7 @@ struct Control {
             }
             else if (w == "stop") rpStop();
             else if (w == "save") rpSave(); else if (w == "discard") rpDiscard();
+            else if (w == "render") { std::string ver; is >> ver; std::string t; std::getline(is, t); if (!t.empty() && t[0] == ' ') t.erase(0, 1); rpRender(t, ver.empty() ? "live.freon" : ver); }
             else if (w == "info") { std::string t; std::getline(is, t); if (!t.empty() && t[0] == ' ') t.erase(0, 1); srv.send(client, "rpinfo " + rpInfo(t)); }
         }
         else if (op == "home") { std::string w; is >> w; if (w == "save") memSave(kHome); else goHome(); }

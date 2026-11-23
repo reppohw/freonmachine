@@ -212,3 +212,12 @@ Cada fase se prueba en la Pi con el live cargado (CPU, cortes y una grabación l
   - Al reproducirla, la web ve exactamente esa secuencia.
 - **Probado en la Pi (23-11):** pasada de corrección sobre un live de 5 s, tocando el Cutoff a mitad. La versión 2 contiene lo original, el valor nuevo y la vuelta al valor grabado; al reproducirla, la web ve esa secuencia, y al parar vuelve el estado de antes.
 - **Siguiente (paso 3):** regenerar el audio. Hoy ya se puede: Rec mientras se reproduce la versión, desde el principio y sin pre-roll. Falta hacerlo con un botón («Render») y, si hace falta, más rápido que el tiempo real.
+
+## Render (paso 3, 23-11-2026)
+
+- **En el panel de Replay:** elige la versión y pulsa **⏺ Render**. Freon la reproduce desde el principio y la graba como toma nueva, con multipista si está encendido.
+- **Nombre:** «AAAA-MM-DD HH-MM-SS (render v2)» (o «(render original)»), con `origen.txt` que dice de qué toma y versión sale.
+- **Inicio exacto:** la toma empieza en la muestra exacta del inicio del live (`TakeInfo::startAbs`).
+- **Final:** al terminar el live sigue 3 s más para las colas de reverb y delay. Después para la grabación, el replay y devuelve el estado de antes. ■ Stop lo corta antes, y la toma queda hasta ahí.
+- **Tiempo real:** dura lo que dura el live. Más rápido haría falta un segundo motor fuera del audio en directo; queda para más adelante si hace falta.
+- **Probado en el Mac:** render de una versión 2 de 4,7 s → toma de 7,8 s. Las 24 notas caen en la misma muestra absoluta que en la versión (desfase 0). Origen y nombre correctos.

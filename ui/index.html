@@ -292,7 +292,7 @@ function connect() {
     else if (op === "rpinfo") { const nf = JSON.parse(rest); if (!RP.info || RP.info.take !== nf.take) RP.pos = 0; RP.info = nf; RP.ver = nf.ver || "live.freon"; drawReplay(); }
     else if (op === "rpunch") { RP.punch = JSON.parse(rest); drawReplay(); }
     else if (op === "rpend") { RP.pend = JSON.parse(rest); RP.punch = []; drawReplay(); }
-    else if (op === "rplay") { const sp1 = rest.split(" "); RP.on = sp1[0] === "1"; if (RP.on) { RP.pos = +sp1[1]; RP.len = +sp1[2]; RP.take = sp1.slice(3).join(" "); if (!RP.info || RP.info.take !== RP.take) sendRaw(`rplay info ${RP.take}`); } drawReplay(); }
+    else if (op === "rplay") { const sp1 = rest.split(" "); RP.on = sp1[0] !== "0"; RP.render = sp1[0] === "2"; if (RP.on) { RP.pos = +sp1[1]; RP.len = +sp1[2]; RP.take = sp1.slice(3).join(" "); if (!RP.info || RP.info.take !== RP.take) sendRaw(`rplay info ${RP.take}`); } drawReplay(); }
     else if (op === "rpmsg") { const [w, ...n] = rest.split(" "); topMsg("Replay", `${w} ${n.join(" ")}`); }
     else if (op === "trecmsg") { const [w, ...n] = rest.split(" "); topMsg("Recording", `${w} ${n.join(" ")}`); }
     else if (op === "memmsg") { const [w, ...n] = rest.split(" "); topMsg("Memories", `${w} ${n.join(" ")}`); }
@@ -1131,15 +1131,16 @@ function drawReplay() {
     const pre = el("select", { id: "rpPre", "aria-label": "Pre-roll" }); [[0, "No pre-roll"], [2, "Pre-roll 2 s"], [4, "Pre-roll 4 s"], [8, "Pre-roll 8 s"], [16, "Pre-roll 16 s"]].forEach(([v, n]) => pre.append(el("option", { value: v }, n)));
     pre.value = String(RP.pre); pre.addEventListener("change", () => { RP.pre = +pre.value; });
     box.append(el("h3", { id: "rpTitle" }, "Replay"),
-      el("p", { class: "hint" }, "Freon plays the live back exactly as you played it: notes, knobs, presets and tempo, with the recorded inputs. Pick a point (or a marker), choose a pre-roll and press ▶. To fix something, just move it while it plays: from that moment that parameter is yours (its recorded moves go quiet) until you press ■. Then save the pass as a new version, or discard it. The original is never touched. The Oxi's notes are ignored meanwhile (stop it). ■ brings back what you had before."),
+      el("p", { class: "hint" }, "Freon plays the live back exactly as you played it: notes, knobs, presets and tempo, with the recorded inputs. Pick a point (or a marker), choose a pre-roll and press ▶. To fix something, just move it while it plays: from that moment that parameter is yours (its recorded moves go quiet) until you press ■. Then save the pass as a new version, or discard it. The original is never touched. ⏺ Render plays the chosen version from the start and records it as a new take (with multitrack if it's on), in real time; it stops by itself at the end. The Oxi's notes are ignored meanwhile (stop it). ■ brings back what you had before."),
       el("div", { class: "scrow" }, pos), el("div", { class: "scrow" }, el("b", { id: "rpTime" }, "0:00"), el("span", { class: "hint", id: "rpLen" }, ""), pre,
         el("select", { id: "rpVer", "aria-label": "Version of the live" }),
         keyBtn("▶ Play from here", "", () => sendRaw(`rplay start ${RP.pos.toFixed(2)} ${RP.pre} ${RP.ver} ${RP.info.take}`)), keyBtn("■ Stop", "danger", () => sendRaw("rplay stop")),
+        keyBtn("⏺ Render", "", () => sendRaw(`rplay render ${RP.ver} ${RP.info.take}`)),
         keyBtn("Close", "", () => { if (RP.on) sendRaw("rplay stop"); RP.info = null; drawReplay(); })),
       el("div", { class: "scrow", id: "rpMarks" }), el("div", { class: "scrow", id: "rpPunch" }));
     $("#rpVer").addEventListener("change", (e) => { RP.ver = e.target.value; });
   }
-  $("#rpTitle").textContent = `Replay · ${RP.info.take}` + (RP.on ? " · playing" : "");
+  $("#rpTitle").textContent = `Replay · ${RP.info.take}` + (RP.render ? " · rendering (recording a new take, in real time)" : RP.on ? " · playing" : "");
   const pos = $("#rpPos"); pos.max = String(Math.max(1, len));
   if (RP.on && !RP.drag) pos.value = String(RP.pos);
   $("#rpTime").textContent = hms(RP.on && !RP.drag ? RP.pos : +pos.value); $("#rpLen").textContent = "/ " + hms(len);
