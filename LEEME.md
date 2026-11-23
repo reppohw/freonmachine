@@ -282,6 +282,21 @@ Se escribe aparte y se cambia de golpe, y la versión anterior queda como
 `freon-estado.json.bak`. Un apagón a mitad de guardado nunca deja el archivo vacío; si
 el archivo queda dañado, se carga la copia.
 
+## Visuales: la nevera
+
+La nevera de Fuga de Freón (los visuales) va dentro de la Freon: abre `http://<ip>:8080/nevera.html` en el navegador
+del ordenador que va al proyector (conectado a la wifi o a la red de la Freon) y pulsa **ENCHUFAR A LA FREON**.
+Con `nevera.html?auto` se salta el formulario y deja la pantalla de espera. No hace falta tarjeta de sonido en ese ordenador: la Freon le
+manda lo que suena, los golpes, el reloj del Oxi y los knobs. La página solo escucha; no cambia nada de la Freon.
+
+- **Empieza con Mayús+S** desde el ordenador (puede empezar a escribir antes del play).
+- **Momentos grandes solos y a compás:** FU-GA-DE-FRE-ÓN, cantad conmigo, el logo con estrobo, el logo de gas y las cartelas, tras los drops y en lo más alto. El ASCII se mueve a tempo con el reloj del Oxi.
+- **Acaba sola:** la subida de tempo del final lanza la despedida, y el Stop del Oxi, el negro y el R.I.P. Un Stop a mitad no acaba nada.
+- Las teclas de la nevera (clímax, coro, gas, logo, fotos, final...) siguen funcionando, pero no hacen falta.
+- Si se recarga la página a mitad, sigue en el mismo punto del show.
+- La tecla **D** enseña los datos, también los de la Freon.
+- Sin la Freon (`nevera.html?mic`), escucha una entrada de audio como antes.
+
 ## Instalar en el Mac (una sola vez)
 
 1. Abre la app **Terminal**.

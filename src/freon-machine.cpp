@@ -50,6 +50,7 @@
 #include "params.h"
 #include "server.h"
 #include "recorder.h"
+#include "vis.h"
 #ifdef __linux__
 #include <ifaddrs.h>
 #include <netinet/in.h>
@@ -261,6 +262,9 @@ struct Audio {
     std::atomic<uint64_t> calls{0}; std::atomic<unsigned> xruns{0}, late{0};      // vigilante: el audio sigue vivo
     std::atomic<float> bpmPub{120}; std::atomic<bool> clkPub{false}, runPub{false};   // copias seguras para el hilo de control
     std::atomic<int> act[NT]; std::atomic<int> dact[8]; std::atomic<int> sact[kPads];
+    // visuales (ui/nevera.html): copia del máster y golpes, solo mientras hay una pantalla de visuales conectada.
+    // vhit: bits 0-7 sonidos de batería, 8-11 pistas, 12 sampler. posPub: posición del reloj en semicorcheas
+    rec::DiskRing vring; std::atomic<bool> visOn{false}; std::atomic<uint32_t> vhit{0}; std::atomic<double> posPub{0};
     int outCh = 2, inCh = 0;
     // rutas de la interfaz (de Ajustes): par de la salida principal, par del cue (-2 automático, -1 ninguno) y canal de la interfaz de cada entrada (-1 ninguno)
     // se cambian en marcha desde Ajustes (sin reiniciar): el audio las lee una vez por bloque
@@ -297,6 +301,7 @@ struct Audio {
         if (dring.buf.empty()) dring.init(1u << 21, 2);          // grabación de lives: máster, ~44 s de margen a 48 kHz (16 MB)
         if (sring.buf.empty()) sring.init(1u << 19, kStemCh);    // pistas: ~11 s (88 MB)
         if (rin.buf.empty()) rin.init(1u << 18, 4);              // entradas grabadas al reproducir: ~5 s
+        if (vring.buf.empty()) vring.init(1u << 15, 2);          // visuales: ~0,7 s (256 KB)
     }
     // grabación de lives (src/recorder.h): máster, pistas (entradas, canales después del fader, retornos) y eventos.
     // absFrame: muestras procesadas desde el arranque; es el reloj común de los tres
@@ -312,7 +317,7 @@ struct Audio {
     void liveNote(int m, int n, int v) {
         switch (m) {
         case LM_SAMP:
-            if (v > 0) { if (n >= 36 && n < 36 + kPads) { samp.trigger(n - 36, v, n); sact[n - 36] = 1; } else if (n >= 60) samp.trigger(samp.sel, v, n, static_cast<float>(n - 72)); }
+            if (v > 0) { if (n >= 36 && n < 36 + kPads) { samp.trigger(n - 36, v, n); sact[n - 36] = 1; vhit.fetch_or(1u << 12, std::memory_order_relaxed); } else if (n >= 60) samp.trigger(samp.sel, v, n, static_cast<float>(n - 72)); }
             else samp.release(n);
             break;
         case LM_BRK:
@@ -344,8 +349,8 @@ struct Audio {
     }
     void noteOn(int t, int n, int v) {
         if (t < 0 || t >= NT) return;
-        act[t] = 1;
-        if (t == 0) { const int l = drums.noteOn(n, v); if (l >= 0 && !drums.lane[static_cast<size_t>(l)].mute) dact[l] = 1; return; }
+        act[t] = 1; vhit.fetch_or(1u << (8 + t), std::memory_order_relaxed);
+        if (t == 0) { const int l = drums.noteOn(n, v); if (l >= 0 && !drums.lane[static_cast<size_t>(l)].mute) { dact[l] = 1; vhit.fetch_or(1u << l, std::memory_order_relaxed); } return; }
         held[t].add(n);
         mel[t].noteOn(n, v);
         if (subMode == 1 && t == subSrc) { subHeld.add(n); subUpdate(); }
@@ -486,7 +491,7 @@ struct Audio {
             constexpr float lsb = 1.0f / 32768.0f / 4294967296.0f;
             for (int i = 0, t = n * oc; i < t; ++i) { dRng = dRng * 1664525u + 1013904223u; const uint32_t a = dRng; dRng = dRng * 1664525u + 1013904223u; out[i] += (static_cast<float>(a) - static_cast<float>(dRng)) * lsb; }
         }
-        bpmPub.store(bpm, std::memory_order_relaxed); clkPub.store(clkOn(), std::memory_order_relaxed); runPub.store(running, std::memory_order_relaxed);
+        posPub.store(pos, std::memory_order_relaxed); bpmPub.store(bpm, std::memory_order_relaxed); clkPub.store(clkOn(), std::memory_order_relaxed); runPub.store(running, std::memory_order_relaxed);
         // consumo: tiempo de cálculo frente al tiempo que dura el bloque
         const float load = static_cast<float>(std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count() * sr / n * 100.0);
         cpu = cpu.load() + (load - cpu.load()) * 0.05f;
@@ -656,7 +661,7 @@ struct Audio {
         auto oc1 = [](float x) { return safeClip(x); };
         for (int i = 0; i < k; ++i) { L[i] = oc1(L[i]); R[i] = oc1(R[i]); mpk = std::max(mpk, std::max(std::fabs(L[i]), std::fabs(R[i]))); }
         pk[NCH + NGRP] = mpk;
-        { const float* mc[2] = {L, R}; dring.push(mc, k); }   // grabación de lives y «lo último»: tal como sale (sin la pre-escucha)
+        { const float* mc[2] = {L, R}; dring.push(mc, k); if (visOn.load(std::memory_order_relaxed)) vring.push(mc, k); }   // grabación de lives y «lo último»: tal como sale (sin la pre-escucha)
         absFrame.store(absFrame.load(std::memory_order_relaxed) + static_cast<uint64_t>(k), std::memory_order_relaxed);
         // --- pre-escucha: salidas 3-4 si las hay; si no, según el modo
         bool anyCue = false; for (auto& s : st) anyCue |= s.p[SP_CUE] >= 0.5f; for (auto& g : grp) anyCue |= g.p[SP_CUE] >= 0.5f;
@@ -1924,9 +1929,24 @@ struct Control {
         assignBreak(false);
     }
 
+    // --- visuales: a las pantallas que han pedido «vis 1», 60 análisis por segundo del máster con los golpes y el reloj
+    std::vector<int> visCl_; vis::Feed vfeed_; bool vfeedOk_ = false;
+    void visTick() {
+        if (!visCl_.empty()) visCl_.erase(std::remove_if(visCl_.begin(), visCl_.end(), [this](int c) { return !srv.has(c); }), visCl_.end());
+        if (visCl_.empty()) { au.visOn = false; return; }
+        if (!vfeedOk_ || vfeed_.rate() != au.sr) { vfeed_.prepare(au.sr); vfeedOk_ = true; }
+        if (!au.visOn.load()) { vfeed_.reset(au.vring); au.vhit = 0; au.visOn = true; return; }
+        vfeed_.run(au.vring, [this](const std::string& spec) {
+            char b[160]; std::snprintf(b, sizeof b, "vis %u %d %.3f %.2f %d %d ", au.vhit.exchange(0), static_cast<int>(au.sr), au.posPub.load(),
+                                       static_cast<double>(au.bpmPub.load()), au.runPub.load() ? 1 : 0, au.clkPub.load() ? 1 : 0);
+            const std::string msg = b + spec;
+            for (int c : visCl_) srv.send(c, msg);
+        });
+    }
     void onMessage(int client, const std::string& m) {
         std::istringstream is(m); std::string op; is >> op;
         if (op == "set") { std::string k; float v; if (is >> k >> v) set(k, v, client); }
+        else if (op == "vis") { int on; if (is >> on) { visCl_.erase(std::remove(visCl_.begin(), visCl_.end(), client), visCl_.end()); if (on) visCl_.push_back(client); } }
         else if (op == "hello") {
             std::string spec = specJson(); spec.pop_back(); spec += "," + mixSpecJson() + ",\"outs\":" + std::to_string(au.outCh) + ",\"ins\":" + std::to_string(au.inCh) + "}";
             spec.pop_back(); spec += "," + liveSpecJson() + "}";
@@ -2449,6 +2469,7 @@ struct Control {
         auto last = std::chrono::steady_clock::now();
         while (!quit) {
             srv.poll(10);
+            visTick();
             Feedback f;
             while (au.fb.pop(f)) {
                 const std::string k = f.t >= 10 ? (f.t == 10 ? "samp.p" + std::to_string(f.e) + "." + std::to_string(f.i) : std::string(kLiveKeys[f.t - 10]) + "." + std::to_string(f.i))

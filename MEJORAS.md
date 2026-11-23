@@ -167,3 +167,21 @@
 - [x] Prueba de 46 s con notas en las 4 pistas y multipista: 0 cortes, CPU media 5,3 % (pico 6,3 %), 40 °C.
 - [ ] Jorge: comprobar qué oye por los auriculares de la 4i4 al pulsar cue (si siguen a 3-4 o a 1-2) y probar voz y monotron por las entradas.
 - [ ] Probar buffer 128 (2,7 ms) con un live completo si hace falta menos latencia.
+
+## Visuales: la nevera dentro de la Freon (23-11-2026)
+Hecho (falta probarlo en la Pi con el proyector):
+- [x] `ui/nevera.html` (la nevera v26 → v27), servida por la propia Freon en `http://<ip>:8080/nevera.html`. Se abre en cualquier navegador conectado a la Freon (el Mac por la wifi `Freon-Machine`, de momento) y va al proyector por HDMI. La página solo escucha: no manda órdenes.
+- [x] La Freon le manda 60 veces por segundo el espectro del máster, calculado igual que lo medía el navegador (así el «oído» de la nevera, calibrado con lives reales, sirve tal cual y no hace falta tarjeta en el Mac), los golpes de batería y sampler, el reloj del Oxi y cada knob. Solo trabaja mientras hay una nevera conectada, y el hilo de audio solo copia el máster a un anillo (`src/vis.h`).
+- [x] Arranque: el show lo da Jorge con Mayús+S desde el ordenador (le gusta que la nevera empiece a escribir antes del play). Con `?auto` la página se salta el formulario y deja la pantalla de espera; si se recarga a mitad, sigue en el mismo minuto.
+- [x] Final automático: la subida de tempo del final (≥ 30 % sobre el tempo habitual o > 190 bpm, subiendo, pasado el 60 % del show) lanza el estrobo de despedida; el Stop del Oxi, el negro, el logo y el R.I.P. Un Stop sin subida no acaba nada: Jorge usa mucho el Stop como recurso.
+- [x] Momentos grandes automáticos, siempre en el 1 del compás del Oxi: FU-GA-DE-FRE-ÓN, cantad conmigo, logo con estrobo (8 compases), logo de gas y cartelas SOMOS / FUGA / DE / FREÓN. Llegan tras los drops y, con la energía arriba, al empezar frases de 8 compases; cada vez más a menudo, sin repetir el mismo dos veces seguidas, y los que llevan el nombre solo después de que la nevera cuente de dónde sale. El coro automático del clímax ya no es una sola vez por show.
+- [x] ASCII a tempo: cuchillos y copos aparecen en los tiempos, cubitos y gas en corcheas, el fondo y la nevera grande laten en cada tiempo, la escarcha brilla con los charles, cada 4 compases la imagen falla un instante y cada 16 cambian las fugas.
+- [x] Reacciones: bombo y caja reales (no adivinados), cutoff y reso de los sintes (sobre todo la 303) abren la fuga de gas, Freeze y granular congelado congelan la imagen, Tape stop la frena, Riser cuenta como subida, Repeat hace fallar la imagen a tempo, Gater es un estrobo a semicorcheas, el filtro del máster apaga la imagen, los saltos del break la hacen fallar y el sampler suelta cubitos. La nevera comenta los cambios de motor y de kit, mutes y solos, y el Stop y el Start del Oxi.
+- [ ] Probar en la Pi y con el proyector, y que Jorge la vea con un live grabado (reproducir `live.freon` mueve la nevera igual que en directo).
+- [ ] Los datos del evento (sala, ciudad, nombres del público) se escriben en la pantalla de inicio de la nevera. Para una pantalla sin teclado, pasarlos a la web de la Freon.
+- [ ] Voz: de momento sin reacción (Jorge no lo ve claro).
+
+Ideas para más adelante (de Jorge, 23-11-2026):
+- **Dibujar en la propia Pi** (Chromium en modo quiosco por el HDMI de la Pi, para llevar menos aparatos). Antes, medir con `--estres` que Chromium dibujando a pantalla completa no le quita tiempo al audio, y quizá limitarlo a 1-2 núcleos y a 1080p.
+- **Que la nevera suene, como un canal más del mezclador.** Por plantear: su voz (síntesis de voz sin internet en la Pi, tipo espeak o Piper, leyendo sus frases), el zumbido del compresor, el tecleo del Terminal, o pitidos de electrodoméstico afinados a la tonalidad. Iría por su propio canal, con fader y mute.
+- **Hablarle a la nevera** por un micro (una entrada de la Scarlett). Reconocer palabras sin internet en la Pi gasta mucha CPU (whisper.cpp): habría que medirlo, o limitarlo a unas pocas palabras clave.

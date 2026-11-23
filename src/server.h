@@ -117,6 +117,7 @@ public:
     }
     void send(int client, const std::string& msg) { for (auto& c : cl_) if (c.ws && c.id == client) frame(c, msg); }
     void broadcast(const std::string& msg, int except = -1) { for (auto& c : cl_) if (c.ws && c.id != except) frame(c, msg); }
+    bool has(int client) const { for (auto& c : cl_) if (c.ws && c.fd >= 0 && c.id == client) return true; return false; }
     bool anyClient() const { for (auto& c : cl_) if (c.ws && c.fd >= 0) return true; return false; }
 
 private:
