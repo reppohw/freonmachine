@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<title>FUGA DE FREÓN · LA NEVERA v30 · FREON MACHINE</title>
+<title>FUGA DE FREÓN · LA NEVERA v31 · FREON MACHINE</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
   :root { --fg:#e6e6e6; --bg:#000; --fs:4.1vw; }
@@ -2632,6 +2632,7 @@ function asciiTick(dt, kick) {
 
 function asciiDraw(a, p, stabbed, E) {
   const { gb, gf, cols, rows, K } = AS;
+  if (!cols || !rows) return;                                            // ventana a 0 (oculta): nada que dibujar
   AS.labels.length = 0;
   gb.globalAlpha = 1; gb.fillStyle = '#000'; gb.fillRect(0, 0, cols, rows);
   gf.globalAlpha = 1; gf.fillStyle = '#000'; gf.fillRect(0, 0, cols, rows);
@@ -2729,7 +2730,7 @@ function asciiDraw(a, p, stabbed, E) {
 
 /* ---------- EL FINAL: el gas llena la pantalla y, al disiparse, deja escritos el logo y la despedida en ASCII ---------- */
 function asciiEnding(lines) {
-  if (!AS.ok || !AS.logoImg || !AS.logoImg.complete) return false;
+  if (!AS.ok || !AS.cols || !AS.rows || !AS.logoImg || !AS.logoImg.complete) return false;
   const { cols, rows, K } = AS;
   const m = document.createElement('canvas'); m.width = cols; m.height = rows; const g = m.getContext('2d', { willReadFrequently: true });
   g.fillStyle = '#000'; g.fillRect(0, 0, cols, rows);
@@ -2963,6 +2964,9 @@ const FL = { ws: null, on: false, ok: false, q: [], cur: null, sr: 48000, hop: 1
   hitsAcc: 0, bh: [], k: {}, cut: -1, res: 0, cutPrev: -1, resPrev: -1, notes: null, touchN: 0, cool: {}, ts: 1, retry: 1000, loudFor: 0, slice: -1, frz: false, riser: false, autoTest: false, knobT: 0 };
 const FREON_SERVED = /^https?:$/.test(location.protocol) && !location.search.includes('mic');
 const AUTO = location.search.includes('auto');
+// ?pi: la nevera de la Pi, por HDMI y sin teclado. Se maneja desde la web de la Freon (Settings › Visuals) y le cuenta cómo está.
+const REMOTE = new URLSearchParams(location.search).has('pi');
+if (REMOTE) document.head.insertAdjacentHTML('beforeend', '<style>*{cursor:none!important}</style>');
 
 const FREON_T = {
   es: {
@@ -3035,7 +3039,7 @@ function flConnect() {
   let ws; try { ws = new WebSocket(`ws://${location.host}`); } catch (e) { return; }
   FL.ws = ws;
   ws.onopen = () => {
-    FL.retry = 1000; FL.ok = true; ws.send('hello'); ws.send('vis 1'); flStatus();
+    FL.retry = 1000; FL.ok = true; ws.send('hello'); ws.send('vis 1'); flStatus(); nevStatus();
     if ((AUTO || FL.autoTest) && $('start') && !starting) go(null, !!prog && !FL.autoTest, true);
   };
   ws.onclose = () => { FL.ok = false; FL.ws = null; flStatus(); setTimeout(flConnect, FL.retry); FL.retry = Math.min(5000, FL.retry * 1.5); };
@@ -3073,6 +3077,33 @@ function flMsg(m) {
     }
   }
   else if (op === 'brkhold' && rest.endsWith(' 1') && showStart && !finale) asciiGlitch(0.25);
+  else if (op === 'nev' && REMOTE) nevCmd(rest);
+}
+// --- la nevera de la Pi: órdenes de la web de la Freon y su estado ---
+function nevStatus() {
+  if (!REMOTE || !FL.ws || FL.ws.readyState !== 1) return;
+  const phase = $('start') ? 'form' : waiting ? 'wait' : document.body.classList.contains('ended') ? 'end' : finale ? 'finale' : showStart ? 'show' : 'form';
+  let ev = {}; try { ev = JSON.parse(lsGet('fdf-event') || '{}'); } catch (e) {}
+  FL.ws.send('nevst ' + JSON.stringify({ phase, pct: showStart ? Math.round(progress() * 100) : 0, act: showStart ? act() : 0,
+    lang: lsGet('fdf-lang') || lang, min: +(lsGet('fdf-dur') || 60), evento: ev.evento || '', sala: ev.sala || '', ciudad: ev.ciudad || '',
+    custom: ev.custom || [], people: ev.people || [], w: innerWidth, h: innerHeight }));
+}
+if (REMOTE) setInterval(nevStatus, 2000);
+function nevCmd(rest) {
+  const sp = rest.indexOf(' '), c = sp < 0 ? rest : rest.slice(0, sp), arg = sp < 0 ? '' : rest.slice(sp + 1);
+  const str = (v, n = 80) => String(v ?? '').slice(0, n).trim(), list = (v, n) => (Array.isArray(v) ? v : []).map(x => str(x, 160)).filter(Boolean).slice(0, n);
+  if (c === 'cfg') {   // ajustes del show: valen para el próximo; si aún no ha empezado, la pantalla de espera se recarga con ellos
+    let o; try { o = JSON.parse(arg); } catch (e) { return; }
+    lsSet('fdf-lang', okLang(o.lang || lang));
+    lsSet('fdf-dur', Math.min(600, Math.max(10, Math.round(+o.min) || 60)));
+    lsSet('fdf-event', JSON.stringify({ evento: str(o.evento), sala: str(o.sala), ciudad: str(o.ciudad), custom: list(o.custom, 40), people: list(o.people, 60) }));
+    if (!showStart) { lsDel('fdf-progress'); location.reload(); } else nevStatus();
+  }
+  else if (c === 'start') { if (waiting) waiting(); }                              // = Mayús+S
+  else if (c === 'new') { lsDel('fdf-progress'); location.reload(); }              // show nuevo: otra vez la pantalla de espera
+  else if (c === 'finale') { if (showStart && !finale) { if (climaxOn) endClimax(true); startFinale(); } }
+  else if (c === 'reload') location.reload();
+  setTimeout(nevStatus, 300);
 }
 function flFrame(rest) {
   const p = rest.split(' '); if (p.length < 8) return;
@@ -3665,7 +3696,7 @@ navigator.mediaDevices?.addEventListener?.('devicechange', () => { if ($('devSel
 // progreso guardado por si se cuelga o recargas a mitad de live
 let prog = null;
 try { prog = JSON.parse(lsGet('fdf-progress') || 'null'); } catch (e) {}
-if (prog && !(Date.now() - prog.saved < 2 * 3600e3 && isFinite(prog.elapsed))) prog = null;
+if (prog && !(Date.now() - prog.saved < (REMOTE ? 10 * 60e3 : 2 * 3600e3) && isFinite(prog.elapsed))) prog = null;
 if (prog) $('contBtn').style.display = '';
 setInterval(() => { if (showStart && analyser && !finale)
   lsSet('fdf-progress', JSON.stringify({ saved: Date.now(), elapsed: now - showStart, revealed, stageOffset, lang, chantDone: !!cool.chantDone }));

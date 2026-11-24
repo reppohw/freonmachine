@@ -299,6 +299,17 @@ manda lo que suena, los golpes, el reloj del Oxi y los knobs. La página solo es
 - La tecla **D** enseña los datos, también los de la Freon.
 - Sin la Freon (`nevera.html?mic`), escucha una entrada de audio como antes.
 
+### La nevera por el HDMI de la Pi (sin ordenador)
+
+La Pi puede sacar la nevera ella sola por su HDMI: un cable **micro-HDMI a HDMI** de la Pi al proyector y listo.
+Se instala una vez, en la Pi: `./deploy/instalar-nevera-hdmi.sh` (pide la contraseña de la Pi; para quitarlo, `./deploy/instalar-nevera-hdmi.sh quitar`).
+Al encender la Pi, la nevera sale sola en la pantalla de espera. Como allí no hay teclado, se maneja desde la web de la Freon, en **Settings › Visuals**:
+
+- **Ajustes del show:** idioma, minutos, evento, sala, ciudad, gente del público y frases propias. Pulsa **Save settings**; si el show no ha empezado, la pantalla de espera se recarga con ellos.
+- **START SHOW** = Mayús+S. **Start the finale** por si la subida de tempo no lo lanza sola. **New show** vuelve a la pantalla de espera. **Reload** recarga la página.
+- Si la Pi o la Freon se reinician a mitad, la nevera sigue el show donde iba (si hace menos de 10 minutos).
+- El sonido va siempre primero: la nevera tiene prioridad baja y no toca el audio. Medido en la Pi 5 a 1080p: 0 cortes con todo a tope, 55 °C como mucho.
+
 ## Instalar en el Mac (una sola vez)
 
 1. Abre la app **Terminal**.

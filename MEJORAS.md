@@ -193,6 +193,6 @@ Hecho (falta probarlo en la Pi con el proyector):
 - [ ] Voz: de momento sin reacción (Jorge no lo ve claro).
 
 Ideas para más adelante (de Jorge, 23-11-2026):
-- **Dibujar en la propia Pi** (Chromium en modo quiosco por el HDMI de la Pi, para llevar menos aparatos). Antes, medir con `--estres` que Chromium dibujando a pantalla completa no le quita tiempo al audio, y quizá limitarlo a 1-2 núcleos y a 1080p.
+- [x] **Dibujar en la propia Pi** (24-11-2026, nevera v31): Chromium en quiosco (cage) por el HDMI de la Pi, servicio `freon-nevera` (`deploy/instalar-nevera-hdmi.sh`), prioridad baja y sin audio. Medido a 1080p: 62 fps (40 con `--estres` a la vez), pico de cálculo del audio 41 % → 44 %, 0 bloques fuera de tiempo, 0 cortes en la Freon real, 55 °C máx. Se maneja desde Settings › Visuals (la web manda «nev …», la nevera contesta «nevst {…}»). Falta probarlo con un proyector de verdad.
 - **Que la nevera suene, como un canal más del mezclador.** Por plantear: su voz (síntesis de voz sin internet en la Pi, tipo espeak o Piper, leyendo sus frases), el zumbido del compresor, el tecleo del Terminal, o pitidos de electrodoméstico afinados a la tonalidad. Iría por su propio canal, con fader y mute.
 - **Hablarle a la nevera** por un micro (una entrada de la Scarlett). Reconocer palabras sin internet en la Pi gasta mucha CPU (whisper.cpp): habría que medirlo, o limitarlo a unas pocas palabras clave.

@@ -1932,8 +1932,11 @@ struct Control {
 
     // --- visuales: a las pantallas que han pedido «vis 1», 60 análisis por segundo del máster con los golpes y el reloj
     std::vector<int> visCl_; vis::Feed vfeed_; bool vfeedOk_ = false;
+    // la nevera de la Pi (HDMI, sin teclado): la web le manda órdenes («nev …») y ella cuenta cómo está («nevst {…}»)
+    int nevCl_ = -1; std::string nevSt_;
     void visTick() {
         if (!visCl_.empty()) visCl_.erase(std::remove_if(visCl_.begin(), visCl_.end(), [this](int c) { return !srv.has(c); }), visCl_.end());
+        if (nevCl_ >= 0 && !srv.has(nevCl_)) { nevCl_ = -1; nevSt_.clear(); srv.broadcast("nevst {}"); }   // se ha ido: la web lo dice
         if (visCl_.empty()) { au.visOn = false; return; }
         if (!vfeedOk_ || vfeed_.rate() != au.sr) { vfeed_.prepare(au.sr); vfeedOk_ = true; }
         if (!au.visOn.load()) { vfeed_.reset(au.vring); au.vhit = 0; au.visOn = true; return; }
@@ -1949,7 +1952,12 @@ struct Control {
         std::istringstream is(m); std::string op; is >> op;
         if (op == "set") { std::string k; float v; if (is >> k >> v) set(k, v, client); }
         else if (op == "vis") { int on; if (is >> on) { visCl_.erase(std::remove(visCl_.begin(), visCl_.end(), client), visCl_.end()); if (on) visCl_.push_back(client); } }
+        else if (op == "nev") { for (int c : visCl_) srv.send(c, m); }   // de la web a las neveras (solo obedece la de la Pi)
+        else if (op == "nevst") {   // la nevera de la Pi dice cómo está: se guarda y se reparte a las webs
+            if (m.size() < 8192) { nevCl_ = client; nevSt_ = m.size() > 6 ? m.substr(6) : std::string("{}"); srv.broadcast("nevst " + nevSt_, client); }
+        }
         else if (op == "hello") {
+            if (!nevSt_.empty()) srv.send(client, "nevst " + nevSt_);
             std::string spec = specJson(); spec.pop_back(); spec += "," + mixSpecJson() + ",\"outs\":" + std::to_string(au.outCh) + ",\"ins\":" + std::to_string(au.inCh) + "}";
             spec.pop_back(); spec += "," + liveSpecJson() + "}";
             midiSeen_ = ~0u;   // que el monitor MIDI se reenvíe a la pantalla nueva

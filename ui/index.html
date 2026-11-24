@@ -315,6 +315,7 @@ function connect() {
     else if (op === "midimon") midiMon(rest);
     else if (op === "sys") { SYS = JSON.parse(rest); buildSys(); }
     else if (op === "sysst") sysStatus(rest.split(" "));
+    else if (op === "nevst") { try { NEV = JSON.parse(rest); } catch (e) { NEV = {}; } drawNev(); }
     else if (op === "knobwarn") { topMsg("Knob mode", "this controller sends absolute values: use Absolute or Pickup"); }
     else if (op === "saveerr") { if (rest === "1") topMsg("Warning", "the state could not be saved to disk"); }
   };
@@ -999,6 +1000,43 @@ function chSelect(k, label) {
   s.value = String(ST[k]); s.addEventListener("change", () => { send(k, Number(s.value)); build(); });
   return el("label", { class: "field" }, el("span", { class: "label" }, label), s);
 }
+// --- Visuals: the fridge on the Pi's HDMI (deploy/instalar-nevera-hdmi.sh). No keyboard there: it is run from here
+let NEV = null, nevUI = null;
+const NEV_PHASE = { form: "starting", wait: "waiting screen · ready to start", show: "show running", finale: "finale", end: "ended (R.I.P.)" };
+function buildNev() {
+  const f = (label, inp) => el("label", { class: "field" }, el("span", { class: "label" }, label), inp);
+  const lang = el("select", { "aria-label": "Language" }); [["es", "Español"], ["en", "English"]].forEach(([v, n]) => lang.append(el("option", { value: v }, n)));
+  const min = el("input", { type: "number", min: "10", max: "600", step: "5", "aria-label": "Show length in minutes" });
+  const txt = (ph) => el("input", { type: "text", maxlength: "80", placeholder: ph });
+  const evento = txt("Festival name"), sala = txt("Venue"), ciudad = txt("City"), people = el("input", { type: "text", placeholder: "Marta, Dani, Lucía" });
+  const custom = el("textarea", { rows: "3", placeholder: "One line each. The fridge says them during the show.", style: "width:100%;min-height:60px;font:inherit;font-size:12px" });
+  const stat = el("p", { class: "hint" }, "…");
+  const fill = () => { const n = NEV || {}; lang.value = n.lang || "es"; min.value = String(n.min || 60); evento.value = n.evento || ""; sala.value = n.sala || ""; ciudad.value = n.ciudad || "";
+    people.value = (n.people || []).join(", "); custom.value = (n.custom || []).join("\n"); };
+  const save = keyBtn("Save settings", "", () => {
+    sendRaw("nev cfg " + JSON.stringify({ lang: lang.value, min: Number(min.value) || 60, evento: evento.value, sala: sala.value, ciudad: ciudad.value,
+      people: people.value.split(",").map(x => x.trim()).filter(Boolean), custom: custom.value.split("\n").map(x => x.trim()).filter(Boolean) }));
+    topMsg("Visuals", NEV && ["show", "finale"].includes(NEV.phase) ? "saved for the next show" : "saved; the waiting screen reloads with them");
+  });
+  const start = keyBtn("START SHOW", "", () => { sendRaw("nev start"); topMsg("Visuals", "show started"); });
+  const fin = confirmKey("Start the finale", "Sure? Strobe and goodbye", () => sendRaw("nev finale"));
+  const fresh = confirmKey("New show", "Sure? Back to the waiting screen", () => sendRaw("nev new"));
+  const reload = keyBtn("Reload", "", () => sendRaw("nev reload"));
+  nevUI = { stat, start, fin, save, fill, filled: false, inputs: [lang, min, evento, sala, ciudad, people, custom] };
+  const sec = el("section", { class: "card" }, el("h2", {}, "Visuals", el("span", {}, "the fridge on the Pi's HDMI; the show starts when you press START SHOW, the finale and the R.I.P. come by themselves")),
+    stat, el("div", { class: "scrow" }, start, fin, fresh, reload),
+    el("div", { class: "row" }, f("Language", lang), f("Minutes", min), f("Event", evento), f("Venue", sala), f("City", ciudad), f("People in the crowd", people)),
+    f("Lines for this show", custom), el("div", { class: "scrow" }, save));
+  drawNev(); return sec;
+}
+function drawNev() {
+  if (!nevUI || !nevUI.stat.isConnected) return;
+  const on = NEV && NEV.phase;
+  nevUI.stat.textContent = on ? `Fridge on HDMI: ${NEV_PHASE[NEV.phase] || NEV.phase}${["show", "finale"].includes(NEV.phase) ? ` · ${NEV.pct}% · act ${NEV.act}` : ""}${NEV.w ? ` · screen ${NEV.w}×${NEV.h}` : ""}`
+    : "Fridge on HDMI: not running (no screen, or not installed: ./deploy/instalar-nevera-hdmi.sh on the Pi)";
+  nevUI.start.disabled = !on || NEV.phase !== "wait"; nevUI.fin.disabled = !on || NEV.phase !== "show"; nevUI.save.disabled = !on;
+  if (on && !nevUI.filled && !nevUI.inputs.includes(document.activeElement)) { nevUI.fill(); nevUI.filled = true; }
+}
 // --- System: everything that affects how Freon runs, without a terminal
 let SYS = null, sysTimer = null, sysTick = 0;
 // barra de avisos: siempre visible arriba. Solo aparece lo que pasa: tensión baja, cortes, CPU alta, máster que entra fuerte, interfaz de reserva
@@ -1245,6 +1283,7 @@ function buildSet() {
       el("div", { class: "scrow" }, keyBtn("Refresh", "", () => sendRaw("usage")), confirmKey("Reset", "Reset counts?", () => sendRaw("usage reset"), "danger")),
       el("div", { class: "scrow", id: "useList" }, el("span", { class: "hint" }, "…"))));
   sendRaw("usage");
+  box.prepend(buildNev());
   box.prepend(card("System", "audio, MIDI and performance; nothing here needs a terminal. If a new setting fails, the previous one comes back", el("div", { class: "row", id: "sysBox" }, "Loading…")));
   sendRaw("sys"); sendRaw("sysst"); clearInterval(sysTimer); sysTimer = setInterval(() => { if (!$("#sec_set").hidden || (++sysTick % 2) === 0) sendRaw("sysst"); }, 2000);
 }
