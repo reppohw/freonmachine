@@ -308,6 +308,7 @@ Al encender la Pi, la nevera sale sola en la pantalla de espera. Como allí no h
 - **Ajustes del show:** idioma, minutos, evento, sala, ciudad, gente del público y frases propias. Pulsa **Save settings**; si el show no ha empezado, la pantalla de espera se recarga con ellos.
 - **START SHOW** = Mayús+S. **Start the finale** por si la subida de tempo no lo lanza sola. **New show** vuelve a la pantalla de espera. **Reload** recarga la página.
 - Si la Pi o la Freon se reinician a mitad, la nevera sigue el show donde iba (si hace menos de 10 minutos).
+- **Cualquier proyector o tele, sin ajustar nada:** vale cualquiera de los dos HDMI y se puede enchufar antes o después de encender. Usa la resolución que pide la pantalla (como mucho 1920×1200: una tele 4K se pone sola a 1080p) y se adapta a 4:3, 16:10 o 16:9. Sin pantalla no arranca nada; si se desenchufa a mitad, al volver sigue donde iba.
 - El sonido va siempre primero: la nevera tiene prioridad baja y no toca el audio. Medido en la Pi 5 a 1080p: 0 cortes con todo a tope, 55 °C como mucho.
 
 ## Instalar en el Mac (una sola vez)

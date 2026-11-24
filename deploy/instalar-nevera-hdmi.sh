@@ -14,7 +14,7 @@ if [ "${1:-}" = "quitar" ]; then
   echo "Quitada. La Freon sigue igual."; exit 0
 fi
 echo "== Navegador y pantalla completa (si faltan)"
-command -v cage >/dev/null && command -v chromium >/dev/null || sudo apt-get install -y --no-install-recommends chromium cage >/dev/null
+command -v cage >/dev/null && command -v chromium >/dev/null && command -v wlr-randr >/dev/null || sudo apt-get install -y --no-install-recommends chromium cage wlr-randr >/dev/null
 chmod +x "$FREON_DIR/deploy/nevera-hdmi.sh"
 echo "== Servicio freon-nevera"
 sudo tee /etc/systemd/system/freon-nevera.service >/dev/null <<UNIT
@@ -52,5 +52,6 @@ WantedBy=multi-user.target
 UNIT
 sudo systemctl daemon-reload
 sudo systemctl disable getty@tty1 >/dev/null 2>&1 || true
-sudo systemctl enable --now freon-nevera
+sudo systemctl enable freon-nevera >/dev/null 2>&1
+sudo systemctl restart freon-nevera
 echo "Listo. La nevera sale por el HDMI y se maneja desde la web de la Freon: Settings › Visuals."
