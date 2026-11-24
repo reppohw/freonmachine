@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<title>FUGA DE FREÓN · LA NEVERA v29 · FREON MACHINE</title>
+<title>FUGA DE FREÓN · LA NEVERA v30 · FREON MACHINE</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
   :root { --fg:#e6e6e6; --bg:#000; --fs:4.1vw; }
@@ -1466,6 +1466,7 @@ function addLine(text, { you = false } = {}) {
   finishTyping();
   if (LT.cur && !you) { const a = act(); if (!sys && (story.active ? a >= 3 : a >= 2 || (a >= 1 && st.pct > 0.9) || (a >= 1 && now - st.lastDrop < 8))) lettersBreak(0.6 + 1.2 * IX()); else LT.cur = null; }
   log.querySelectorAll('.cursor').forEach(c => c.remove());
+  if (!sys && !you) log.querySelectorAll('.line.sys').forEach(l => l.remove());
   const lines = [...log.children];
   const before = lines.map(l => l.getBoundingClientRect().top);
   const el = document.createElement('div'); el.className = 'line' + (you ? ' you' : '') + (sys ? ' sys' : '');
@@ -1631,10 +1632,10 @@ function chantTick() {
     if (it.fl && CFG.strobe) { lastFlash = now; flashOff = now + 0.06; document.body.classList.add(stage() >= 2 ? 'flash' : 'flashDim'); }
   }
 }
-let climaxHigh = false;
+let climaxHigh = false, climaxMoment = false;
 function startClimax(why) {
   if (climaxOn || finale || (story.active && why === 'auto')) return;
-  climaxHigh = why !== 'auto';                     // el clímax a mano (C) siempre con destellos a tope
+  climaxHigh = why !== 'auto'; climaxMoment = false;                     // el clímax a mano (C) siempre con destellos a tope
   closePhoto(); finishTyping(); climaxOn = true; climaxStart = now; climaxNextWord = 0; wordCount = 0;
   cardQueue = stage() >= 1 && Math.random() < 0.6 ? [] : null;   // a veces, a mitad del clímax: SOMOS / FUGA / DE / FREÓN
   climaxDur = STAGES[stage()].dur;
@@ -1647,7 +1648,7 @@ function endClimax(quiet = false) {
   $('climax').classList.remove('showlogo');
   climaxOn = false; lastClimaxEnd = now; document.body.classList.remove('climax', 'flash', 'flashDim');
   $('climax').style.transform = '';
-  if (!quiet && !wasManualMode) say('afterClimax', { force: true });
+  if (!quiet && !wasManualMode && !climaxMoment && act() >= 2 && st.pct > 0.8) say('afterClimax', { force: true });
 }
 /* --- MODO LOGO: el logo con estrobo (tecla L) --- */
 let logoMode = false, logoHalf = 0;
@@ -2866,7 +2867,7 @@ function cageCheck(dt) {
     cageDone = true;
     const line = lang === 'es' ? '¿Esto es John Cage o se os ha colgado algo?' : 'Is this John Cage or did something crash?';
     used.add(line); saveUsed();
-    if (story.active) story.q.unshift(line); else { lastSpoke = -99; sayText(line); }
+    if (story.active) { const k = story.q.findIndex(x => x[0] !== '$'); story.q.splice(k < 0 ? story.q.length : k, 0, line); } else { lastSpoke = -99; sayText(line); }
     ev('JOHN CAGE');
   }
 }
@@ -3332,7 +3333,7 @@ function flMoment(why, only = null) {
   else if (pick === 'logo') { toggleLogo(); FL.logoUntil = now + 8 * 16 * 60 / (FL.bpm || 120) / 4; }   // 8 compases
   else if (pick === 'gaslogo') asciiLogo();
   else if (PIECE_T[pick]) startPiece(pick);
-  else { startClimax('auto'); cardQueue = []; }
+  else { startClimax('auto'); cardQueue = []; climaxMoment = true; }
   return true;
 }
 // cada fotograma: efectos del máster, golpes y reloj. Devuelve la velocidad del dibujo (tape stop y freeze la frenan)
@@ -3721,7 +3722,6 @@ async function go(deviceId, cont = false, freon = false) {
     if (cont && prog) { showStart = now - (+prog.elapsed || 0); revealed = +prog.revealed || 0; stageOffset = +prog.stageOffset || 0; if (prog.chantDone) cool.chantDone = 1; }
     applyLook(); if (!cont) startStory();
     requestAnimationFrame(frame);
-    $('help').classList.remove('hide'); setTimeout(() => $('help').classList.add('hide'), 9000);
   });
   // continuar tras un cuelgue: directo, sin espera. En test, solo con ?wait
   if (cont || (TEST && !new URLSearchParams(location.search).has('wait'))) begin(); else showWait(begin);
