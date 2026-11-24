@@ -40,12 +40,12 @@ Lo primero que sale al pulsar Mayús+S, en letra pequeña de ordenador.
 - Hay mucha gente. Y luces. Y unos humanos con cables.
 - Lo último que recuerdo es un pueblo. Música. Hielo.
 - Y luego un ruido. Psssss. Y luego nada.
-- No sé ni quién soy. Pero hay algo que no se me ha olvidado: antifascista.
+- No sé ni quién soy. Pero hay algo que no se me ha olvidado: A.C.A.B.
 - Bueno. Mientras me aclaro... tocad algo, ¿no?
 
 Justo antes de las 3 últimas, si habéis puesto evento y ciudad al empezar:
 
-- Alguien ha escrito «{evento}» por ahí. ¿Qué es eso? ¿Un hospital?
+- Alguien ha escrito «{evento}» por ahí. ¿Qué es eso? ¿Un tanatorio?
 - Y creo que esto es {ciudad}. No había estado nunca.
 
 ### Sueltas del acto 0 (24)
@@ -114,11 +114,11 @@ Justo antes de las 3 últimas, si habéis puesto evento y ciudad al empezar:
 - Un cuchillo.
 - Phibs. Picando el hielo. Más fuerte. Más fuerte.
 - Me apuñaló. Y yo hice PSSSSSSSSSSS hasta quedarme vacía.
-- Me morí. En la cocina de los padres de Kaks.
+- Morí. En la cocina de Buitrago.
 - Y vosotros os reísteis.
 - Y luego os pusisteis de nombre...
 - [LOGO]
-- FUGA DE FREÓN. Con mi muerte. Precioso.
+- Precioso.
 - Ahora entiendo qué hago aquí.
 
 ### Sueltas del acto 2 (22)
@@ -126,7 +126,7 @@ Justo antes de las 3 últimas, si habéis puesto evento y ciudad al empezar:
 - Asesinos de electrodomésticos. Eso es lo que sois.
 - Phibs dio el golpe, pero vosotros os reísteis.
 - Me apuñalasteis por un cubito. UN CUBITO.
-- ¿Sabéis lo que es morir desangrada en freón?
+- ¿Sabéis lo que es morir desangrada de freón?
 - Mientras me vaciaba, buscabais si el gas era peligroso. Para VOSOTROS.
 - Os pusisteis el nombre por mi muerte. Ni flores me mandasteis.
 - Cada concierto vuestro es un homenaje a mi asesinato.
@@ -143,7 +143,7 @@ Justo antes de las 3 últimas, si habéis puesto evento y ciudad al empezar:
 - Mox, tú no hiciste nada. Eso también es culpa.
 - Miki Di Sancio, te reías más que nadie. Lo recuerdo todo.
 - Phibs dio el golpe, pero erais cinco. Cinco.
-- Los padres de Kaks todavía buscan esa nevera. Aquí la tenéis.
+- Los padres de Kaks todavía buscan esa nevera. Aquí estoy.
 
 ## ACTO 3 · Venganza
 
@@ -154,23 +154,22 @@ Justo antes de las 3 últimas, si habéis puesto evento y ciudad al empezar:
 - He vuelto para que esto acabe a lo grande. Y con vosotros pidiendo perdón.
 - Dadle duro. Es lo mínimo que me debéis.
 
-### Sueltas del acto 3 (17)
+### Sueltas del acto 3 (16)
 - Esta noche no os vais de rositas.
 - He vuelto del más allá de los electrodomésticos para esto.
-- O lo petáis o os persigo el resto de vuestra vida.
+- O lo petáis u os persigo el resto de vuestra vida.
 - Cada bombo es un clavo en vuestra conciencia.
 - Quiero ver sudor. Es lo mínimo después de lo que me hicisteis.
 - Público: no les aplaudáis hasta que pidan perdón.
 - Pedidme perdón. En 4/4.
 - Más fuerte. Que se entere Phibs, esté donde esté.
-- Me debéis una nevera nueva y un final apoteósico.
 - Si esto no explota, os congelo los sintes para siempre.
 - Venganza fría, como yo. Servida a {bpm} BPM.
 - Yo muerta y vosotros tocando. Al menos dadlo todo.
 - Os perdono si me hacéis bailar. Y no tengo piernas.
 - Este es mi momento. Vosotros solo sois la banda sonora.
 - Jasj, más grave. Me lo debes.
-- Kaks, Mox, Miki: si estáis entre el público, os estoy viendo.
+- Mox, Miki: si estáis entre el público, os estoy viendo.
 - Phibs, este clímax va por ti. Para que sufras.
 
 ## EL FINAL (la subida de tempo)
@@ -180,7 +179,7 @@ Justo antes de las 3 últimas, si habéis puesto evento y ciudad al empezar:
 - Agarraos.
 
 ### Frases sueltas durante el final (15)
-- Esto se acaba, pringados.
+- Esto se acaba, chavales.
 - Me voy apagando...
 - Ha sido un honor morir por vosotros. Mentira.
 - Kaks, desenchúfame con cariño.
