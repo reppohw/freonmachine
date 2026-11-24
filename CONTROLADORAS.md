@@ -194,11 +194,11 @@ La voz ya no está en el LPD8.
 
 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
 |---|---|---|---|---|---|---|---|
-| Voz on/off (mute de su canal) | Samples on/off (mute de su canal) | Canal 8: Granular ↔ Monotron | Final de los visuales (mantener 1 s) | libre | libre | libre | libre |
+| Voz on/off (mute de su canal) | Samples on/off (mute de su canal) | Canal 8: Granular ↔ Monotron | libre | libre | libre | libre | libre |
 
 Luz: encendida si suena (voz, samples), color distinto para Granular y Monotron.
 
-**Botones bajo la pantalla:** Record ⏺ = grabar / parar la grabación del live (luz mientras graba). Play ▶ = empezar los visuales (START SHOW).
+**Botones bajo la pantalla:** Record ⏺ = grabar / parar la grabación del live (luz mientras graba). Play ▶ = empezar los visuales (START SHOW); con el show en marcha, Play otra vez = el final de los visuales (mantenido 1 s, para que un toque sin querer no acabe el show). Luz de Play: apagada en la espera, encendida durante el show.
 
 **Página 1 · Principal**
 
