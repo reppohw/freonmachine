@@ -188,15 +188,17 @@ La voz ya no está en el LPD8.
 
 ## Launch Control XL 3 (mezclador y botones del show) · decidido el 24-11-2026, falta programarlo
 
-8 faders, 24 encoders sin fin con LED RGB (3 filas de 8), 16 botones (2 filas de 8), Page ▲▼ y pantalla. Lo de cada página va en los encoders y en la fila de abajo; la fila de arriba es igual en todas.
+8 faders, 24 encoders sin fin con LED RGB (3 filas de 8), 16 botones (2 filas de 8), Page ▲▼, Record, Play y pantalla. Lo de cada página va en los encoders y en la fila de abajo; la fila de arriba es igual en todas.
 
 **Fila de botones de arriba (en todas las páginas): lo que hace falta a mano**
 
 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
 |---|---|---|---|---|---|---|---|
-| Voz on/off | Samples on/off | Canal 8: Granular ↔ Monotron | Rec / Stop | Empezar los visuales (START SHOW) | Final de los visuales (mantener 1 s) | libre | libre |
+| Voz on/off (mute de su canal) | Samples on/off (mute de su canal) | Canal 8: Granular ↔ Monotron | Final de los visuales (mantener 1 s) | libre | libre | libre | libre |
 
-Luz: encendida si está activo (voz, samples, grabando), color distinto para Granular y Monotron.
+Luz: encendida si suena (voz, samples), color distinto para Granular y Monotron.
+
+**Botones bajo la pantalla:** Record ⏺ = grabar / parar la grabación del live (luz mientras graba). Play ▶ = empezar los visuales (START SHOW).
 
 **Página 1 · Principal**
 
@@ -215,5 +217,7 @@ Luz: encendida si está activo (voz, samples, grabando), color distinto para Gra
 **Página 4 · Voz:** sus 24 ajustes en los 24 encoders (Input, Gain, Low cut, Gate, Comp, De-ess, Mode, Pitch, Formant, Retune, Key, Scale, Harmony, Harm level, Robot note, Carrier, Tone, Effect, Amount, Reverb, Echo, Echo time, Balance y Level).
 
 **Pantalla:** en reposo, la página; al girar, canal o efecto, parámetro y valor.
+
+**Guía de programación:** «Launch Control XL 3 Programmer's Reference Guide» (PDF de Novation). En modo DAW, Record y Play mandan; en el modo MIDI suelto no.
 
 **Por comprobar con la controladora:** números MIDI de botones y Page, cómo se escribe la pantalla (en la Launch Control 3 es por SysEx en modo DAW; en la XL 3 seguramente igual), colores de los LED y si los faders mandan en modo DAW.
