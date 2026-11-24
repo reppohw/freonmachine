@@ -284,7 +284,7 @@ el archivo queda dañado, se carga la copia.
 
 ## Visuales: la nevera
 
-La nevera de Fuga de Freón (los visuales) va dentro de la Freon: abre `http://<ip>:8080/nevera.html` en el navegador
+La nevera de Fuga de Freón (los visuales) va dentro de la Freon: abre `http://<ip>:8080/nevera.html` en el navegador (o pulsa «Visuals ↗» arriba en la web de la Freon, que la abre en otra pestaña con la dirección buena)
 del ordenador que va al proyector (conectado a la wifi o a la red de la Freon) y pulsa **ENCHUFAR A LA FREON**.
 Con `nevera.html?auto` se salta el formulario y deja la pantalla de espera. No hace falta tarjeta de sonido en ese ordenador: la Freon le
 manda lo que suena, los golpes, el reloj del Oxi y los knobs. La página solo escucha; no cambia nada de la Freon.
