@@ -181,7 +181,39 @@ La voz ya no está en el LPD8.
 ## Controladoras futuras (idea, sin comprar): BCR32 + Launch Control XL 3 + LPD8
 
 - **BCR32 (instrumentos):** 4 filas × 8 encoders. Vista principal: batería, T2, T3 y T4, con 8 parámetros cada uno. Vista ampliada: un instrumento en los 32 encoders. Al pulsar un encoder, el parámetro vuelve a su valor de fábrica.
-- **Launch Control XL 3 (mezclador, todo en la primera vista):** canales bombo, caja, resto, T2, T3, T4, breaks y monotron (una entrada de la interfaz). Faders = nivel; knobs = gain (trim), envío 1 (reverb) y envío 2 (delay); botones = encender el canal y cue. Sin mute ni solo.
+- **Launch Control XL 3:** comprada (llega el 25-11-2026). El reparto, decidido con Jorge, está en su apartado de abajo.
 - **Qué va en la primera vista:** se decide con los datos de Settings › Most touched (`usos.json`), no a ojo.
 - **Ya existe en el mezclador:** la batería sale en 3 canales (Kick, Snare, Drums rest) y el monotron entra por un canal Input 1-4.
 - **Home:** tendrá su gesto propio en cada controladora, igual que en el LPD8.
+
+## Launch Control XL 3 (mezclador y botones del show) · decidido el 24-11-2026, falta programarlo
+
+8 faders, 24 encoders sin fin con LED RGB (3 filas de 8), 16 botones (2 filas de 8), Page ▲▼ y pantalla. Lo de cada página va en los encoders y en la fila de abajo; la fila de arriba es igual en todas.
+
+**Fila de botones de arriba (en todas las páginas): lo que hace falta a mano**
+
+| 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+|---|---|---|---|---|---|---|---|
+| Voz on/off | Samples on/off | Canal 8: Granular ↔ Monotron | Rec / Stop | Empezar los visuales (START SHOW) | Final de los visuales (mantener 1 s) | libre | libre |
+
+Luz: encendida si está activo (voz, samples, grabando), color distinto para Granular y Monotron.
+
+**Página 1 · Principal**
+
+| | Bombo | Caja | Resto | T1 | T2 | T3 | Breaks | Granular / Monotron |
+|---|---|---|---|---|---|---|---|---|
+| Encoders fila 1 | Envío A (reverb) | … | | | | | | |
+| Encoders fila 2 | Envío B (delay) | … | | | | | | |
+| Encoders fila 3 | Gain | … | | | | | | |
+| Faders | Volumen | … | | | | | | |
+| Botones de abajo | Cue | … | | | | | | |
+
+**Página 2 · El resto de canales:** Sub, el que no esté en el canal 8 (Granular o Monotron), Sampler, Voz, Input 2, Input 3 e Input 4. Igual que la página 1 (envío A, envío B, gain, volumen y cue). Los faders no son motorizados: al cambiar de página, cada fader solo toma el control al pasar por el valor que tiene (modo pickup), así no hay saltos.
+
+**Página 3 · Máster:** los 8 efectos del máster (Amount y su segundo parámetro) y el crossfader de las combinaciones. Botones de abajo: las 8 combinaciones, como en el LPD8.
+
+**Página 4 · Voz:** sus 24 ajustes en los 24 encoders (Input, Gain, Low cut, Gate, Comp, De-ess, Mode, Pitch, Formant, Retune, Key, Scale, Harmony, Harm level, Robot note, Carrier, Tone, Effect, Amount, Reverb, Echo, Echo time, Balance y Level).
+
+**Pantalla:** en reposo, la página; al girar, canal o efecto, parámetro y valor.
+
+**Por comprobar con la controladora:** números MIDI de botones y Page, cómo se escribe la pantalla (en la Launch Control 3 es por SysEx en modo DAW; en la XL 3 seguramente igual), colores de los LED y si los faders mandan en modo DAW.
