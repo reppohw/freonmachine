@@ -214,4 +214,6 @@ Freon la pone en **modo DAW** al conectarse (temporal: al desenchufarla o cerrar
 
 **Números (modo DAW, puerto DAW):** faders CC 5-12 y encoders relativos CC 77-100 por el canal 16 (absolutos 13-36); botones por el canal 1: arriba 37-44, abajo 45-52, Page ▲ 106 / ▼ 107, Track ◀ 103 / ▶ 102, Record 118, Play 116; Shift CC 63 por el canal 7. Pantalla y luces por SysEx (`F0 00 20 29 02 15 …`), ver la «Launch Control XL 3 Programmer's Reference Guide» de Novation.
 
+**Imágenes en la pantalla (vúmetros verticales):** la guía dice que se puede mandar un dibujo de 128 × 64 (SysEx `09`, pantallas 20h y 21h), pero esta unidad no lo muestra ni contesta (probado el 25-11-2026 en las dos pantallas). Por eso los vúmetros van en texto. Volver a probar con la unidad de cambio o tras preguntar a Novation.
+
 **Pendiente:** funciones para los botones 4-8 de arriba y para Track más allá de los dos grupos de canales. **La unidad del 25-11-2026 está defectuosa:** los faders 5 y 6 mandan a la vez CC 9 y CC 10 con el mismo valor y no pasan de 63, también en el modo de fábrica (comprobado con su pantalla). Para devolver o cambiar.
