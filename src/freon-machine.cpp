@@ -2381,7 +2381,19 @@ struct Control {
     int xlPage_ = 0, xlBank_ = 0, xlStage_ = 0; bool xlGran_ = true, xlOn_ = false, xlPlayFired_ = false, xlShift_ = false;
     std::chrono::steady_clock::time_point xlPlayAt_{}, xlAt_{}, xlStageAt_{}, xlScrAt_{};
     float xlPk_[NCH + NGRP + 2] = {};   // picos de cada canal y del máster (para las luces de abajo y la pantalla)
-    void xlPeaks(const float* pk) { for (int i = 0; i < NCH + NGRP + 2; ++i) xlPk_[i] = std::max(pk[i], xlPk_[i] * 0.75f); }
+    // medidor del máster: sube al instante, baja a 20 dB/s, marca de pico que se queda 2 s y aviso de CLIP (3 s)
+    float xlMdb_ = -99, xlHold_ = -99; std::chrono::steady_clock::time_point xlHoldAt_{}, xlClipAt_{}, xlPkAt_{};
+    void xlPeaks(const float* pk) {
+        for (int i = 0; i < NCH + NGRP + 2; ++i) xlPk_[i] = std::max(pk[i], xlPk_[i] * 0.75f);
+        const auto now = std::chrono::steady_clock::now();
+        const float dt = xlPkAt_ == std::chrono::steady_clock::time_point{} ? 0.06f : std::min(0.5f, std::chrono::duration<float>(now - xlPkAt_).count());
+        xlPkAt_ = now;
+        const float m = pk[NCH + NGRP], db = m > 1e-5f ? 20.0f * std::log10(m) : -99.0f;
+        xlMdb_ = std::max(db, std::max(-99.0f, xlMdb_ - 20.0f * dt));
+        if (db >= xlHold_ || now - xlHoldAt_ > std::chrono::seconds(2)) { xlHold_ = db; xlHoldAt_ = now; }
+        if (db > -0.3f) xlClipAt_ = now;
+    }
+    int xlAbs_[24] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}; bool xlRelRetry_ = false;
     float xlFx_[8] = {-1, -1, -1, -1, -1, -1, -1, -1}, xlFs_[8] = {-1, -1, -1, -1, -1, -1, -1, -1};   // faders: última posición y último valor puesto
     std::map<int, std::array<int, 3>> xlRgb_; std::map<int, std::array<std::string, 9>> xlTxt_;     // lo ya mandado (no se repite)
     static const char* xlChName(int c) { static const char* n[NCH] = {"Kick", "Snare", "Drums", "Sub", "T1", "T2", "T3", "Granular", "Sampler", "Breaks", "Voice", "Mono", "In 2", "In 3", "In 4"}; return c >= 0 && c < NCH ? n[c] : ""; }
@@ -2493,7 +2505,8 @@ struct Control {
     // recién conectada, por pasos (la XL 3 necesita un momento tras entrar en modo DAW):
     // 1) modo DAW y encoders relativos; 2) a los 0,4 s, las pantallas
     void xlSetup() {
-        xlRgb_.clear(); xlTxt_.clear(); xlOn_ = true; xlStage_ = 1; xlStageAt_ = std::chrono::steady_clock::now();
+        xlRgb_.clear(); xlTxt_.clear(); xlOn_ = true; xlStage_ = 1; xlStageAt_ = std::chrono::steady_clock::now(); xlRelRetry_ = false;
+        for (int& a : xlAbs_) a = -1;
         xlSend({0x9F, 0x0C, 0x7F});                                                       // modo DAW (temporal)
         for (int row : {0x45, 0x48, 0x49}) xlSend({0xB6, row, 0x7F});                    // las 3 filas de encoders, relativas
         std::printf("Launch Control XL 3: modo DAW\n"); std::fflush(stdout);
@@ -2501,28 +2514,33 @@ struct Control {
     void xlStages() {
         const auto now = std::chrono::steady_clock::now();
         if (xlStage_ == 1 && now - xlStageAt_ >= std::chrono::milliseconds(400)) {
+            for (int row : {0x45, 0x48, 0x49}) xlSend({0xB6, row, 0x7F});                // otra vez el relativo, ya con la XL 3 lista
             for (int t = 5; t <= 36; ++t) xlSend({0xF0, 0x00, 0x20, 0x29, 0x02, 0x15, 0x04, t, 0x62});   // canal, parámetro y valor; sale sola al mover
-            xlSend({0xF0, 0x00, 0x20, 0x29, 0x02, 0x15, 0x04, 0x35, 0x03});                  // pantalla fija: el máster y 8 canales
+            xlSend({0xF0, 0x00, 0x20, 0x29, 0x02, 0x15, 0x04, 0x35, 0x02});                  // pantalla fija: el medidor del máster (3 líneas)
             xlSend({0xF0, 0x00, 0x20, 0x29, 0x02, 0x15, 0x04, 0x36, 0x02});                  // aviso de página: 3 líneas
             xlPageShow(0); xlScreen();
             xlSend({0xF0, 0x00, 0x20, 0x29, 0x02, 0x15, 0x04, 0x35, 0x7F});
             xlStage_ = 3;
         }
     }
-    // pantalla en reposo: arriba, el máster (barra y dB); debajo, los 8 canales de los faders (letra y barra), en su sitio
-    static std::string xlBar(float pk, int n) {
-        const float db = pk > 1e-5f ? 20.0f * std::log10(pk) : -99.0f; const int k = std::clamp(static_cast<int>(std::lround((db + 48.0f) / 48.0f * static_cast<float>(n))), 0, n);
-        std::string b; for (int i = 0; i < n; ++i) b += static_cast<char>(i < k ? 0x1C : 0x1B); return b;
-    }
+    // pantalla en reposo: el medidor del máster.
+    //   MASTER        LIM 3.2   (o CLIP!)
+    //   -6.2 dB  peak -3.1
+    //   ■■■■■■■■■■□□|□□□□□   barra de -36 a 0 dB (2 dB por cuadro); «|» = el pico de los últimos 2 s
     void xlScreen() {
-        const float pk = xlPk_[NCH + NGRP], db = pk > 1e-5f ? 20.0f * std::log10(pk) : -99.0f;
-        char t[16]; if (db > -60) std::snprintf(t, sizeof t, " %.0fdB", static_cast<double>(db)); else t[0] = 0;
-        xlText(0x35, 0, "M " + xlBar(pk, 10) + t);
-        for (int s = 0; s < 8; ++s) {
-            const int c = xlFadCh(s); if (c < 0) { xlText(0x35, s + 1, ""); continue; }
-            const std::string nm = xlChName(c); const char l = nm == "Sub" ? 'U' : nm[0] == 'T' || nm[0] == 'I' ? nm.back() : nm[0];   // T1→1, In 2→2, Kick→K, Sub→U
-            xlText(0x35, s + 1, std::string(1, l) + xlBar(xlPk_[c], 4));
-        }
+        const auto now = std::chrono::steady_clock::now();
+        const float gr = std::fabs(au.grDb.load());
+        std::string t = "MASTER";
+        if (now - xlClipAt_ < std::chrono::seconds(3)) t += "     CLIP!";
+        else if (gr >= 0.5f) { char g[24]; std::snprintf(g, sizeof g, "   LIM %.1f", static_cast<double>(gr)); t += g; }
+        char n[40];
+        if (xlMdb_ <= -60) std::snprintf(n, sizeof n, "-inf");
+        else std::snprintf(n, sizeof n, "%.1f dB  peak %.1f", static_cast<double>(xlMdb_), static_cast<double>(xlHold_ > -60 ? xlHold_ : xlMdb_));
+        constexpr int kN = 18; constexpr float kLo = -36.0f;
+        auto pos = [&](float d) { return std::clamp(static_cast<int>(std::lround((d - kLo) / -kLo * kN)), 0, kN); };
+        const int k = pos(xlMdb_), h = pos(xlHold_);
+        std::string bar; for (int i = 0; i < kN; ++i) bar += i < k ? static_cast<char>(0x1C) : (i == h - 1 && h > k ? '|' : static_cast<char>(0x1B));
+        xlText(0x35, 0, t); xlText(0x35, 1, n); xlText(0x35, 2, bar);
     }
     std::string nevPhase() const { const size_t a = nevSt_.find("\"phase\":\""); if (a == std::string::npos) return ""; const size_t b = nevSt_.find('"', a + 9); return b == std::string::npos ? "" : nevSt_.substr(a + 9, b - a - 9); }
     void nevSend(const std::string& c) { for (int cl : visCl_) srv.send(cl, "nev " + c); }
@@ -2534,6 +2552,12 @@ struct Control {
         if (ch == 6 && c == 30) { if (v != 1) xlSend({0xB6, 0x1E, 0x01}); return; }       // Mode: se queda en la vista de Freon
         if (ch == 15 && c >= 5 && c <= 12) { xlFader(c - 5, v); return; }
         if (ch == 15 && c >= 77 && c <= 100) { xlEncoder((c - 77) / 8, (c - 77) % 8, v - 64); return; }
+        if (ch == 15 && c >= 13 && c <= 36) {   // una fila que se quedó en absoluto: se usa lo que ha girado desde la última vez
+            int& last = xlAbs_[c - 13]; const int d = last < 0 ? 0 : v - last; last = v;
+            if (d != 0 && std::abs(d) < 32) xlEncoder((c - 13) / 8, (c - 13) % 8, d);
+            if (!xlRelRetry_) { xlRelRetry_ = true; for (int row : {0x45, 0x48, 0x49}) xlSend({0xB6, row, 0x7F}); }   // y se le vuelve a pedir el relativo
+            return;
+        }
         if (ch != 0) return;
         const bool down = v >= 64;
         if (c >= 37 && c <= 44) { if (down) xlTop(c - 37); return; }
@@ -2599,7 +2623,7 @@ struct Control {
         }
         if (now - xlAt_ < std::chrono::milliseconds(50)) return;
         xlAt_ = now;
-        if (xlStage_ >= 3 && now - xlScrAt_ >= std::chrono::milliseconds(150)) { xlScrAt_ = now; xlScreen(); }
+        if (xlStage_ >= 3 && now - xlScrAt_ >= std::chrono::milliseconds(100)) { xlScrAt_ = now; xlScreen(); }
         // luces de los encoders: el color dice dónde está el knob. Verde abajo, amarillo en el medio, rojo arriba
         using RGB = std::array<int, 3>; std::map<int, RGB> want;
         auto heat = [](float x, float bright) { x = std::clamp(x, 0.0f, 1.0f); return RGB{static_cast<int>(127 * bright * std::min(1.0f, 2 * x)), static_cast<int>(127 * bright * std::min(1.0f, 2 * (1 - x))), 0}; };
