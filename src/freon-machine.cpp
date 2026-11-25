@@ -20,6 +20,7 @@
 #include <time.h>
 #include <climits>
 #include <algorithm>
+#include <array>
 #include <fstream>
 #include <functional>
 #include <ctime>
@@ -51,6 +52,7 @@
 #include "server.h"
 #include "recorder.h"
 #include "vis.h"
+#include "xl3logo.h"
 #ifdef __linux__
 #include <ifaddrs.h>
 #include <netinet/in.h>
@@ -2367,7 +2369,273 @@ struct Control {
         }
         return true;
     }
+    // ---------------- Novation Launch Control XL 3: mezclador y botones del show (ver CONTROLADORAS.md) ----------------
+    // Freon la pone en modo DAW (temporal: al desenchufarla vuelve a como venía) y la maneja entera: 4 páginas, pantalla y
+    // luces. Nunca se le manda nada que se guarde en ella (brillo, canal MIDI, curva, firmware…).
+    // En modo DAW: faders CC 5-12 y encoders (relativos) CC 77-100 por el canal 16; botones por el canal 1:
+    // fila de arriba 37-44, de abajo 45-52, Page ▲ 106 / ▼ 107, Record 118, Play 116.
+    std::function<void(const std::vector<unsigned char>&)> xlOut; std::function<bool()> xlNew;
+    struct XlP { std::string key, name; float lo = 0, hi = 1, step = 0; bool log = false; char fmt = 'p'; const char* names = nullptr; };
+    // xlPage_: qué llevan los knobs (0 mezcla, 1 máster, 2 voz); xlBank_: qué 8 canales llevan faders, knobs y botones (Track ◀ ▶)
+    int xlPage_ = 0, xlBank_ = 0, xlStage_ = 0; bool xlGran_ = true, xlOn_ = false, xlPlayFired_ = false, xlShift_ = false;
+    std::chrono::steady_clock::time_point xlPlayAt_{}, xlAt_{}, xlStageAt_{}, xlScrAt_{};
+    float xlPk_[NCH + NGRP + 2] = {};   // picos de cada canal y del máster (para las luces de abajo y la pantalla)
+    void xlPeaks(const float* pk) { for (int i = 0; i < NCH + NGRP + 2; ++i) xlPk_[i] = std::max(pk[i], xlPk_[i] * 0.75f); }
+    float xlFx_[8] = {-1, -1, -1, -1, -1, -1, -1, -1}, xlFs_[8] = {-1, -1, -1, -1, -1, -1, -1, -1};   // faders: última posición y último valor puesto
+    std::map<int, std::array<int, 3>> xlRgb_; std::map<int, std::array<std::string, 9>> xlTxt_;     // lo ya mandado (no se repite)
+    static const char* xlChName(int c) { static const char* n[NCH] = {"Kick", "Snare", "Drums", "Sub", "T1", "T2", "T3", "Granular", "Sampler", "Breaks", "Voice", "Mono", "In 2", "In 3", "In 4"}; return c >= 0 && c < NCH ? n[c] : ""; }
+    // canal del mezclador de cada columna: página 1 (o 3 y 4, para los faders) y página 2. La columna 8 de la página 1 es el
+    // granular o el monotron (Input 1), según el botón 3 de arriba; el otro va a la página 2
+    int xlColCh(int slot, bool page2) const {
+        static const int p1[8] = {0, 1, 2, 4, 5, 6, 9, -2}, p2[8] = {3, -3, 8, 10, 12, 13, 14, -1};
+        const int v = (page2 ? p2 : p1)[slot];
+        if (v == -2) return xlGran_ ? 7 : 11;
+        if (v == -3) return xlGran_ ? 11 : 7;
+        return v;
+    }
+    XlP xlGainP(int c) const {
+        if (c == 7) return {"gran.10", "Gain", 0, 1.5f};
+        else if (c == 9) return {"brk.10", "Gain", 0, 1.5f};
+        else if (c == 10) return {"voz.23", "Gain", 0, 1.5f};
+        else return {"c" + std::to_string(c) + ".trim", "Gain", -24, 24, 0, false, 'd'};
+    }
+    XlP xlEnc(int row, int slot) const {
+        if (xlPage_ == 0) {
+            const int c = xlColCh(slot, xlBank_ == 1); if (c < 0) return {};
+            const std::string C = "c" + std::to_string(c) + ".";
+            if (row == 0) return {C + "s0", "Reverb"};
+            else if (row == 1) return {C + "s1", "Delay"};
+            else return xlGainP(c);
+        }
+        if (xlPage_ == 1) {
+            static const XlP a[8] = {{"m.filt", "Filter", -1, 1, 0, false, 'b'}, {"m.rep", "Repeat"}, {"m.comb", "Comb"}, {"m.space", "Space"}, {"m.throw", "Delay"}, {"m.tape", "Tape stop"}, {"m.riser", "Riser"}, {"m.lofi", "Lo-Fi"}};
+            static const XlP b[8] = {{"m.res", "Reso", 0.7f, 15, 0, true, 'f'}, {"m.rSize", "Size", 0, 5, 1, false, 'i'}, {"m.cbPitch", "Pitch", 24, 96, 1, false, 'i'}, {"m.spSize", "Size"},
+                                     {"m.throwDiv", "Time", 0, 9, 1, false, 'i'}, {"m.tapeSm", "Inertia"}, {"m.rNoise", "Noise"}, {"m.lfSrr", "Rate"}};
+            if (row == 0) return a[slot];
+            else if (row == 1) return b[slot];
+            else if (slot == 0) return {"cb.amt", "Combo mix"};
+            else return {};
+        }
+        const int i = row * 8 + slot; if (i >= VZ_COUNT) return {};
+        const PSpec& p = kVzSpec[i]; return {"voz." + std::to_string(i), p.label, p.min, p.max, p.step >= 1 ? p.step : 0, p.log, p.fmt, p.names};
+    }
+    std::string xlTitle(int slot) const {   // nombre de la columna (pantalla)
+        static const char* fx[8] = {"Filter", "Repeat", "Comb", "Space", "Delay", "Tape stop", "Riser", "Lo-Fi"};
+        if (xlPage_ == 0) return xlChName(xlColCh(slot, xlBank_ == 1));
+        return xlPage_ == 1 ? fx[slot] : "Voice";
+    }
+    static float xlNorm(const XlP& p, float v) { return p.log && p.lo > 0 ? std::log(v / p.lo) / std::log(p.hi / p.lo) : (v - p.lo) / (p.hi - p.lo); }
+    static float xlDenorm(const XlP& p, float x) {
+        x = std::clamp(x, 0.0f, 1.0f); float v = p.log && p.lo > 0 ? p.lo * std::pow(p.hi / p.lo, x) : p.lo + x * (p.hi - p.lo);
+        if (p.step >= 1) v = std::round(v);
+        return std::clamp(v, p.lo, p.hi);
+    }
+    static std::string xlAscii(const std::string& s) {   // la pantalla solo tiene ASCII: fuera tildes y símbolos
+        std::string o;
+        for (size_t i = 0; i < s.size(); ++i) {
+            const unsigned char c = static_cast<unsigned char>(s[i]);
+            if (c < 0x80) { if (c >= 0x20 && c <= 0x7E) o += static_cast<char>(c); continue; }
+            if (c == 0xC3 && i + 1 < s.size()) { const unsigned char d = static_cast<unsigned char>(s[++i]);
+                static const char* m = "AAAAAAACEEEEIIIIDNOOOOOxOUUUUYTsaaaaaaaceeeeiiiidnooooo/ouuuuyty"; if (d >= 0x80 && d < 0xC0) o += m[d - 0x80]; continue; }
+            while (i + 1 < s.size() && (static_cast<unsigned char>(s[i + 1]) & 0xC0) == 0x80) ++i;   // otro carácter: fuera
+        }
+        return o;
+    }
+    std::string xlVal(const XlP& p) {
+        const float v = st[p.key]; char b[32];
+        if (p.fmt == 'n' && p.names) {   // lista de nombres: «Normal|Robot|…»
+            const std::string n = p.names; int k = static_cast<int>(std::lround(v - p.lo)); size_t a = 0;
+            for (; k > 0 && a != std::string::npos; --k) { a = n.find('|', a); if (a != std::string::npos) ++a; }
+            if (a == std::string::npos) return "";
+            return n.substr(a, n.find('|', a) == std::string::npos ? std::string::npos : n.find('|', a) - a);
+        }
+        if (p.fmt == 'd' || p.fmt == 'g' || (p.fmt == 'f' && p.names)) std::snprintf(b, sizeof b, "%+.1f dB", static_cast<double>(v));
+        else if (p.fmt == 'h') std::snprintf(b, sizeof b, "%.0f Hz", static_cast<double>(v));
+        else if (p.fmt == 't') std::snprintf(b, sizeof b, "%+.0f st", static_cast<double>(v));
+        else if (p.fmt == 'i' || p.fmt == 'm' || p.step >= 1) std::snprintf(b, sizeof b, "%.0f", static_cast<double>(v));
+        else if (p.fmt == 'b') std::snprintf(b, sizeof b, "%+.0f%%", static_cast<double>(v) * 100.0);
+        else if (p.fmt == 'f') std::snprintf(b, sizeof b, "%.1f", static_cast<double>(v));
+        else std::snprintf(b, sizeof b, "%.0f%%", static_cast<double>(v) * 100.0);
+        return b;
+    }
+    void xlSend(std::initializer_list<int> head, const std::string& tail = "") {
+        if (!xlOut) return;
+        std::vector<unsigned char> m; for (int x : head) m.push_back(static_cast<unsigned char>(x));
+        for (char c : tail) m.push_back(static_cast<unsigned char>(c));
+        if (m[0] == 0xF0) m.push_back(0xF7);
+        xlOut(m);
+    }
+    void xlText(int target, int field, const std::string& s) {   // un campo de texto de una pantalla, solo si ha cambiado
+        std::string a = xlAscii(s).substr(0, 18); for (char ch : s) if (ch == 0x1B || ch == 0x1C) { a = s.substr(0, 18); break; }   // cuadros de la barra: tal cual
+        auto& last = xlTxt_[target][static_cast<size_t>(field)];
+        if (last == a) return;
+        last = a; xlSend({0xF0, 0x00, 0x20, 0x29, 0x02, 0x15, 0x06, target, field}, a);
+    }
+    void xlShowVal(int target, const XlP& p, const std::string& pre = "") { if (!p.key.empty() && st.count(p.key)) xlText(target, 2, pre + xlVal(p)); }
+    int xlFadCh(int slot) const { return xlColCh(slot, xlBank_ == 1); }
+    // la página entera: pantalla fija (página y los 8 nombres) y la pantalla de cada control (columna, parámetro y valor)
+    // announce: 1 = aviso de los knobs (Page), 2 = aviso de los canales (Track)
+    void xlPageShow(int announce = 1) {
+        static const char* kName[3] = {"Mix", "Master FX", "Voice"};
+        if (announce) {   // aviso grande: sale encima y se va solo
+            if (announce == 1) { xlText(0x36, 0, "KNOBS " + std::to_string(xlPage_ + 1) + "/3"); xlText(0x36, 1, kName[xlPage_]); }
+            else { xlText(0x36, 0, xlBank_ ? "CHANNELS 9-16" : "CHANNELS 1-8"); xlText(0x36, 1, xlBank_ ? "Sub Mono Smp Voice In" : "Drums T1-T3 Brk Gran"); }
+            xlText(0x36, 2, "");
+            xlSend({0xF0, 0x00, 0x20, 0x29, 0x02, 0x15, 0x04, 0x36, 0x7F});
+        }
+        for (int s = 0; s < 8; ++s) { const int c = xlFadCh(s); const XlP p{c >= 0 ? "c" + std::to_string(c) + ".lvl" : "", "Volume"};
+            xlText(5 + s, 0, xlChName(c)); xlText(5 + s, 1, "Volume"); xlShowVal(5 + s, p); xlFx_[s] = xlFs_[s] = -1; }
+        for (int r = 0; r < 3; ++r) for (int s = 0; s < 8; ++s) { const XlP p = xlEnc(r, s); const int t = 13 + r * 8 + s;
+            xlText(t, 0, p.key.empty() ? "" : xlTitle(s)); xlText(t, 1, p.name); xlShowVal(t, p); }
+        xlSend({0xB6, 0x1E, 0x01});   // vuelve a la vista DAW Mixer (por si se cambió con Mode)
+    }
+    // recién conectada, por pasos (la XL 3 necesita un momento tras entrar en modo DAW):
+    // 1) modo DAW y encoders relativos; 2) a los 0,4 s, las pantallas y el logo de Fuga de Freón; 3) a los 3 s, el máster
+    void xlSetup() {
+        xlRgb_.clear(); xlTxt_.clear(); xlOn_ = true; xlStage_ = 1; xlStageAt_ = std::chrono::steady_clock::now();
+        xlSend({0x9F, 0x0C, 0x7F});                                                       // modo DAW (temporal)
+        for (int row : {0x45, 0x48, 0x49}) xlSend({0xB6, row, 0x7F});                    // las 3 filas de encoders, relativas
+        std::printf("Launch Control XL 3: modo DAW\n"); std::fflush(stdout);
+    }
+    void xlStages() {
+        const auto now = std::chrono::steady_clock::now();
+        if (xlStage_ == 1 && now - xlStageAt_ >= std::chrono::milliseconds(400)) {
+            for (int t = 5; t <= 36; ++t) xlSend({0xF0, 0x00, 0x20, 0x29, 0x02, 0x15, 0x04, t, 0x62});   // canal, parámetro y valor; sale sola al mover
+            xlSend({0xF0, 0x00, 0x20, 0x29, 0x02, 0x15, 0x04, 0x35, 0x02});                  // pantalla fija: 3 líneas (el máster)
+            xlSend({0xF0, 0x00, 0x20, 0x29, 0x02, 0x15, 0x04, 0x36, 0x02});                  // aviso de página: 3 líneas
+            xlPageShow(0); xlScreen();
+            std::vector<unsigned char> m = {0xF0, 0x00, 0x20, 0x29, 0x02, 0x15, 0x09, 0x20};  // el logo, en la pantalla fija
+            m.insert(m.end(), kXlLogo, kXlLogo + 1216); m.push_back(0xF7); if (xlOut) xlOut(m);
+            xlStage_ = 2; xlStageAt_ = now;
+        } else if (xlStage_ == 2 && now - xlStageAt_ >= std::chrono::seconds(3)) {
+            xlSend({0xF0, 0x00, 0x20, 0x29, 0x02, 0x15, 0x04, 0x35, 0x7F});                  // fuera el logo: el máster
+            xlStage_ = 3;
+        }
+    }
+    // pantalla en reposo: el máster. Tempo (y REC si se graba), nivel en dB y una barra de 14 cuadros
+    void xlScreen() {
+        char t[32]; const float bpm = au.bpmPub.load();
+        std::snprintf(t, sizeof t, "FREON %.0f BPM", static_cast<double>(bpm > 0 ? bpm : 0));
+        const float pk = xlPk_[NCH + NGRP]; const float db = pk > 1e-5f ? 20.0f * std::log10(pk) : -99.0f;
+        char n[32]; if (db > -60) std::snprintf(n, sizeof n, "Master %.1f dB", static_cast<double>(db)); else std::snprintf(n, sizeof n, "Master");
+        std::string bar; const int k = std::clamp(static_cast<int>(std::lround((db + 48.0f) / 48.0f * 14.0f)), 0, 14);
+        for (int i = 0; i < 14; ++i) bar += static_cast<char>(i < k ? 0x1C : 0x1B);
+        xlText(0x35, 0, t); xlText(0x35, 1, n); xlText(0x35, 2, bar);
+    }
+    std::string nevPhase() const { const size_t a = nevSt_.find("\"phase\":\""); if (a == std::string::npos) return ""; const size_t b = nevSt_.find('"', a + 9); return b == std::string::npos ? "" : nevSt_.substr(a + 9, b - a - 9); }
+    void nevSend(const std::string& c) { for (int cl : visCl_) srv.send(cl, "nev " + c); }
+    void xl3(const CtlMidi& m) {
+        const int ty = m.s & 0xF0, ch = m.s & 0x0F;
+        if (ty != 0xB0) return;   // notas (la respuesta al modo DAW): no son gestos
+        const int c = m.d1, v = m.d2;
+        if (ch == 6 && c == 63) { xlShift_ = v >= 64; return; }                          // Shift
+        if (ch == 6 && c == 30) { if (v != 1) xlSend({0xB6, 0x1E, 0x01}); return; }       // Mode: se queda en la vista de Freon
+        if (ch == 15 && c >= 5 && c <= 12) { xlFader(c - 5, v); return; }
+        if (ch == 15 && c >= 77 && c <= 100) { xlEncoder((c - 77) / 8, (c - 77) % 8, v - 64); return; }
+        if (ch != 0) return;
+        const bool down = v >= 64;
+        if (c >= 37 && c <= 44) { if (down) xlTop(c - 37); return; }
+        if (c >= 45 && c <= 52) { xlBottom(c - 45, down); return; }
+        if ((c == 106 || c == 107) && down) { xlPage_ = (xlPage_ + (c == 107 ? 1 : 2)) % 3; xlPageShow(1); return; }   // Page: solo los knobs
+        if ((c == 102 || c == 103) && down) { xlBank_ = c == 102 ? 1 : 0; xlPageShow(2); return; }                      // Track: los 8 canales
+        if (c == 118 && down) { trecToggle(); return; }
+        if (c == 116) xlPlay(down);
+    }
+    void xlEncoder(int row, int slot, int d) {
+        if (d == 0) return;
+        const XlP p = xlEnc(row, slot); if (p.key.empty() || !st.count(p.key)) return;
+        const float cur = st[p.key];
+        const float nv = p.step >= 1 ? std::clamp(cur + (d > 0 ? p.step : -p.step), p.lo, p.hi) : xlDenorm(p, xlNorm(p, cur) + static_cast<float>(d) / 127.0f);
+        if (nv != cur) set(p.key, nv, kMidiSrc);
+        xlShowVal(13 + row * 8 + slot, p);
+    }
+    void xlFader(int slot, int v) {   // recogida: el fader no salta; manda cuando pasa por el valor actual
+        const int c = xlFadCh(slot); if (c < 0) return;
+        const XlP p{"c" + std::to_string(c) + ".lvl", "Volume"}; if (!st.count(p.key)) return;
+        const float x = static_cast<float>(v) / 127.0f, cn = xlNorm(p, st[p.key]);
+        const bool held = xlFs_[slot] >= 0 && std::fabs(xlFs_[slot] - cn) < 0.002f;
+        const bool caught = held || std::fabs(x - cn) <= 0.03f || (xlFx_[slot] >= 0 && (xlFx_[slot] - cn) * (x - cn) <= 0.0f);
+        xlFx_[slot] = x;
+        if (caught) { const float nv = xlDenorm(p, x); if (nv != st[p.key]) set(p.key, nv, kMidiSrc); xlFs_[slot] = xlNorm(p, nv); }
+        xlShowVal(5 + slot, p, caught ? "" : (x < cn ? "up to " : "down to "));
+    }
+    void xlTop(int b) {
+        if (b == 0) toggle("c10.mute");                                   // voz on/off
+        else if (b == 1) toggle("c8.mute");                               // samples on/off
+        else if (b == 2) {                                                // columna 8: granular ↔ monotron
+            xlGran_ = !xlGran_; xlPageShow(0);
+            xlText(0x36, 0, "CHANNEL 8"); xlText(0x36, 1, xlGran_ ? "Granular" : "Monotron"); xlText(0x36, 2, "");
+            xlSend({0xF0, 0x00, 0x20, 0x29, 0x02, 0x15, 0x04, 0x36, 0x7F});
+        }
+    }
+    void xlBottom(int b, bool down) {
+        {
+            const int c = xlColCh(b, xlBank_ == 1); if (c < 0 || !down) return;
+            if (xlShift_) {   // Shift + cue: el gain del canal a 0 dB (o a su valor de partida)
+                const XlP g = xlGainP(c); set(g.key, g.key.find(".trim") != std::string::npos ? 0.0f : 0.9f, kMidiSrc);
+                xlText(13 + 16 + b, 0, xlChName(c)); xlText(13 + 16 + b, 1, "Gain reset"); xlShowVal(13 + 16 + b, g);
+                xlSend({0xF0, 0x00, 0x20, 0x29, 0x02, 0x15, 0x04, 13 + 16 + b, 0x7F});
+            } else toggle("c" + std::to_string(c) + ".cue");
+        }
+    }
+    void xlPlay(bool down) {   // Play: empieza los visuales; con el show en marcha, mantenido 1 s, lanza el final
+        if (!down) { xlPlayAt_ = {}; return; }
+        const std::string ph = nevPhase();
+        if (ph == "wait") nevSend("start");
+        else if (ph == "show") { xlPlayAt_ = std::chrono::steady_clock::now(); xlPlayFired_ = false; }
+    }
+    void xlBye() { if (xlOn_) xlSend({0x9F, 0x0C, 0x00}); }   // al cerrar Freon: la XL 3 vuelve a su modo normal
+    void xlTick() {
+        if (!xlOut) return;
+        if (xlNew && xlNew()) xlSetup();
+        if (!xlOn_) return;
+        xlStages();
+        const auto now = std::chrono::steady_clock::now();
+        if (xlPlayAt_ != std::chrono::steady_clock::time_point{} && !xlPlayFired_ && now - xlPlayAt_ >= std::chrono::seconds(1)) {
+            xlPlayFired_ = true;
+            if (nevPhase() == "show") nevSend("finale");
+        }
+        if (now - xlAt_ < std::chrono::milliseconds(50)) return;
+        xlAt_ = now;
+        if (xlStage_ >= 3 && now - xlScrAt_ >= std::chrono::milliseconds(150)) { xlScrAt_ = now; xlScreen(); }
+        // luces de los encoders: el color dice dónde está el knob. Verde abajo, amarillo en el medio, rojo arriba
+        using RGB = std::array<int, 3>; std::map<int, RGB> want;
+        auto heat = [](float x, float bright) { x = std::clamp(x, 0.0f, 1.0f); return RGB{static_cast<int>(127 * bright * std::min(1.0f, 2 * x)), static_cast<int>(127 * bright * std::min(1.0f, 2 * (1 - x))), 0}; };
+        for (int r = 0; r < 3; ++r) for (int s = 0; s < 8; ++s) {
+            const XlP p = xlEnc(r, s);
+            want[13 + r * 8 + s] = !p.key.empty() && st.count(p.key) ? heat(xlNorm(p, st[p.key]), 1.0f) : RGB{0, 0, 0};
+        }
+        auto on = [&](const std::string& k) { return st.count(k) && st[k] >= 0.5f; };
+        want[37] = on("c10.mute") ? RGB{30, 0, 0} : RGB{0, 127, 0};
+        want[38] = on("c8.mute") ? RGB{30, 0, 0} : RGB{0, 127, 0};
+        want[39] = xlGran_ ? RGB{0, 60, 127} : RGB{127, 50, 0};
+        for (int b = 3; b < 8; ++b) want[37 + b] = {0, 0, 0};
+        for (int b = 0; b < 8; ++b) {
+            RGB c{0, 0, 0};
+            {   // el nivel del canal: verde, amarillo y rojo según suena; en azul si está en cue
+                const int ch = xlColCh(b, xlBank_ == 1);
+                if (ch >= 0) {
+                    const float pk = xlPk_[ch], db = pk > 1e-5f ? 20.0f * std::log10(pk) : -99.0f, x = std::clamp((db + 48.0f) / 48.0f, 0.0f, 1.0f);
+                    if (on("c" + std::to_string(ch) + ".cue")) c = RGB{0, static_cast<int>(20 + 50 * x), static_cast<int>(60 + 67 * x)};
+                    else c = x > 0.02f ? heat(x, 0.25f + 0.75f * x) : RGB{3, 3, 3};
+                }
+            }
+            want[45 + b] = c;
+        }
+        want[106] = want[107] = {20, 20, 20};
+        want[103] = xlBank_ == 0 ? RGB{90, 90, 90} : RGB{10, 10, 10}; want[102] = xlBank_ == 1 ? RGB{90, 90, 90} : RGB{10, 10, 10};   // Track: en qué canales estás
+        want[118] = trec.recording.load() ? RGB{127, 0, 0} : RGB{12, 0, 0};
+        const std::string ph = nevPhase();
+        want[116] = ph == "wait" ? RGB{0, 25, 0} : ph == "show" ? RGB{0, 127, 0} : ph == "finale" ? RGB{127, 127, 127} : RGB{0, 0, 0};
+        int n = 0;
+        for (const auto& [idx, c] : want) {
+            const auto it = xlRgb_.find(idx); if (it != xlRgb_.end() && it->second == c) continue;
+            xlRgb_[idx] = c; xlSend({0xF0, 0x00, 0x20, 0x29, 0x02, 0x15, 0x01, 0x53, idx, c[0], c[1], c[2]});
+            if (++n >= 48) break;   // como mucho 48 luces por vuelta: el resto, en la siguiente
+        }
+    }
     void onCtl(const CtlMidi& m) {
+        if (m.port >= 0 && m.port < 1000 && portHas(m.port, "lcxl3")) { xl3(m); return; }   // la XL 3 va aparte: su canal 16 no es el del mezclador
         if (m.port >= 0 && m.port < 1000 && portHas(m.port, "lpd8") && lpd8(m)) return;
         const int ty = m.s & 0xF0; int ch = m.s & 0x0F;
         if (ty == 0xC0) { onProgram(ch, m.d1); return; }
@@ -2512,7 +2780,7 @@ struct Control {
                 last = now;
                 float pk[NCH + NGRP + 2]; float pmax = 0; { int i = 0; for (auto& p : au.peak) { pk[i] = p.exchange(0.0f); pmax = std::max(pmax, pk[i]); ++i; } }
                 if (pmax >= 0.99f) clipHold = 1.0f;
-                statusLeds(dt);
+                statusLeds(dt); xlPeaks(pk);
                 if (srv.anyClient()) {
                     std::string o = "lvl";
                     for (float p : pk) o += " " + jnum(p);
@@ -2528,7 +2796,7 @@ struct Control {
                     l += " s"; for (auto& sp : au.gran.segPk) l += " " + jnum(std::round(sp.load() * 100) / 100);
                     srv.broadcast(l);
                 }
-                if (au.recState.load() == 2) finishRec(); recSavedCheck(); lpdTick(); trecPoll(); rpPoll();
+                if (au.recState.load() == 2) finishRec(); recSavedCheck(); lpdTick(); xlTick(); trecPoll(); rpPoll();
                 // monitor MIDI: puertos abiertos y último mensaje
                 { const unsigned c = gMidiCount.load();
                   std::string ports; { std::lock_guard<std::mutex> lk(gMidiNamesMx); for (size_t i = 0; i < gMidiNames.size(); ++i) { if (i) ports += " | "; ports += gMidiNames[i]; } }
@@ -2796,9 +3064,9 @@ int renderTest(const std::string& path) {
 struct MidiHub {
     Audio* au = nullptr; std::mutex mx; int only = -1; const void* clockOwner = nullptr; double clockAge = 1e9;
     std::function<void(const std::string&)> onPortsChanged;   // aviso al hilo de control (estado completo a las controladoras nuevas)
-    struct Port { std::unique_ptr<RtMidiIn> in; std::string name; MidiHub* hub = nullptr; double acc = 0; ClockEst est; int idx = 0; bool lpd = false; };
+    struct Port { std::unique_ptr<RtMidiIn> in; std::string name; MidiHub* hub = nullptr; double acc = 0; ClockEst est; int idx = 0; bool lpd = false, xl = false; };
     struct Out { std::unique_ptr<RtMidiOut> out; std::string name; };
-    std::vector<std::unique_ptr<Port>> ports; std::vector<std::unique_ptr<Out>> outs, lpdOuts; int nextIdx = 0;   // lpdOuts: solo para las luces del LPD8 (SysEx), nunca para devolver valores
+    std::vector<std::unique_ptr<Port>> ports; std::vector<std::unique_ptr<Out>> outs, lpdOuts, xlOuts; int nextIdx = 0;   // xlOuts: el puerto DAW de la Launch Control XL 3   // lpdOuts: solo para las luces del LPD8 (SysEx), nunca para devolver valores
     static void cb(double dt, std::vector<unsigned char>* m, void* u) {
         if (!m || m->empty()) return;
         auto* p = static_cast<Port*>(u); MidiHub& h = *p->hub; const unsigned char st = (*m)[0];
@@ -2817,8 +3085,10 @@ struct MidiHub {
             p->acc = 0;
         }
         const unsigned char d1 = m->size() > 1 ? (*m)[1] : 0, d2 = m->size() > 2 ? (*m)[2] : 0, ty = st & 0xF0;
+        // Launch Control XL 3: todo al hilo de control (Control::xl3); nada suena ni va al mezclador
+        if (p->xl) { if (ty == 0xB0 || ty == 0x90 || ty == 0x80) h.au->ctlq.push({st, d1, d2, static_cast<int16_t>(p->idx)}); }
         // Akai LPD8 (canales 11 a 14): todo, notas incluidas, lo traduce el hilo de control (Control::lpd8)
-        if (p->lpd && (st & 0x0F) >= 10 && (st & 0x0F) <= 13 && (ty == 0x90 || ty == 0x80 || ty == 0xB0)) {
+        else if (p->lpd && (st & 0x0F) >= 10 && (st & 0x0F) <= 13 && (ty == 0x90 || ty == 0x80 || ty == 0xB0)) {
             const int prog = (st & 0x0F) - 10, pad = d1 - 36; const bool note = ty == 0x90 || ty == 0x80, down = ty == 0x90 && d2 > 0;
             static const int kGrNote[4] = {60, 63, 67, 72};   // granular: pads 5-8 = do, mi♭, sol, do' (los 1-4 son On, Freeze, Sync y modo notas)
             const int sch = gLpdSamp.load(std::memory_order_relaxed), gch = gLpdGran.load(std::memory_order_relaxed);
@@ -2867,7 +3137,7 @@ struct MidiHub {
                 if (notADevice(nm) || isIgnored(nm)) continue;
                 bool have = false; for (auto& p : ports) have |= p->name == nm;
                 if (have) continue;
-                auto p = std::make_unique<Port>(); p->name = nm; p->hub = this; p->idx = nextIdx++; p->lpd = lower(nm).find("lpd8") != std::string::npos;
+                auto p = std::make_unique<Port>(); p->name = nm; p->hub = this; p->idx = nextIdx++; p->lpd = lower(nm).find("lpd8") != std::string::npos; p->xl = lower(nm).find("lcxl3") != std::string::npos;
                 p->in = std::make_unique<RtMidiIn>(); p->in->openPort(i); p->in->ignoreTypes(true, false, true); p->in->setCallback(&MidiHub::cb, p.get());
                 std::printf("MIDI:  %s\n", nm.c_str());
                 ports.push_back(std::move(p)); changed = true;
@@ -2884,11 +3154,18 @@ struct MidiHub {
                     const std::string& nm = now[i]; if (lower(nm).find("lpd8") == std::string::npos || isIgnored(nm)) continue;
                     bool have = false; for (auto& o : lpdOuts) have |= o->name == nm; if (have) continue;
                     auto o = std::make_unique<Out>(); o->name = nm; o->out = std::make_unique<RtMidiOut>(); o->out->openPort(i); lpdOuts.push_back(std::move(o)); lpdNew = true;
+                }
+                for (size_t k = 0; k < xlOuts.size();) { if (std::find(now.begin(), now.end(), xlOuts[k]->name) != now.end()) { ++k; continue; } xlOuts.erase(xlOuts.begin() + static_cast<long>(k)); }
+                for (unsigned i = 0; i < n; ++i) {   // Launch Control XL 3: solo su puerto DAW (pantalla, luces y modo)
+                    const std::string& nm = now[i], l = lower(nm); if (l.find("lcxl3") == std::string::npos || l.find("daw") == std::string::npos || isIgnored(nm)) continue;
+                    bool have = false; for (auto& o : xlOuts) have |= o->name == nm;
+                    if (have) continue;
+                    auto o = std::make_unique<Out>(); o->name = nm; o->out = std::make_unique<RtMidiOut>(); o->out->openPort(i); xlOuts.push_back(std::move(o)); xlNew = true;
                 } }
             for (unsigned i = 0; i < n; ++i) {
                 const std::string& nm = now[i];
                 // al MC-24 no se le abre salida: solo tiene potenciómetros, y tras cerrarla deja de mandar hasta reenchufarlo
-                if (notADevice(nm) || isIgnored(nm) || lower(nm).find("mc-24") != std::string::npos || lower(nm).find("lpd8") != std::string::npos) continue;
+                if (notADevice(nm) || isIgnored(nm) || lower(nm).find("mc-24") != std::string::npos || lower(nm).find("lpd8") != std::string::npos || lower(nm).find("lcxl3") != std::string::npos) continue;
                 bool have = false; for (auto& o : outs) have |= o->name == nm;
                 if (have) continue;
                 auto o = std::make_unique<Out>(); o->name = nm; o->out = std::make_unique<RtMidiOut>(); o->out->openPort(i);
@@ -2910,6 +3187,9 @@ struct MidiHub {
     std::mutex lpdMx; bool lpdNew = false;   // lpdNew: se acaba de conectar un LPD8 (hay que mandarle sus luces)
     void sendLpd(const std::vector<unsigned char>& msg) { std::lock_guard<std::mutex> lk(lpdMx); for (auto& o : lpdOuts) { try { o->out->sendMessage(&msg); } catch (RtMidiError&) {} } }
     bool takeLpdNew() { std::lock_guard<std::mutex> lk(lpdMx); const bool r = lpdNew; lpdNew = false; return r; }
+    bool xlNew = false;
+    void sendXl(const std::vector<unsigned char>& msg) { std::lock_guard<std::mutex> lk(lpdMx); for (auto& o : xlOuts) { try { o->out->sendMessage(&msg); } catch (RtMidiError&) {} } }
+    bool takeXlNew() { std::lock_guard<std::mutex> lk(lpdMx); const bool r = xlNew; xlNew = false; return r; }
     std::string outNames() const { std::string r; for (auto& o : outs) { if (!r.empty()) r += " | "; r += o->name; } return r; }
 };
 
@@ -3080,6 +3360,7 @@ int main(int argc, char** argv) {
     ctl.tick = [&hub]() { hub.scan(false); };
     const bool midiLog = std::getenv("GB_MIDILOG") != nullptr;   // pruebas: muestra lo que se devuelve a las controladoras
     ctl.lpdOut = [&hub](const std::vector<unsigned char>& m) { hub.sendLpd(m); }; ctl.lpdNew = [&hub]() { return hub.takeLpdNew(); };
+    ctl.xlOut = [&hub](const std::vector<unsigned char>& m) { hub.sendXl(m); }; ctl.xlNew = [&hub]() { return hub.takeXlNew(); };
     ctl.midiOut = [&hub, &ctl, midiLog](const std::vector<unsigned char>& m) { hub.send(m, ctl.ss["midi.skip"]); if (midiLog && m.size() == 3) std::printf("MIDI> %02X %d %d\n", m[0], m[1], m[2]); };
 
     // --- Audio
@@ -3291,6 +3572,7 @@ int main(int argc, char** argv) {
     }
     std::printf("\nPantalla: abre http://%s:%d en Chrome o Safari.\nPara salir: Ctrl+C.\n", host == "0.0.0.0" ? "localhost" : host.c_str(), port);
     ctl.run(gQuit);
+    ctl.xlBye();
     if (fake.joinable()) fake.join();
     if (audio) { if (audio->isStreamRunning()) audio->stopStream(); if (audio->isStreamOpen()) audio->closeStream(); }
     std::printf("\nEstado guardado en %s. Hasta luego.\n", ctl.file.c_str());

@@ -186,38 +186,32 @@ La voz ya no está en el LPD8.
 - **Ya existe en el mezclador:** la batería sale en 3 canales (Kick, Snare, Drums rest) y el monotron entra por un canal Input 1-4.
 - **Home:** tendrá su gesto propio en cada controladora, igual que en el LPD8.
 
-## Launch Control XL 3 (mezclador y botones del show) · decidido el 24-11-2026, falta programarlo
+## Launch Control XL 3 (mezclador y botones del show) · programada el 25-11-2026
 
-8 faders, 24 encoders sin fin con LED RGB (3 filas de 8), 16 botones (2 filas de 8), Page ▲▼, Record, Play y pantalla. Lo de cada página va en los encoders y en la fila de abajo; la fila de arriba es igual en todas.
+8 faders, 24 encoders sin fin con LED RGB (3 filas de 8), 16 botones (2 filas de 8), Page ▲▼, Track ◀▶, Record, Play, Shift y pantalla de 128 × 64.
+Freon la pone en **modo DAW** al conectarse (temporal: al desenchufarla o cerrar Freon vuelve a como venía). Nunca se le manda nada que se guarde en ella (brillo, canal MIDI, curva, firmware). La Freon la trata aparte: su canal 16 no se confunde con el del mezclador.
 
-**Fila de botones de arriba (en todas las páginas): lo que hace falta a mano**
+**Track ◀ ▶: qué 8 canales** llevan los faders, los botones de abajo y los knobs de mezcla.
+- Canales 1-8 (◀): bombo, caja, resto, T1, T2, T3, breaks y Granular / Monotron.
+- Canales 9-16 (▶): Sub, el que no esté en la columna 8 (Granular o Monotron), sampler, voz, Input 2, 3 y 4.
 
-| 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
-|---|---|---|---|---|---|---|---|
-| Voz on/off (mute de su canal) | Samples on/off (mute de su canal) | Canal 8: Granular ↔ Monotron | libre | libre | libre | libre | libre |
+**Page ▲ ▼: qué llevan los knobs** (los faders se quedan con sus canales).
+1. Mix: fila 1 reverb (envío A), fila 2 delay (envío B), fila 3 gain.
+2. Master FX: fila 1 la cantidad de Filter, Repeat, Comb, Space, Delay, Tape stop, Riser y Lo-Fi; fila 2 su segundo ajuste; fila 3, knob 1, el crossfader de las combinaciones.
+3. Voice: sus 24 ajustes.
 
-Luz: encendida si suena (voz, samples), color distinto para Granular y Monotron.
+**Faders:** volumen. Recogida: si el fader no está donde el volumen, no salta; la pantalla dice «up to 72%» o «down to» hasta que lo alcanzas.
 
-**Botones bajo la pantalla:** Record ⏺ = grabar / parar la grabación del live (luz mientras graba). Play ▶ = empezar los visuales (START SHOW); con el show en marcha, Play otra vez = el final de los visuales (mantenido 1 s, para que un toque sin querer no acabe el show). Luz de Play: apagada en la espera, encendida durante el show.
+**Botones de abajo:** cue (en azul). Sin cue, su luz es el **medidor de nivel** del canal (verde, amarillo, rojo). **Shift + cue:** el gain de ese canal a 0 dB.
 
-**Página 1 · Principal**
+**Fila de arriba:** 1 voz on/off y 2 samples on/off (mute de su canal: verde si suena, rojo apagado si no); 3 columna 8 Granular (azul) ↔ Monotron (naranja); 4-8 libres.
 
-| | Bombo | Caja | Resto | T1 | T2 | T3 | Breaks | Granular / Monotron |
-|---|---|---|---|---|---|---|---|---|
-| Encoders fila 1 | Envío A (reverb) | … | | | | | | |
-| Encoders fila 2 | Envío B (delay) | … | | | | | | |
-| Encoders fila 3 | Gain | … | | | | | | |
-| Faders | Volumen | … | | | | | | |
-| Botones de abajo | Cue | … | | | | | | |
+**Record ⏺:** grabar / parar el live (rojo mientras graba). **Play ▶:** empezar los visuales; con el show en marcha, mantenido 1 s, el final (luz: tenue en la espera, verde en el show, blanca en el final).
 
-**Página 2 · El resto de canales:** Sub, el que no esté en el canal 8 (Granular o Monotron), Sampler, Voz, Input 2, Input 3 e Input 4. Igual que la página 1 (envío A, envío B, gain, volumen y cue). Los faders no son motorizados: al cambiar de página, cada fader solo toma el control al pasar por el valor que tiene (modo pickup), así no hay saltos.
+**Luces de los knobs:** el color dice dónde está cada uno: verde abajo, amarillo en el medio, rojo arriba.
 
-**Página 3 · Máster:** los 8 efectos del máster (Amount y su segundo parámetro) y el crossfader de las combinaciones. Botones de abajo: las 8 combinaciones, como en el LPD8.
+**Pantalla:** al conectarse, el logo de Fuga de Freón 3 s; en reposo, el máster (tempo, nivel en dB y barra); al tocar un control, canal, parámetro y valor; al cambiar con Page o Track, un aviso grande. Mode, DAW Control y DAW Mixer no hacen nada: si se pulsa Mode, Freon la devuelve a su vista.
 
-**Página 4 · Voz:** sus 24 ajustes en los 24 encoders (Input, Gain, Low cut, Gate, Comp, De-ess, Mode, Pitch, Formant, Retune, Key, Scale, Harmony, Harm level, Robot note, Carrier, Tone, Effect, Amount, Reverb, Echo, Echo time, Balance y Level).
+**Números (modo DAW, puerto DAW):** faders CC 5-12 y encoders relativos CC 77-100 por el canal 16 (absolutos 13-36); botones por el canal 1: arriba 37-44, abajo 45-52, Page ▲ 106 / ▼ 107, Track ◀ 103 / ▶ 102, Record 118, Play 116; Shift CC 63 por el canal 7. Pantalla y luces por SysEx (`F0 00 20 29 02 15 …`), ver la «Launch Control XL 3 Programmer's Reference Guide» de Novation.
 
-**Pantalla:** en reposo, la página; al girar, canal o efecto, parámetro y valor.
-
-**Guía de programación:** «Launch Control XL 3 Programmer's Reference Guide» (PDF de Novation). En modo DAW, Record y Play mandan; en el modo MIDI suelto no.
-
-**Por comprobar con la controladora:** números MIDI de botones y Page, cómo se escribe la pantalla (en la Launch Control 3 es por SysEx en modo DAW; en la XL 3 seguramente igual), colores de los LED y si los faders mandan en modo DAW.
+**Pendiente:** funciones para los botones 4-8 de arriba. La unidad del 25-11-2026 manda a la vez los faders 5 y 6 (CC 9 y 10 con el mismo valor): posible defecto, por confirmar.
