@@ -254,7 +254,7 @@ struct Audio {
     BusComp gcomp[NGRP]; float gCrushP[NGRP] = {};   // Crush de cada grupo: compresión en paralelo de lo que entra en él
     float busL[NBUS][BLK], busR[NBUS][BLK], sendL[NSEND][BLK], sendR[NSEND][BLK], cueL[BLK], cueR[BLK];
     // reloj
-    double pos = 0; long ticks = 0; long sinceTick = 1 << 30; bool running = false; float bpm = 120;
+    double pos = 0; long ticks = 0; long sinceTick = 1 << 30; bool running = false, extStop = false; float bpm = 120;   // extStop: el Oxi mandó Stop (y ya no manda reloj)
     std::atomic<float> clkBpm{0};
     // medidores
     std::atomic<float> peak[NCH + NGRP + 2]; std::atomic<float> grDb{0};
@@ -331,7 +331,9 @@ struct Audio {
         }
     }
     bool clkOn() const { return mp[MP_CLOCK] >= 0.5f && sinceTick < static_cast<long>(sr * 0.5f) && clkBpm.load() > 20; }
-    bool brkPlaying() const { return clkOn() ? running : true; }
+    // los breaks siguen el Play/Stop del Oxi. Tras un Stop el Oxi deja de mandar reloj: siguen parados hasta el siguiente Play
+    // (sin reloj externo, o con el reloj desactivado, van solos a su tempo)
+    bool brkPlaying() const { return clkOn() ? running : !(extStop && mp[MP_CLOCK] >= 0.5f); }
     void liveSet(int m, int pad, int i, float v) {
         const bool b = v >= 0.5f;
         switch (m) {
@@ -417,16 +419,16 @@ struct Audio {
         case 'c': { const Cmd c{static_cast<Kind>(e.k), e.a, e.b, e.c, e.v}; if (c.k == K_REC || rpPunched(cmdKeyOf(e.k, e.a, e.b, e.c))) break; apply(c); if (log) evr.push({f, 'c', e.k, e.a, e.b, e.c, e.v}); break; }
         case 'm': { const Midi m{static_cast<unsigned char>(e.a), static_cast<unsigned char>(e.b), static_cast<unsigned char>(e.c), 0.0}; handleMidi(m); if (log) evr.push({f, 'm', 0, e.a, e.b, e.c, 0.0f}); break; }
         case 't': clkBpm.store(e.v); break;
-        case 'P': ticks = static_cast<long>(e.ticks); running = e.a != 0; sinceTick = 0; if (e.v > 20) clkBpm.store(e.v); if (running && mp[MP_CLOCK] >= 0.5f) pos = ticks / 6.0; break;   // reloj al saltar a un punto
+        case 'P': ticks = static_cast<long>(e.ticks); running = e.a != 0; extStop = !running; sinceTick = 0; if (e.v > 20) clkBpm.store(e.v); if (running && mp[MP_CLOCK] >= 0.5f) pos = ticks / 6.0; break;   // reloj al saltar a un punto
         }
     }
     void handleMidi(const Midi& m) {
         // Reloj: tras Start, el primer pulso es la posición 0
         if (m.s == 0xF8) { ++ticks; sinceTick = 0; if (running && mp[MP_CLOCK] >= 0.5f) pos = ticks / 6.0; return; }
-        if (m.s == 0xFA) { ticks = -1; pos = 0; running = true; return; }
-        if (m.s == 0xFB) { running = true; return; }
+        if (m.s == 0xFA) { ticks = -1; pos = 0; running = true; extStop = false; return; }
+        if (m.s == 0xFB) { running = true; extStop = false; return; }
         if (m.s == 0xFC) {   // Stop: se sueltan las notas (no se cortan de golpe), por si el secuenciador no manda sus note off
-            running = false; subHeld.clear(); subUpdate();
+            running = false; extStop = true; subHeld.clear(); subUpdate();
             for (int t = 1; t < NT; ++t) { while (!held[t].empty()) noteOff(t, held[t].v[0]); }
             return;
         }
