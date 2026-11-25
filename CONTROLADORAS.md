@@ -208,9 +208,9 @@ Freon la pone en **modo DAW** al conectarse (temporal: al desenchufarla o cerrar
 
 **Record ⏺:** grabar / parar el live (rojo mientras graba). **Play ▶:** empezar los visuales; con el show en marcha, mantenido 1 s, el final (luz: tenue en la espera, verde en el show, blanca en el final).
 
-**Luces de los knobs:** el color dice dónde está cada uno: verde abajo, amarillo en el medio, rojo arriba.
+**Luces de los knobs:** el color dice dónde está cada uno: verde abajo, amarillo en el medio, rojo arriba. La Freon le manda a la XL 3 la posición de cada knob (al cambiar de página o si cambia desde la web): ningún knob se queda en el tope ni hay que recogerlo. Si una fila se queda en absoluto (pasó con la de reverb), la Freon usa lo que ha girado y le vuelve a pedir el relativo.
 
-**Pantalla:** en reposo, el máster (barra y dB) y los 8 canales de los faders (letra y barrita de nivel); al tocar un control, canal, parámetro y valor; al cambiar con Page o Track, un aviso grande. Mode, DAW Control y DAW Mixer no hacen nada: si se pulsa Mode, Freon la devuelve a su vista.
+**Pantalla:** en reposo, el medidor del máster: «MASTER  LIM x.x» (lo que recorta el limitador, fijo), el nivel en dB con el pico de los últimos 2 s, y una barra de 18 cuadros con más detalle arriba (de −6 a 0 dB, de medio en medio) y «|» en el pico. Al tocar un control, canal, parámetro y valor; 0,6 s después de soltarlo vuelve el máster. Al cambiar con Page o Track, un aviso grande. Los 8 canales se ven en las luces de los botones de abajo. Mode, DAW Control y DAW Mixer no hacen nada: si se pulsa Mode, Freon la devuelve a su vista.
 
 **Números (modo DAW, puerto DAW):** faders CC 5-12 y encoders relativos CC 77-100 por el canal 16 (absolutos 13-36); botones por el canal 1: arriba 37-44, abajo 45-52, Page ▲ 106 / ▼ 107, Track ◀ 103 / ▶ 102, Record 118, Play 116; Shift CC 63 por el canal 7. Pantalla y luces por SysEx (`F0 00 20 29 02 15 …`), ver la «Launch Control XL 3 Programmer's Reference Guide» de Novation.
 

@@ -291,9 +291,11 @@ manda lo que suena, los golpes, el reloj del Oxi y los knobs. La página solo es
 
 - **Empieza con Mayús+S** desde el ordenador (puede empezar a escribir antes del play).
 - **Momentos grandes solos y a compás:** FU-GA-DE-FRE-ÓN, cantad conmigo, el logo con estrobo, el logo de gas y las cartelas, tras los drops y en lo más alto. El ASCII se mueve a tempo con el reloj del Oxi.
-- **Acaba sola:** la subida de tempo del final lanza la despedida, y el Stop del Oxi, el negro y el R.I.P. Un Stop a mitad no acaba nada.
-- **Escenas sin Terminal:** lluvia de neveras, FUGA DE FREÓN en letras gigantes, cuchillos contra cubitos y la nevera persiguiendo a la banda. Salen solas; la tecla **V** lanza una (o la quita).
-- **Todo reacciona:** las letras del Terminal saltan, ondulan, se congelan o se rompen y caen; las notas de los sintes son carámbanos en su altura; filtro, reso y efectos del máster cambian la imagen.
+- **Acaba sola:** la subida de tempo del final (por encima de 180 BPM) lanza la despedida, y el Stop del Oxi, el negro y el R.I.P. Un Stop a mitad no acaba nada. Si salta sin querer, se apaga en Settings › Visuals con **Auto finale** (vale al momento). La despedida acaba con el logo sólido.
+- **La nevera tiene cara:** buena al principio, preocupada, enfadada y, en el último acto y el final, el demonio con cuernos.
+- **Escenas sin Terminal:** lluvia de neveras, FUGA DE FREÓN en letras gigantes, cuchillos contra cubitos, la nevera persiguiendo a la banda, la nevera en grande hablando, la rueda de reconocimiento, el cuchillazo de 2010 y el mapa del planeta a Buitrago (este, siempre en el acto 1, tras recordar la casa). A pantalla completa, 4 compases: cinta de peligro, los ojos gigantes y la pantalla que se agrieta. Salen solas; la tecla **V** lanza una (o la quita).
+- **Cortes y destellos:** con la caja y las palmas, cortes a negro; en el 1 del compás, destellos. Cada vez más a menudo (solo con el estrobo permitido).
+- **Todo reacciona:** las letras del Terminal saltan, ondulan, se congelan o se rompen y caen; las notas de los sintes son carámbanos en su altura. Cada efecto del máster tiene su imagen: Repeat la parte en baldosas, Space deja estela, Delay tres ecos, Riser la acerca y la hace temblar, Comb barras verticales, Lo-Fi la pixela, Tape stop la frena, el filtro paso bajo la oscurece y la ondula (bajo el agua) y el paso alto la deja en líneas.
 - Las teclas de la nevera (clímax, coro, gas, logo, fotos, final...) siguen funcionando, pero no hacen falta.
 - Si se recarga la página a mitad, sigue en el mismo punto del show.
 - La tecla **D** enseña los datos, también los de la Freon.
@@ -306,7 +308,7 @@ Se instala una vez, en la Pi: `./deploy/instalar-nevera-hdmi.sh` (pide la contra
 Al encender la Pi, la nevera sale sola en la pantalla de espera. Como allí no hay teclado, se maneja desde la web de la Freon, en **Settings › Visuals**:
 
 - **Ajustes del show:** idioma, minutos, evento, sala, ciudad, gente del público y frases propias. Pulsa **Save settings**; si el show no ha empezado, la pantalla de espera se recarga con ellos.
-- **START SHOW** = Mayús+S. **Start the finale** por si la subida de tempo no lo lanza sola. **New show** vuelve a la pantalla de espera. **Reload** recarga la página.
+- **START SHOW** = Mayús+S. **Start the finale** por si la subida de tempo no lo lanza sola. **Auto finale ON/OFF**: si está apagado, el final solo sale con el botón (o con Play de la XL 3). **New show** vuelve a la pantalla de espera. **Reload** recarga la página.
 - Si la Pi o la Freon se reinician a mitad, la nevera sigue el show donde iba (si hace menos de 10 minutos).
 - **Cualquier proyector o tele, sin ajustar nada:** vale cualquiera de los dos HDMI y se puede enchufar antes o después de encender. Usa la resolución que pide la pantalla (como mucho 1920×1200: una tele 4K se pone sola a 1080p) y se adapta a 4:3, 16:10 o 16:9. Sin pantalla no arranca nada; si se desenchufa a mitad, al volver sigue donde iba.
 - El sonido va siempre primero: la nevera tiene prioridad baja y no toca el audio. Medido en la Pi 5 a 1080p: 0 cortes con todo a tope, 55 °C como mucho.

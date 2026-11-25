@@ -3012,6 +3012,8 @@ const FREON_SERVED = /^https?:$/.test(location.protocol) && !location.search.inc
 const AUTO = location.search.includes('auto');
 // ?pi: la nevera de la Pi, por HDMI y sin teclado. Se maneja desde la web de la Freon (Settings › Visuals) y le cuenta cómo está.
 const REMOTE = new URLSearchParams(location.search).has('pi');
+// final automático (la subida de tempo lo lanza solo): se puede apagar desde la web por si salta sin querer
+const autoFinale = () => lsGet('fdf-autofin') !== '0';
 if (REMOTE) document.head.insertAdjacentHTML('beforeend', '<style>*{cursor:none!important}</style>');
 
 const FREON_T = {
@@ -3130,7 +3132,7 @@ function nevStatus() {
   let ev = {}; try { ev = JSON.parse(lsGet('fdf-event') || '{}'); } catch (e) {}
   FL.ws.send('nevst ' + JSON.stringify({ phase, pct: showStart ? Math.round(progress() * 100) : 0, act: showStart ? act() : 0,
     lang: lsGet('fdf-lang') || lang, min: +(lsGet('fdf-dur') || 60), evento: ev.evento || '', sala: ev.sala || '', ciudad: ev.ciudad || '',
-    custom: ev.custom || [], people: ev.people || [], w: innerWidth, h: innerHeight }));
+    custom: ev.custom || [], people: ev.people || [], w: innerWidth, h: innerHeight, autoFinale: autoFinale() }));
 }
 if (REMOTE) setInterval(nevStatus, 2000);
 function nevCmd(rest) {
@@ -3147,6 +3149,7 @@ function nevCmd(rest) {
   else if (c === 'new') { lsDel('fdf-progress'); location.reload(); }              // show nuevo: otra vez la pantalla de espera
   else if (c === 'finale') { if (showStart && !finale) { if (climaxOn) endClimax(true); startFinale(); } }
   else if (c === 'reload') location.reload();
+  else if (c === 'autofin') { lsSet('fdf-autofin', arg === '0' ? '0' : '1'); ev('FINAL AUTOMÁTICO ' + (autoFinale() ? 'SÍ' : 'NO')); }   // vale al momento
   setTimeout(nevStatus, 300);
 }
 function flFrame(rest) {
@@ -3822,7 +3825,7 @@ function flTick(dt) {
   if (FL.run && FL.bpm >= 40 && now - (FL.bhT ?? -99) >= 1) { FL.bhT = now; FL.bh.push([now, FL.bpm]); if (FL.bh.length > 600) FL.bh.shift(); }
   if (showStart && !waiting) {
     const el = (now - showStart) / 60 / CFG.showMinutes;
-    if (!finale && el >= 0.6 && FL.run && (FL.bpm || 0) > 180 && flRamp()) { if (climaxOn) endClimax(true); startFinale(); ev('FINAL AUTO · SUBIDA ' + FL.bpm + ' bpm'); }
+    if (!finale && autoFinale() && el >= 0.6 && FL.run && (FL.bpm || 0) > 180 && flRamp()) { if (climaxOn) endClimax(true); startFinale(); ev('FINAL AUTO · SUBIDA ' + FL.bpm + ' bpm'); }
     else if (finale === 1 && FL.stopFor > 0.3) endShow();
   }
 }

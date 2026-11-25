@@ -47,6 +47,7 @@ Freon Machine tiene que ser **eficiente y muy estable**. Esto pesa más que cual
 ## Estructura
 - `src/freon-machine.cpp`:
   - hilo de audio (`Audio`) y hilo de control (`Control`), que lleva el estado, la web, el mapa MIDI de controladoras, la devolución de valores y LEDs, y el guardado seguro;
+  - la Launch Control XL 3 (`Control::xl3`, `xlTick`): Freon la pone en modo DAW por su puerto DAW y le manda pantalla, luces y posición de los knobs; nunca ajustes que se guarden en ella (ver CONTROLADORAS.md);
   - `MidiHub` y `main`.
 - `src/params.h`:
   - especificaciones de los 9 motores (`kEng`), presets de fábrica y capa de 16 knobs (`kLayer`). La pantalla ofrece Juno, DX7, Moog, 303, Game Boy y Phatty; Wavetable, SuperSaw y Modal están ocultos (`kEngHidden`) y los envíos C y D también (`kSendsShown`);
@@ -85,5 +86,5 @@ Freon Machine tiene que ser **eficiente y muy estable**. Esto pesa más que cual
    - el gesto de Home en el LPD8.
 2. Sesión de escucha de baterías: quedarse con 2 o 3 kits y reducir sus parámetros, al estilo de la 808.
 3. PIN para la web, para borrar y apagar (pendiente de que Jorge diga sí).
-4. Launch Control XL 3 cuando la compre: mezclador en primera vista y Rec en un botón (nota 56 del canal del mezclador).
+4. Launch Control XL 3: programada; la unidad de prueba tenía los faders 5 y 6 defectuosos y se devuelve. Con la de cambio: comprobar faders y volver a probar las imágenes en pantalla (vúmetros verticales).
 5. Grabación: exportar MIDI para Pro Tools y Ableton; render más rápido que el tiempo real si hace falta.

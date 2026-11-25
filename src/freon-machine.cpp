@@ -77,7 +77,7 @@ private:
     T b_[N]; std::atomic<unsigned> w_{0}, r_{0};
 };
 
-enum Kind : uint8_t { K_ENGP, K_ENG, K_CHN, K_STRIP, K_GRP, K_FX, K_MST, K_KIT, K_LANE, K_SUB, K_NOTE, K_ALLOFF, K_LIVE, K_LCH, K_REC };
+enum Kind : uint8_t { K_ENGP, K_ENG, K_CHN, K_STRIP, K_GRP, K_FX, K_MST, K_KIT, K_LANE, K_SUB, K_NOTE, K_ALLOFF, K_LIVE, K_LCH, K_REC, K_CLKGONE };
 // Módulos de directo (K_LIVE: a = módulo, b = pad, c = parámetro). En las notas, t = 10 + módulo
 enum LiveMod { LM_SAMP = 0, LM_BRK, LM_GRAN, LM_VOZ, LM_COUNT };
 struct Cmd { Kind k; int16_t a, b, c; float v; };
@@ -407,6 +407,7 @@ struct Audio {
                 else if (c.a == 20) { if (v > 0) subHeld.add(n); else subHeld.remove(n); subUpdate(); } else if (c.a >= 0 && c.a < NT) { if (v > 0) noteOn(c.a, n, v); else noteOff(c.a, n); }
                 break; }
             case K_ALLOFF: allNotesOff(); break;
+            case K_CLKGONE: extStop = false; running = false; break;   // se desenchufó el aparato del reloj: los breaks ya no esperan su Play
             case K_LIVE: if (c.a >= 0 && c.a < LM_COUNT) liveSet(c.a, c.b, c.c, c.v); break;
             case K_LCH: if (c.a >= 0 && c.a < LM_COUNT) lch[c.a] = static_cast<int>(c.v); break;
             case K_REC: if (c.v >= 0.5f) { if (recState == 0) { recSrc = c.b; recLen = 0; recState = 1; } } else if (recState == 1) recState = 2; break;   // mientras se guarda la anterior (3), no empieza otra
@@ -2660,11 +2661,11 @@ struct Control {
                 const int ch = xlColCh(b, xlBank_ == 1);
                 if (ch >= 0) {
                     const float pk = xlPk_[ch], db = pk > 1e-5f ? 20.0f * std::log10(pk) : -99.0f, x = std::clamp((db + 40.0f) / 40.0f, 0.0f, 1.0f);
-                    const float b = 0.2f + 0.8f * x;   // más brillo cuanto más suena
+                    const float br = 0.2f + 0.8f * x;   // más brillo cuanto más suena
                     if (on("c" + std::to_string(ch) + ".cue")) c = RGB{0, static_cast<int>(20 + 50 * x), static_cast<int>(60 + 67 * x)};
-                    else if (db < -45) c = RGB{3, 3, 3};                                                  // en silencio
-                    else if (db < -12) c = RGB{0, static_cast<int>(127 * b), 0};                         // verde
-                    else if (db < -4) c = RGB{static_cast<int>(127 * b), static_cast<int>(100 * b), 0};  // amarillo
+                    else if (db < -45) c = RGB{3, 3, 3};                                                     // en silencio
+                    else if (db < -12) c = RGB{0, static_cast<int>(127 * br), 0};                           // verde
+                    else if (db < -4) c = RGB{static_cast<int>(127 * br), static_cast<int>(100 * br), 0};   // amarillo
                     else c = RGB{127, 0, 0};                                                              // rojo: cerca de 0 dB
                 }
             }
@@ -3176,7 +3177,7 @@ struct MidiHub {
                 if (std::find(now.begin(), now.end(), ports[k]->name) != now.end()) { ++k; continue; }
                 std::printf("MIDI desconectado: %s\n", ports[k]->name.c_str());
                 ports[k]->in->cancelCallback();
-                { std::lock_guard<std::mutex> lk(mx); if (clockOwner == ports[k].get()) { clockOwner = nullptr; clockAge = 1e9; } }
+                { std::lock_guard<std::mutex> lk(mx); if (clockOwner == ports[k].get()) { clockOwner = nullptr; clockAge = 1e9; au->cmds.push({K_CLKGONE, 0, 0, 0, 0}); } }
                 ports.erase(ports.begin() + static_cast<long>(k)); changed = true;
                 au->cmds.push({K_ALLOFF, 0, 0, 0, 0});   // las notas de ese aparato no van a recibir su note off
             }
