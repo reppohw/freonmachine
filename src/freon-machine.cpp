@@ -2529,10 +2529,10 @@ struct Control {
     // pantalla en reposo: el medidor del máster.
     //   MASTER        LIM 3.2   (o CLIP!)
     //   -6.2 dB  peak -3.1
-    //   ■■■■■■■■■■■■□□|□□□   18 cuadros con más detalle arriba: −40 … −20 de 3 en 3 dB, luego de 2 en 2 hasta −6 y de 1 en 1 hasta 0;
+    //   ■■■■■■■■■■■■□□|□□□   18 cuadros, casi todos arriba: −30, −24, −18, −14, −11, −9, −7 y, desde −6, de medio en medio dB hasta 0;
     //                        «|» = el pico de los últimos 2 s
     static int xlCells(float db) {
-        static const float th[18] = {-40, -34, -30, -26, -23, -20, -18, -16, -14, -12, -10, -8, -6, -5, -4, -3, -2, -1};
+        static const float th[18] = {-30, -24, -18, -14, -11, -9, -7, -6, -5, -4, -3.5f, -3, -2.5f, -2, -1.5f, -1, -0.5f, -0.1f};
         int k = 0; for (float t : th) if (db >= t) ++k; return k;
     }
     void xlScreen() {
