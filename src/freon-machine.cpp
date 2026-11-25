@@ -2382,6 +2382,8 @@ struct Control {
     std::chrono::steady_clock::time_point xlPlayAt_{}, xlAt_{}, xlStageAt_{}, xlScrAt_{};
     float xlPk_[NCH + NGRP + 2] = {};   // picos de cada canal y del máster (para las luces de abajo y la pantalla)
     // medidor del máster: sube al instante, baja a 20 dB/s, marca de pico que se queda 2 s y aviso de CLIP (3 s)
+    int xlLastT_ = -1; std::chrono::steady_clock::time_point xlTouchAt_{};   // el último control tocado (su pantalla se quita al soltarlo)
+    void xlTouch(int t) { xlLastT_ = t; xlTouchAt_ = std::chrono::steady_clock::now(); }
     float xlMdb_ = -99, xlHold_ = -99; std::chrono::steady_clock::time_point xlHoldAt_{}, xlClipAt_{}, xlPkAt_{};
     void xlPeaks(const float* pk) {
         for (int i = 0; i < NCH + NGRP + 2; ++i) xlPk_[i] = std::max(pk[i], xlPk_[i] * 0.75f);
@@ -2478,11 +2480,12 @@ struct Control {
         if (m[0] == 0xF0) m.push_back(0xF7);
         xlOut(m);
     }
-    void xlText(int target, int field, const std::string& s) {   // un campo de texto de una pantalla, solo si ha cambiado
+    bool xlText(int target, int field, const std::string& s) {   // un campo de texto de una pantalla, solo si ha cambiado
         std::string a = xlAscii(s).substr(0, 18); for (char ch : s) if (ch == 0x1B || ch == 0x1C) { a = s.substr(0, 18); break; }   // cuadros de la barra: tal cual
         auto& last = xlTxt_[target][static_cast<size_t>(field)];
-        if (last == a) return;
+        if (last == a) return false;
         last = a; xlSend({0xF0, 0x00, 0x20, 0x29, 0x02, 0x15, 0x06, target, field}, a);
+        return true;
     }
     void xlShowVal(int target, const XlP& p, const std::string& pre = "") { if (!p.key.empty() && st.count(p.key)) xlText(target, 2, pre + xlVal(p)); }
     int xlFadCh(int slot) const { return xlColCh(slot, xlBank_ == 1); }
@@ -2526,9 +2529,20 @@ struct Control {
     // pantalla en reposo: el medidor del máster.
     //   MASTER        LIM 3.2   (o CLIP!)
     //   -6.2 dB  peak -3.1
-    //   ■■■■■■■■■■□□|□□□□□   barra de -36 a 0 dB (2 dB por cuadro); «|» = el pico de los últimos 2 s
+    //   ■■■■■■■■■■■■□□|□□□   18 cuadros con más detalle arriba: −40 … −20 de 3 en 3 dB, luego de 2 en 2 hasta −6 y de 1 en 1 hasta 0;
+    //                        «|» = el pico de los últimos 2 s
+    static int xlCells(float db) {
+        static const float th[18] = {-40, -34, -30, -26, -23, -20, -18, -16, -14, -12, -10, -8, -6, -5, -4, -3, -2, -1};
+        int k = 0; for (float t : th) if (db >= t) ++k; return k;
+    }
     void xlScreen() {
         const auto now = std::chrono::steady_clock::now();
+        // 0,6 s después de soltar un control, su pantalla se quita y vuelve el máster
+        if (xlLastT_ >= 0 && now - xlTouchAt_ > std::chrono::milliseconds(600)) {
+            xlSend({0xF0, 0x00, 0x20, 0x29, 0x02, 0x15, 0x04, xlLastT_, 0x00});
+            xlSend({0xF0, 0x00, 0x20, 0x29, 0x02, 0x15, 0x04, xlLastT_, 0x62}); xlLastT_ = -1;   // y sigue saliendo sola al moverlo
+            xlSend({0xF0, 0x00, 0x20, 0x29, 0x02, 0x15, 0x04, 0x35, 0x7F});
+        }
         const float gr = std::fabs(au.grDb.load());
         std::string t = "MASTER";
         if (now - xlClipAt_ < std::chrono::seconds(3)) t += "     CLIP!";
@@ -2536,11 +2550,11 @@ struct Control {
         char n[40];
         if (xlMdb_ <= -60) std::snprintf(n, sizeof n, "-inf");
         else std::snprintf(n, sizeof n, "%.1f dB  peak %.1f", static_cast<double>(xlMdb_), static_cast<double>(xlHold_ > -60 ? xlHold_ : xlMdb_));
-        constexpr int kN = 18; constexpr float kLo = -36.0f;
-        auto pos = [&](float d) { return std::clamp(static_cast<int>(std::lround((d - kLo) / -kLo * kN)), 0, kN); };
-        const int k = pos(xlMdb_), h = pos(xlHold_);
-        std::string bar; for (int i = 0; i < kN; ++i) bar += i < k ? static_cast<char>(0x1C) : (i == h - 1 && h > k ? '|' : static_cast<char>(0x1B));
-        xlText(0x35, 0, t); xlText(0x35, 1, n); xlText(0x35, 2, bar);
+        const int k = xlCells(xlMdb_), h = xlCells(xlHold_);
+        std::string bar; for (int i = 0; i < 18; ++i) bar += i < k ? static_cast<char>(0x1C) : (i == h - 1 && h > k ? '|' : static_cast<char>(0x1B));
+        bool ch = xlText(0x35, 0, t); ch |= xlText(0x35, 1, n); ch |= xlText(0x35, 2, bar);
+        // si no hay otro control en pantalla, el máster se redibuja con lo nuevo
+        if (ch && xlLastT_ < 0) xlSend({0xF0, 0x00, 0x20, 0x29, 0x02, 0x15, 0x04, 0x35, 0x7F});
     }
     std::string nevPhase() const { const size_t a = nevSt_.find("\"phase\":\""); if (a == std::string::npos) return ""; const size_t b = nevSt_.find('"', a + 9); return b == std::string::npos ? "" : nevSt_.substr(a + 9, b - a - 9); }
     void nevSend(const std::string& c) { for (int cl : visCl_) srv.send(cl, "nev " + c); }
@@ -2573,7 +2587,7 @@ struct Control {
         const float cur = st[p.key];
         const float nv = p.step >= 1 ? std::clamp(cur + (d > 0 ? p.step : -p.step), p.lo, p.hi) : xlDenorm(p, xlNorm(p, cur) + static_cast<float>(d) / 127.0f);
         if (nv != cur) set(p.key, nv, kMidiSrc);
-        xlShowVal(13 + row * 8 + slot, p);
+        xlShowVal(13 + row * 8 + slot, p); xlTouch(13 + row * 8 + slot);
     }
     void xlFader(int slot, int v) {   // recogida: el fader no salta; manda cuando pasa por el valor actual
         const int c = xlFadCh(slot); if (c < 0) return;
@@ -2583,7 +2597,7 @@ struct Control {
         const bool caught = held || std::fabs(x - cn) <= 0.03f || (xlFx_[slot] >= 0 && (xlFx_[slot] - cn) * (x - cn) <= 0.0f);
         xlFx_[slot] = x;
         if (caught) { const float nv = xlDenorm(p, x); if (nv != st[p.key]) set(p.key, nv, kMidiSrc); xlFs_[slot] = xlNorm(p, nv); }
-        xlShowVal(5 + slot, p, caught ? "" : (x < cn ? "up to " : "down to "));
+        xlShowVal(5 + slot, p, caught ? "" : (x < cn ? "up to " : "down to ")); xlTouch(5 + slot);
     }
     void xlTop(int b) {
         if (b == 0) toggle("c10.mute");                                   // voz on/off
@@ -2641,9 +2655,13 @@ struct Control {
             {   // el nivel del canal: verde, amarillo y rojo según suena; en azul si está en cue
                 const int ch = xlColCh(b, xlBank_ == 1);
                 if (ch >= 0) {
-                    const float pk = xlPk_[ch], db = pk > 1e-5f ? 20.0f * std::log10(pk) : -99.0f, x = std::clamp((db + 48.0f) / 48.0f, 0.0f, 1.0f);
+                    const float pk = xlPk_[ch], db = pk > 1e-5f ? 20.0f * std::log10(pk) : -99.0f, x = std::clamp((db + 40.0f) / 40.0f, 0.0f, 1.0f);
+                    const float b = 0.2f + 0.8f * x;   // más brillo cuanto más suena
                     if (on("c" + std::to_string(ch) + ".cue")) c = RGB{0, static_cast<int>(20 + 50 * x), static_cast<int>(60 + 67 * x)};
-                    else c = x > 0.02f ? heat(x, 0.25f + 0.75f * x) : RGB{3, 3, 3};
+                    else if (db < -45) c = RGB{3, 3, 3};                                                  // en silencio
+                    else if (db < -12) c = RGB{0, static_cast<int>(127 * b), 0};                         // verde
+                    else if (db < -4) c = RGB{static_cast<int>(127 * b), static_cast<int>(100 * b), 0};  // amarillo
+                    else c = RGB{127, 0, 0};                                                              // rojo: cerca de 0 dB
                 }
             }
             want[45 + b] = c;

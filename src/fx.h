@@ -510,7 +510,11 @@ public:
             }
             break; }
         }
-        for (int i = 0; i < n; ++i) { oL[i] *= ret; oR[i] *= ret; }
+        // ganancia de cada tipo (medida el 25-11-2026: con el envío al 100 %, el efecto sale tan fuerte como lo que entra; antes,
+        // entre 0,5 y 9 dB por debajo y se oía poco). Hall, Plate, Black hole, Ping-pong, Tape, Dub, Multi, Chorus
+        static constexpr float kMakeup[FX_COUNT] = {2.0f, 2.24f, 1.35f, 2.8f, 2.0f, 1.9f, 1.26f, 1.06f};
+        const float g = ret * kMakeup[std::clamp(type, 0, FX_COUNT - 1)];
+        for (int i = 0; i < n; ++i) { oL[i] *= g; oR[i] *= g; }
     }
 private:
     static int idx(float v) { return std::clamp(static_cast<int>(v + 0.5f), 0, 9); }
