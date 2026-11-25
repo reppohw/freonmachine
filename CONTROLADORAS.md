@@ -210,8 +210,8 @@ Freon la pone en **modo DAW** al conectarse (temporal: al desenchufarla o cerrar
 
 **Luces de los knobs:** el color dice dónde está cada uno: verde abajo, amarillo en el medio, rojo arriba.
 
-**Pantalla:** al conectarse, el logo de Fuga de Freón 3 s; en reposo, el máster (tempo, nivel en dB y barra); al tocar un control, canal, parámetro y valor; al cambiar con Page o Track, un aviso grande. Mode, DAW Control y DAW Mixer no hacen nada: si se pulsa Mode, Freon la devuelve a su vista.
+**Pantalla:** en reposo, el máster (barra y dB) y los 8 canales de los faders (letra y barrita de nivel); al tocar un control, canal, parámetro y valor; al cambiar con Page o Track, un aviso grande. Mode, DAW Control y DAW Mixer no hacen nada: si se pulsa Mode, Freon la devuelve a su vista.
 
 **Números (modo DAW, puerto DAW):** faders CC 5-12 y encoders relativos CC 77-100 por el canal 16 (absolutos 13-36); botones por el canal 1: arriba 37-44, abajo 45-52, Page ▲ 106 / ▼ 107, Track ◀ 103 / ▶ 102, Record 118, Play 116; Shift CC 63 por el canal 7. Pantalla y luces por SysEx (`F0 00 20 29 02 15 …`), ver la «Launch Control XL 3 Programmer's Reference Guide» de Novation.
 
-**Pendiente:** funciones para los botones 4-8 de arriba. La unidad del 25-11-2026 manda a la vez los faders 5 y 6 (CC 9 y 10 con el mismo valor): posible defecto, por confirmar.
+**Pendiente:** funciones para los botones 4-8 de arriba y para Track más allá de los dos grupos de canales. **La unidad del 25-11-2026 está defectuosa:** los faders 5 y 6 mandan a la vez CC 9 y CC 10 con el mismo valor y no pasan de 63, también en el modo de fábrica (comprobado con su pantalla). Para devolver o cambiar.

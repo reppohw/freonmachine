@@ -52,7 +52,6 @@
 #include "server.h"
 #include "recorder.h"
 #include "vis.h"
-#include "xl3logo.h"
 #ifdef __linux__
 #include <ifaddrs.h>
 #include <netinet/in.h>
@@ -2490,7 +2489,7 @@ struct Control {
         xlSend({0xB6, 0x1E, 0x01});   // vuelve a la vista DAW Mixer (por si se cambió con Mode)
     }
     // recién conectada, por pasos (la XL 3 necesita un momento tras entrar en modo DAW):
-    // 1) modo DAW y encoders relativos; 2) a los 0,4 s, las pantallas y el logo de Fuga de Freón; 3) a los 3 s, el máster
+    // 1) modo DAW y encoders relativos; 2) a los 0,4 s, las pantallas
     void xlSetup() {
         xlRgb_.clear(); xlTxt_.clear(); xlOn_ = true; xlStage_ = 1; xlStageAt_ = std::chrono::steady_clock::now();
         xlSend({0x9F, 0x0C, 0x7F});                                                       // modo DAW (temporal)
@@ -2501,26 +2500,27 @@ struct Control {
         const auto now = std::chrono::steady_clock::now();
         if (xlStage_ == 1 && now - xlStageAt_ >= std::chrono::milliseconds(400)) {
             for (int t = 5; t <= 36; ++t) xlSend({0xF0, 0x00, 0x20, 0x29, 0x02, 0x15, 0x04, t, 0x62});   // canal, parámetro y valor; sale sola al mover
-            xlSend({0xF0, 0x00, 0x20, 0x29, 0x02, 0x15, 0x04, 0x35, 0x02});                  // pantalla fija: 3 líneas (el máster)
+            xlSend({0xF0, 0x00, 0x20, 0x29, 0x02, 0x15, 0x04, 0x35, 0x03});                  // pantalla fija: el máster y 8 canales
             xlSend({0xF0, 0x00, 0x20, 0x29, 0x02, 0x15, 0x04, 0x36, 0x02});                  // aviso de página: 3 líneas
             xlPageShow(0); xlScreen();
-            std::vector<unsigned char> m = {0xF0, 0x00, 0x20, 0x29, 0x02, 0x15, 0x09, 0x20};  // el logo, en la pantalla fija
-            m.insert(m.end(), kXlLogo, kXlLogo + 1216); m.push_back(0xF7); if (xlOut) xlOut(m);
-            xlStage_ = 2; xlStageAt_ = now;
-        } else if (xlStage_ == 2 && now - xlStageAt_ >= std::chrono::seconds(3)) {
-            xlSend({0xF0, 0x00, 0x20, 0x29, 0x02, 0x15, 0x04, 0x35, 0x7F});                  // fuera el logo: el máster
+            xlSend({0xF0, 0x00, 0x20, 0x29, 0x02, 0x15, 0x04, 0x35, 0x7F});
             xlStage_ = 3;
         }
     }
-    // pantalla en reposo: el máster. Tempo (y REC si se graba), nivel en dB y una barra de 14 cuadros
+    // pantalla en reposo: arriba, el máster (barra y dB); debajo, los 8 canales de los faders (letra y barra), en su sitio
+    static std::string xlBar(float pk, int n) {
+        const float db = pk > 1e-5f ? 20.0f * std::log10(pk) : -99.0f; const int k = std::clamp(static_cast<int>(std::lround((db + 48.0f) / 48.0f * static_cast<float>(n))), 0, n);
+        std::string b; for (int i = 0; i < n; ++i) b += static_cast<char>(i < k ? 0x1C : 0x1B); return b;
+    }
     void xlScreen() {
-        char t[32]; const float bpm = au.bpmPub.load();
-        std::snprintf(t, sizeof t, "FREON %.0f BPM", static_cast<double>(bpm > 0 ? bpm : 0));
-        const float pk = xlPk_[NCH + NGRP]; const float db = pk > 1e-5f ? 20.0f * std::log10(pk) : -99.0f;
-        char n[32]; if (db > -60) std::snprintf(n, sizeof n, "Master %.1f dB", static_cast<double>(db)); else std::snprintf(n, sizeof n, "Master");
-        std::string bar; const int k = std::clamp(static_cast<int>(std::lround((db + 48.0f) / 48.0f * 14.0f)), 0, 14);
-        for (int i = 0; i < 14; ++i) bar += static_cast<char>(i < k ? 0x1C : 0x1B);
-        xlText(0x35, 0, t); xlText(0x35, 1, n); xlText(0x35, 2, bar);
+        const float pk = xlPk_[NCH + NGRP], db = pk > 1e-5f ? 20.0f * std::log10(pk) : -99.0f;
+        char t[16]; if (db > -60) std::snprintf(t, sizeof t, " %.0fdB", static_cast<double>(db)); else t[0] = 0;
+        xlText(0x35, 0, "M " + xlBar(pk, 10) + t);
+        for (int s = 0; s < 8; ++s) {
+            const int c = xlFadCh(s); if (c < 0) { xlText(0x35, s + 1, ""); continue; }
+            const std::string nm = xlChName(c); const char l = nm == "Sub" ? 'U' : nm[0] == 'T' || nm[0] == 'I' ? nm.back() : nm[0];   // T1→1, In 2→2, Kick→K, Sub→U
+            xlText(0x35, s + 1, std::string(1, l) + xlBar(xlPk_[c], 4));
+        }
     }
     std::string nevPhase() const { const size_t a = nevSt_.find("\"phase\":\""); if (a == std::string::npos) return ""; const size_t b = nevSt_.find('"', a + 9); return b == std::string::npos ? "" : nevSt_.substr(a + 9, b - a - 9); }
     void nevSend(const std::string& c) { for (int cl : visCl_) srv.send(cl, "nev " + c); }
@@ -2635,7 +2635,8 @@ struct Control {
         }
     }
     void onCtl(const CtlMidi& m) {
-        if (m.port >= 0 && m.port < 1000 && portHas(m.port, "lcxl3")) { xl3(m); return; }   // la XL 3 va aparte: su canal 16 no es el del mezclador
+        // la XL 3 va aparte (su canal 16 no es el del mezclador), y solo por su puerto DAW: lo que mande en su modo de fábrica no toca nada
+        if (m.port >= 0 && m.port < 1000 && portHas(m.port, "lcxl3")) { if (portHas(m.port, "daw")) xl3(m); return; }
         if (m.port >= 0 && m.port < 1000 && portHas(m.port, "lpd8") && lpd8(m)) return;
         const int ty = m.s & 0xF0; int ch = m.s & 0x0F;
         if (ty == 0xC0) { onProgram(ch, m.d1); return; }
