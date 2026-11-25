@@ -24,6 +24,6 @@ fi
 "$DIR/nevera-resolucion.sh" &
 mkdir -p "$HOME/.config/freon-nevera"
 exec chromium --ozone-platform=wayland --kiosk --no-first-run --noerrdialogs --disable-session-crashed-bubble \
-  --password-store=basic --user-data-dir="$HOME/.config/freon-nevera" --ignore-gpu-blocklist --disable-features=Translate \
+  --password-store=basic --user-data-dir="$HOME/.config/freon-nevera" --ignore-gpu-blocklist --disable-features=Translate,TranslateUI --disable-translate \
   --mute-audio --alsa-output-device=null --alsa-input-device=null --check-for-update-interval=31536000 \
   "http://localhost:8080/nevera.html?auto&pi"
