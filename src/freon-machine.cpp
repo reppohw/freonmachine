@@ -2384,7 +2384,7 @@ struct Control {
     // medidor del máster: sube al instante, baja a 20 dB/s, marca de pico que se queda 2 s y aviso de CLIP (3 s)
     int xlLastT_ = -1; std::chrono::steady_clock::time_point xlTouchAt_{};   // el último control tocado (su pantalla se quita al soltarlo)
     void xlTouch(int t) { xlLastT_ = t; xlTouchAt_ = std::chrono::steady_clock::now(); }
-    float xlMdb_ = -99, xlHold_ = -99; std::chrono::steady_clock::time_point xlHoldAt_{}, xlClipAt_{}, xlPkAt_{};
+    float xlMdb_ = -99, xlHold_ = -99, xlGr_ = 0; std::chrono::steady_clock::time_point xlHoldAt_{}, xlClipAt_{}, xlPkAt_{};
     void xlPeaks(const float* pk) {
         for (int i = 0; i < NCH + NGRP + 2; ++i) xlPk_[i] = std::max(pk[i], xlPk_[i] * 0.75f);
         const auto now = std::chrono::steady_clock::now();
@@ -2395,6 +2395,7 @@ struct Control {
         if (db >= xlHold_ || now - xlHoldAt_ > std::chrono::seconds(2)) { xlHold_ = db; xlHoldAt_ = now; }
         if (db > -0.3f) xlClipAt_ = now;
     }
+    int xlPos_[24] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};   // posición mandada a cada knob
     int xlAbs_[24] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}; bool xlRelRetry_ = false;
     float xlFx_[8] = {-1, -1, -1, -1, -1, -1, -1, -1}, xlFs_[8] = {-1, -1, -1, -1, -1, -1, -1, -1};   // faders: última posición y último valor puesto
     std::map<int, std::array<int, 3>> xlRgb_; std::map<int, std::array<std::string, 9>> xlTxt_;     // lo ya mandado (no se repite)
@@ -2510,6 +2511,7 @@ struct Control {
     void xlSetup() {
         xlRgb_.clear(); xlTxt_.clear(); xlOn_ = true; xlStage_ = 1; xlStageAt_ = std::chrono::steady_clock::now(); xlRelRetry_ = false;
         for (int& a : xlAbs_) a = -1;
+        for (int& a : xlPos_) a = -1;
         xlSend({0x9F, 0x0C, 0x7F});                                                       // modo DAW (temporal)
         for (int row : {0x45, 0x48, 0x49}) xlSend({0xB6, row, 0x7F});                    // las 3 filas de encoders, relativas
         std::printf("Launch Control XL 3: modo DAW\n"); std::fflush(stdout);
@@ -2527,7 +2529,7 @@ struct Control {
         }
     }
     // pantalla en reposo: el medidor del máster.
-    //   MASTER        LIM 3.2   (o CLIP!)
+    //   MASTER   LIM 3.2      (lo que recorta el limitador, siempre a la vista)
     //   -6.2 dB  peak -3.1
     //   ■■■■■■■■■■■■□□|□□□   18 cuadros, casi todos arriba: −30, −24, −18, −14, −11, −9, −7 y, desde −6, de medio en medio dB hasta 0;
     //                        «|» = el pico de los últimos 2 s
@@ -2543,10 +2545,9 @@ struct Control {
             xlSend({0xF0, 0x00, 0x20, 0x29, 0x02, 0x15, 0x04, xlLastT_, 0x62}); xlLastT_ = -1;   // y sigue saliendo sola al moverlo
             xlSend({0xF0, 0x00, 0x20, 0x29, 0x02, 0x15, 0x04, 0x35, 0x7F});
         }
-        const float gr = std::fabs(au.grDb.load());
-        std::string t = "MASTER";
-        if (now - xlClipAt_ < std::chrono::seconds(3)) t += "     CLIP!";
-        else if (gr >= 0.5f) { char g[24]; std::snprintf(g, sizeof g, "   LIM %.1f", static_cast<double>(gr)); t += g; }
+        // limitador: siempre en el mismo sitio (no cambia el título); lo que más ha recortado, bajando despacio, para que no baile
+        xlGr_ = std::max(std::fabs(au.grDb.load()), xlGr_ - 0.4f);
+        char t[32]; std::snprintf(t, sizeof t, "MASTER   LIM %.1f", static_cast<double>(xlGr_));
         char n[40];
         if (xlMdb_ <= -60) std::snprintf(n, sizeof n, "-inf");
         else std::snprintf(n, sizeof n, "%.1f dB  peak %.1f", static_cast<double>(xlMdb_), static_cast<double>(xlHold_ > -60 ? xlHold_ : xlMdb_));
@@ -2642,8 +2643,11 @@ struct Control {
         using RGB = std::array<int, 3>; std::map<int, RGB> want;
         auto heat = [](float x, float bright) { x = std::clamp(x, 0.0f, 1.0f); return RGB{static_cast<int>(127 * bright * std::min(1.0f, 2 * x)), static_cast<int>(127 * bright * std::min(1.0f, 2 * (1 - x))), 0}; };
         for (int r = 0; r < 3; ++r) for (int s = 0; s < 8; ++s) {
-            const XlP p = xlEnc(r, s);
-            want[13 + r * 8 + s] = !p.key.empty() && st.count(p.key) ? heat(xlNorm(p, st[p.key]), 1.0f) : RGB{0, 0, 0};
+            const XlP p = xlEnc(r, s); const int i = r * 8 + s; const bool ok = !p.key.empty() && st.count(p.key);
+            want[13 + i] = ok ? heat(xlNorm(p, st[p.key]), 1.0f) : RGB{0, 0, 0};
+            // la posición de cada knob, a la XL 3: así un knob nunca se queda «en el tope» de la controladora ni hay que recogerlo
+            const int pos = ok ? std::clamp(static_cast<int>(std::lround(xlNorm(p, st[p.key]) * 127.0f)), 0, 127) : 0;
+            if (xlPos_[i] != pos) { xlPos_[i] = pos; xlAbs_[i] = pos; xlSend({0xBF, 13 + i, pos}); }
         }
         auto on = [&](const std::string& k) { return st.count(k) && st[k] >= 0.5f; };
         want[37] = on("c10.mute") ? RGB{30, 0, 0} : RGB{0, 127, 0};
