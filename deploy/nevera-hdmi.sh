@@ -9,6 +9,11 @@
 # - El navegador no toca el audio: así nunca puede quitarle la Scarlett a la Freon.
 # - Prioridad baja: si falta CPU, cede la imagen, nunca el sonido (el audio de la Freon va en tiempo real).
 DIR="$(cd "$(dirname "$0")" && pwd)"
+# sin cursor del ratón en la pantalla: un tema de cursor invisible (un punto transparente para todas las flechas)
+T="$HOME/.icons/freon-vacio/cursors"; mkdir -p "$T"; cp -f "$DIR/cursor-vacio" "$T/default"
+for n in left_ptr arrow top_left_arrow pointer hand1 hand2 text xterm watch wait progress crosshair grab grabbing; do ln -sf default "$T/$n"; done
+printf '[Icon Theme]\nName=freon-vacio\n' > "$HOME/.icons/freon-vacio/index.theme"
+export XCURSOR_THEME=freon-vacio XCURSOR_PATH="$HOME/.icons:/usr/share/icons" XCURSOR_SIZE=24
 hdmi() { cat /sys/class/drm/card*-HDMI-A-*/status 2>/dev/null | grep -qx connected; }
 if [ "${1:-}" != "dentro" ]; then
   until hdmi; do sleep 2; done

@@ -984,13 +984,14 @@ function midiMon(rest) {
   const tab = rest.indexOf("\t"), head = (tab < 0 ? rest : rest.slice(0, tab)).split(" "), ports = tab < 0 ? "" : rest.slice(tab + 1);
   const c = Number(head[0]), st = Number(head[1]), d1 = Number(head[2]), d2 = Number(head[3]), port = head.slice(4).join(" ");
   MIDI.ports = ports; const t = $("#topMidi");
+  { const no = !/oxi/i.test(ports); if (no !== ALERT.noOxi) { ALERT.noOxi = no; drawAlerts(); } }
   if (c > MIDI.count && c > 0) {
     const ch = (st & 15) + 1, ty = st & 0xF0;
     const what = ty === 0x90 && d2 > 0 ? `note ${noteName(d1)} (${d1}) vel ${d2}` : ty === 0x80 || ty === 0x90 ? `note off ${noteName(d1)}` : ty === 0xB0 ? `CC ${d1} = ${d2}` : `0x${st.toString(16)}`;
     t.textContent = `MIDI ← ${port} · ch ${ch} · ${what}`; t.className = ""; clearTimeout(midiMon.t); midiMon.t = setTimeout(() => (t.className = "dim"), 1500);
   } else if (!c) t.textContent = ports ? `MIDI: ${ports} · nothing received yet` : "MIDI: no inputs";
   MIDI.count = c;
-  const s = $("#midiPorts"); if (s) s.textContent = ports || "none — connect the Oxi and restart the program";
+  const s = $("#midiPorts"); if (s) s.textContent = ports || "none — plug in the Oxi (Freon picks it up by itself)";
 }
 
 // --- Settings
@@ -1044,7 +1045,7 @@ function drawNev() {
 // --- System: everything that affects how Freon runs, without a terminal
 let SYS = null, sysTimer = null, sysTick = 0;
 // barra de avisos: siempre visible arriba. Solo aparece lo que pasa: tensión baja, cortes, CPU alta, máster que entra fuerte, interfaz de reserva
-const ALERT = { low: false, drop: 0, dropSeen: 0, cpu: 0, hotUntil: 0, note: "-" };
+const ALERT = { low: false, drop: 0, dropSeen: 0, cpu: 0, hotUntil: 0, note: "-", noOxi: false };
 function drawAlerts() {
   const box = $("#topAlerts"); if (!box) return; box.textContent = "";
   const add = (t, tip) => box.append(el("span", { class: "alert", title: tip }, t));
@@ -1054,6 +1055,8 @@ function drawAlerts() {
   if (Date.now() < ALERT.hotUntil) add("MASTER HOT", "The limiter is cutting more than 6 dB: bring the faders down");
   if (ALERT.note === "default" || ALERT.note === "auto") add("BACKUP OUTPUT", "The chosen interface is not connected: Freon is using another output");
   if (ALERT.note === "none") add("NO AUDIO", "No audio interface");
+  // sin Oxi: aviso discreto (en gris), no en rojo
+  if (ALERT.noOxi) box.append(el("span", { class: "dim", title: "The Oxi is not connected. If it is plugged in, unplug and replug its USB cable, or switch its USB mode (device ↔ device powered itself). Freon picks it up by itself." }, "no oxi"));
 }
 function alertClick() { ALERT.dropSeen = ALERT.drop; drawAlerts(); }
 document.addEventListener("click", (e) => { if (e.target.closest && e.target.closest("#topAlerts")) alertClick(); });

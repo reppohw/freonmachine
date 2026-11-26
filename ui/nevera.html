@@ -3124,6 +3124,7 @@ function flMsg(m) {
   }
   else if (op === 'brkhold' && rest.endsWith(' 1') && showStart && !finale) asciiGlitch(0.25);
   else if (op === 'nev' && REMOTE) nevCmd(rest);
+  else if (op === 'midimon') { const tab = rest.indexOf('\t'); FL.oxi = /oxi/i.test(tab < 0 ? '' : rest.slice(tab + 1)); FL.oxiAt ??= performance.now(); }
 }
 // --- la nevera de la Pi: órdenes de la web de la Freon y su estado ---
 function nevStatus() {
@@ -4068,7 +4069,10 @@ function showWait(begin) {
   const pre = el.querySelector('pre'), spin = '|/-\\';
   let log = [], cur = null, n = 0, k = 0;
   const head = () => ['Last login: ' + new Date().toLocaleString(lang === 'es' ? 'es-ES' : 'en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) + ' on ttys000', W.cmd];
-  const draw = () => { pre.textContent = [...head(), ...log, cur ? cur.slice(0, k) : ''].join('\n'); const c = document.createElement('span'); c.className = 'cur'; c.textContent = cur ? ' ' : spin[n % 4]; pre.append(c); };
+  // el Oxi, como una línea más del terminal: solo se ve si la nevera está con la Freon
+  const oxi = () => !FL.ok || FL.oxi === undefined ? [] : FL.oxi ? [lang === 'es' ? '[ OK ] oxi one ............. conectado' : '[ OK ] oxi one ............. connected']
+    : performance.now() - (FL.oxiAt || 0) < 8000 ? [] : lang === 'es' ? ['[ !! ] oxi one ............. no detectado', '       reconéctalo o cambia su modo USB'] : ['[ !! ] oxi one ............. not found', '       replug it or switch its USB mode'];
+  const draw = () => { pre.textContent = [...head(), ...oxi(), ...log, cur ? cur.slice(0, k) : ''].join('\n'); const c = document.createElement('span'); c.className = 'cur'; c.textContent = cur ? ' ' : spin[n % 4]; pre.append(c); };
   const tick = () => {
     n++;
     if (cur) { k += 2; if (k >= cur.length) { log.push(cur); cur = null; if (log.length > 12) log = log.slice(-6); } }
