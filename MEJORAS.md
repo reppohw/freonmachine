@@ -184,7 +184,10 @@ Hecho (falta probarlo en la Pi con el proyector):
 - [x] Breaks (25-11-2026): se paran con el Stop del Oxi y esperan al Play; si se desenchufa el aparato del reloj, vuelven a ir solos.
 - [x] v36 (27-11-2026): todas las escenas salen en cada show (programa por actos); nada las interrumpe y, si se cortan, siguen donde iban; golpes a pantalla completa (ojos con tres maneras de mirar, boca, cuchillazo, nombres, termómetro).
 - [x] v37 (27-11-2026): capa sólida (textos grandes, bocadillos, rótulos del mapa, peligro, FUGA DE FREÓN, nombres, termómetro y cuchillo, lisos en el color del show); la nevera sin boca (solo ojos); fuera el golpe de la boca; la nevera de fondo casi desaparece en las escenas; frases sobre los hackeos a neveras de supermercados en Francia y Bruselas (octubre-noviembre de 2026).
-- [ ] Probar la v37 con música en la tele y ajustar cuánto salen las escenas, los golpes, los cortes y los destellos.
+- [x] v38 (27-11-2026): todas las escenas en sólido (sin ASCII); bocadillo de una pieza; logos (estrobo y logo de gas) en sólido; mapa de cerca como un mapa de verdad (A-1, sierra, embalses, Rascafría, flecha a Madrid); fuera la nevera de fondo en el mapa y en el cuchillazo; las letras del terminal ya no caen encima de las escenas; MODO DEMO (Shift+D o botón Demo en Settings › Visuals) que enseña todo, una cosa detrás de otra, con su título.
+- [ ] Ambiente (gas, fugas, nevera de fondo) sigue en ASCII: pasarlo a sólido si se quiere.
+- [ ] Reducir el glitch horizontal.
+- [ ] Probar la v38 con música en la tele y ajustar cuánto salen las escenas, los golpes, los cortes y los destellos.
   - Arreglos: durante una escena ya no se gastan frases ni salen fotos; las frases de la historia no se rompen hasta la venganza; la lluvia de neveras sale desde el acto 3.
 - [x] v28 (24-11-2026), tras la revisión con Jorge:
   - La reso ya no hace vibrar la pantalla por estar alta (la 303 y el Moog suelen ir así): vibra al *moverla*. El filtro de T1-T3 cambia el brillo entre 70 % y 125 %, y moverlo da un destello.

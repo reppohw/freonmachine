@@ -1023,12 +1023,14 @@ function buildNev() {
   const fin = confirmKey("Start the finale", "Sure? Strobe and goodbye", () => sendRaw("nev finale"));
   const fresh = confirmKey("New show", "Sure? Back to the waiting screen", () => sendRaw("nev new"));
   const reload = keyBtn("Reload", "", () => sendRaw("nev reload"));
+  const demo = confirmKey("Demo", "Sure? Plays everything, one by one", () => { sendRaw("nev demo"); topMsg("Visuals", "demo: every scene, one after another (press again to stop)"); });
+  demo.title = "Shows everything the fridge can do, one after another, with its name. Ends with the finale: then press New show";
   // final automático: la subida de tempo (por encima de 180 BPM) lo lanza sola; se apaga si salta sin querer (vale al momento)
   const auto = keyBtn("Auto finale", "", () => { const off = NEV && NEV.autoFinale !== false; sendRaw("nev autofin " + (off ? 0 : 1)); if (NEV) NEV.autoFinale = !off; drawNev(); topMsg("Visuals", off ? "automatic finale off: only the button starts it" : "automatic finale on"); });
   auto.title = "When on, a tempo rise above 180 BPM starts the finale by itself";
   nevUI = { stat, start, fin, save, fill, auto, filled: false, inputs: [lang, min, evento, sala, ciudad, people, custom] };
   const sec = el("section", { class: "card" }, el("h2", {}, "Visuals", el("span", {}, "the fridge on the Pi's HDMI; the show starts when you press START SHOW, the finale and the R.I.P. come by themselves")),
-    stat, el("div", { class: "scrow" }, start, fin, auto, fresh, reload),
+    stat, el("div", { class: "scrow" }, start, fin, auto, fresh, reload, demo),
     el("div", { class: "row" }, f("Language", lang), f("Minutes", min), f("Event", evento), f("Venue", sala), f("City", ciudad), f("People in the crowd", people)),
     f("Lines for this show", custom), el("div", { class: "scrow" }, save));
   drawNev(); return sec;

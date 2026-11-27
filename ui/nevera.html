@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="google" content="notranslate">
-<title>FUGA DE FREÓN · LA NEVERA v37 · FREON MACHINE</title>
+<title>FUGA DE FREÓN · LA NEVERA v38 · FREON MACHINE</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
   :root { --fg:#e6e6e6; --bg:#000; --fs:4.1vw; }
@@ -1670,7 +1670,7 @@ function toggleLogo() {
   if (logoMode) { endClimax(true); return; }
   if (climaxOn) endClimax(true);
   closePhoto(); finishTyping(); climaxOn = true; logoMode = true; climaxStart = now; climaxDur = Infinity;
-  document.body.classList.add('climax', 'logoA');                 // el logo en ASCII (los clímax siguen con el logo normal)
+  document.body.classList.add('climax'); $('climaxText').textContent = ''; $('climax').classList.add('showlogo');   // el logo, liso
   ev('LOGO');
 }
 function logoTick(kick) {
@@ -2202,7 +2202,9 @@ const gray = (g, v, a = 1) => {
 };
 // CAPA SÓLIDA: lo que tiene que leerse (textos grandes, rótulos, gráficos a pantalla completa) no pasa a ASCII: se dibuja
 // encima, liso, en el color del show. Las mismas funciones de dibujo, en unidades de celda.
-const SOLID_PIECES = new Set(['peligro', 'letras', 'nombres', 'termometro', 'cuchillo']);
+const SOLID_PIECES = new Set(['peligro', 'letras', 'nombres', 'termometro', 'cuchillo']), SOLID_ALL = true;   // v38: todas las escenas, lisas
+// un gris como texto de color: en la capa sólida, el tono del color del show
+const tone = (g, v) => { if (!g.__solid) { const c = Math.round(v * 255); return `rgb(${c},${c},${c})`; } const [r, gg, b] = AS.solidRGB || [255, 255, 255]; return `rgb(${Math.round(r * v)},${Math.round(gg * v)},${Math.round(b * v)})`; };
 const solid = fn => { (AS.solid || (AS.solid = [])).push(fn); };
 function rrect(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
 
@@ -2210,7 +2212,7 @@ function rrect(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x 
 function drawFridge(g, s, o = {}) {
   const w = s * 0.56, h = s, x = -w / 2, y = -h / 2, split = y + h * 0.34;
   // cuerpo
-  const gr = g.createLinearGradient(x, y, x + w, y + h); gr.addColorStop(0, 'rgb(95,95,95)'); gr.addColorStop(1, 'rgb(40,40,40)');   // cuerpo tenue: manda el contorno
+  const gr = g.createLinearGradient(x, y, x + w, y + h); gr.addColorStop(0, tone(g, 0.37)); gr.addColorStop(1, tone(g, 0.16));   // cuerpo tenue: manda el contorno
   g.fillStyle = gr; rrect(g, x, y, w, h * 0.96, s * 0.04); g.fill();
   if (o.door > 0) {   // interior iluminado
     const ix = x + w * 0.06, iw = w * 0.88, iy = split + h * 0.03, ih = h * 0.56;
@@ -2695,12 +2697,18 @@ function asciiDraw(a, p, stabbed, E) {
     else { gray(gf, 1); gf.beginPath(); gf.moveTo(c.x - 0.9, c.y); gf.lineTo(c.x + 0.9, c.y); gf.lineTo(c.x, c.y + c.len); gf.closePath(); gf.fill(); } }
   if (AS.scene && !(typeof logoMode !== 'undefined' && logoMode)) drawScene(gf, AS.scene);
   if (PC.cur) { const P = PC.cur, nm = P.name;
-    if (SOLID_PIECES.has(nm)) solid(c => PIECE_D[nm](c, P)); else { try { PIECE_D[nm](gf, P); } catch (e) { report(e); } gf.globalAlpha = 1; } }
+    if (SOLID_ALL || SOLID_PIECES.has(nm)) solid(c => PIECE_D[nm](c, P)); else { try { PIECE_D[nm](gf, P); } catch (e) { report(e); } gf.globalAlpha = 1; } }
   if (typeof logoMode !== 'undefined' && logoMode && AS.logoImg && AS.logoImg.complete) {      // tecla L: el logo en ASCII
     const lh = rows * 0.62 * (1 + AS.kickAmp * 0.04), lw = lh * (788 / 550) * K;
     gf.globalAlpha = 1; gf.drawImage(AS.logoImg, (cols - lw) / 2, rows * 0.5 - lh / 2, lw, lh);
   }
-  if (AS.lp.length) { const e = now - AS.logoT; gray(gf, 1); gf.globalAlpha = e > 12 ? Math.max(0, 1 - (e - 12) / 3.5) : 1;
+  if (AS.lp.length) { const e = now - AS.logoT, sa = Math.max(0, Math.min(1, (e - 6.5) / 1.5)) * (e > 12 ? Math.max(0, 1 - (e - 12) / 3.5) : 1);
+    if (sa > 0 && AS.logoImg && AS.logoImg.complete) solid(c => {   // una vez formado, el logo pasa a liso
+      const lh = Math.round(AS.rows * 0.5), lw = Math.round(lh * (788 / 550) * AS.K), ox = (AS.cols - lw) / 2, oy = AS.rows * 0.52 - lh / 2;
+      const key = (AS.solidRGB || []).join(','); if (!AS.logoTint || AS.logoTintKey !== key) { const t = document.createElement('canvas'); t.width = 788; t.height = 550; const q = t.getContext('2d');
+        q.drawImage(AS.logoImg, 0, 0, 788, 550); q.globalCompositeOperation = 'source-in'; q.fillStyle = `rgb(${key || '255,255,255'})`; q.fillRect(0, 0, 788, 550); AS.logoTint = t; AS.logoTintKey = key; }
+      c.globalAlpha = sa; c.drawImage(AS.logoTint, ox, oy, lw, lh); c.globalAlpha = 1; });
+    gray(gf, 1); gf.globalAlpha = (e > 12 ? Math.max(0, 1 - (e - 12) / 3.5) : 1) * (1 - 0.9 * Math.min(1, Math.max(0, (e - 6.5) / 1.5)));
     for (const q of AS.lp) if (q.on) gf.fillRect(q.x - 0.5, q.y - 0.5, 1.15, 1.15); gf.globalAlpha = 1; }
   // --- convertir a caracteres ---
   if (AS.repTiles > 1) {   // Repeat: baldosas con la misma imagen, que saltan de sitio en cada repetición
@@ -3181,6 +3189,7 @@ function nevCmd(rest) {
   else if (c === 'new') { lsDel('fdf-progress'); location.reload(); }              // show nuevo: otra vez la pantalla de espera
   else if (c === 'finale') { if (showStart && !finale) { if (climaxOn) endClimax(true); startFinale(); } }
   else if (c === 'reload') location.reload();
+  else if (c === 'demo') { if (DEMO.on) DEMO.on = false; else demoStart(); }
   else if (c === 'autofin') { lsSet('fdf-autofin', arg === '0' ? '0' : '1'); ev('FINAL AUTOMÁTICO ' + (autoFinale() ? 'SÍ' : 'NO')); }   // vale al momento
   setTimeout(nevStatus, 300);
 }
@@ -3322,7 +3331,8 @@ const PC = { cur: null };
 const barSec = () => 16 * 60 / ((FL.on && FL.run ? FL.bpm : st.bpm) || 120) / 4;
 function startPiece(name) {
   if (PC.cur || !AS.ok || !PIECE_T[name]) return false;
-  finishTyping(); if (LT.cur) lettersBreak(0.8);
+  finishTyping(); LT.cur = null; for (const f of LT.fall) f.el.remove(); LT.fall = [];   // las letras del terminal no caen encima de la escena
+  AS.scene = null; AS.splitStory = false;   // el dibujo del recuerdo no se queda debajo de la escena
   PC.cur = { name, t0: now, until: now + (PIECE_BARS[name] || 8) * barSec(), a: [], b: [], sc: [0, 0] };
   document.body.classList.add('piece'); asciiGlitch(0.25); ev('ESCENA ' + name); progMark(name);
   return true;
@@ -3555,8 +3565,10 @@ Object.assign(PIECE_D, {
     // bocadillo con la frase en letras grandes (se leen de lejos), escribiéndose mientras habla
     const lines = P.lines || []; let left = Math.floor(P.typed || 0);
     const fh = R * 0.07, lh = fh * 1.25, bx = C * 0.5, by = R * 0.1, bw = C * 0.47, bh = lines.length * lh + fh;
-    gray(g, 1); g.lineWidth = 0.6; rrect(g, bx, by, bw, bh, 2); g.stroke();
-    g.beginPath(); g.moveTo(bx + 2, by + bh * 0.75); g.lineTo(x + s * 0.18 * AS.K, R * 0.5); g.lineTo(bx + 2, by + bh * 0.95); g.stroke();
+    const rr = 2, tx = x + s * 0.2 * AS.K, ty = R * 0.48, t0 = Math.min(by + bh - rr, by + bh * 0.55), t1 = Math.min(by + bh - rr, t0 + Math.max(3, bh * 0.25));
+    g.beginPath(); g.moveTo(bx + rr, by); g.lineTo(bx + bw - rr, by); g.arcTo(bx + bw, by, bx + bw, by + rr, rr); g.lineTo(bx + bw, by + bh - rr); g.arcTo(bx + bw, by + bh, bx + bw - rr, by + bh, rr);
+    g.lineTo(bx + rr, by + bh); g.arcTo(bx, by + bh, bx, by + bh - rr, rr); g.lineTo(bx, t1); g.lineTo(tx, ty); g.lineTo(bx, t0); g.lineTo(bx, by + rr); g.arcTo(bx, by, bx + rr, by, rr); g.closePath();
+    gray(g, 0, 0.85); g.fill(); gray(g, 1); g.lineWidth = 0.6; g.stroke();   // fondo oscuro y un solo contorno
     g.save(); g.font = `bold ${fh}px ${FONT}`; g.textBaseline = 'top'; gray(g, 1);
     lines.forEach((l, i) => { const t = l.slice(0, Math.max(0, left)); left -= l.length + 1; if (!t) return;
       g.save(); g.translate(bx + 2, by + fh * 0.5 + i * lh); g.scale(AS.K, 1); const wpx = g.measureText(l).width, k = Math.min(1, (bw - 4) / AS.K / wpx); g.scale(k, 1); g.fillText(t, 0, 0); g.restore(); });
@@ -3593,7 +3605,7 @@ Object.assign(PIECE_D, {
     const R = AS.rows, C = AS.cols, f = P.f || 0, e = f * f * (3 - 2 * f);
     // de un planeta que gira a Europa y, al final, a la sierra norte de Madrid
     const lat0 = 20 + (BUITRAGO[0] - 20) * Math.min(1, e * 1.6), lon0 = -50 + (BUITRAGO[1] + 50) * Math.min(1, e * 1.6);
-    const rad = R * 0.44 * Math.pow(70, Math.max(0, (e - 0.3) / 0.7)) * (1 + 0.015 * (P.zoomK || 0));   // al final: de Madrid a Buitrago en pantalla
+    const rad = R * 0.44 * Math.pow(130, Math.max(0, (e - 0.3) / 0.7)) * (1 + 0.015 * (P.zoomK || 0));   // al final: de Madrid a Buitrago en pantalla
     const cx = C / 2, cy = R / 2;
     if (rad < R * 3) { gray(g, 0.12); g.beginPath(); g.ellipse(cx, cy, rad * AS.K, rad, 0, 0, Math.PI * 2); g.fill(); gray(g, 0.55); g.lineWidth = 0.4; g.stroke(); }
     // meridianos y paralelos
@@ -3608,13 +3620,28 @@ Object.assign(PIECE_D, {
       const near = Math.min(1, Math.max(0, (rad / R - 3) / 10));   // de cerca, la tierra se aclara para que se lean la carretera y el pin
       if (n < 3) continue; g.closePath(); gray(g, (k === 'iberia' ? 0.62 : 0.42) * (1 - 0.65 * near)); g.fill(); gray(g, 1); g.lineWidth = 0.35; g.stroke();
     }
+    // de cerca, como un mapa de verdad: la sierra (discontinua), los embalses y los pueblos de alrededor
+    if (e > 0.5) {
+      const fa = Math.min(1, (e - 0.5) * 4), P2 = (la, lo) => ortho(la, lo, lat0, lon0, rad, cx, cy);
+      const SIERRA = [[40.55, -4.35], [40.7, -4.1], [40.82, -3.95], [40.93, -3.82], [41.02, -3.7], [41.12, -3.6], [41.22, -3.48], [41.3, -3.3]];
+      g.save(); g.setLineDash([1.6, 1.1]); gray(g, 0.75, fa); g.lineWidth = 0.6; g.beginPath(); SIERRA.forEach(([la, lo], i) => { const [x, y] = P2(la, lo); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.stroke(); g.restore();
+      { const [x, y] = P2(40.8, -4.05); bigText(g, 'SIERRA DE GUADARRAMA', x, y + R * 0.04, R * 0.032, C * 0.4); }
+      for (const [la, lo, rx, ry] of [[40.993, -3.69, 0.03, 0.012], [40.955, -3.585, 0.04, 0.015], [40.86, -3.61, 0.03, 0.02]]) {   // Riosequillo, Puentes Viejas, El Atazar
+        const [x, y] = P2(la, lo), kx = rad * 0.01745 * rx * AS.K, ky = rad * 0.01745 * ry; gray(g, 0.3, fa); g.beginPath(); g.ellipse(x, y, Math.max(0.5, kx), Math.max(0.3, ky), -0.3, 0, Math.PI * 2); g.fill();
+      }
+      for (const [n, la, lo, dx] of [['Rascafría', 40.904, -3.88, -1]]) {   // un solo pueblo, a la izquierda: lo demás, limpio
+        const [x, y, v] = P2(la, lo); if (!v || x < 0 || x > C || y < 0 || y > R) continue;
+        gray(g, 0.9, fa); g.beginPath(); g.ellipse(x, y, 0.6 * AS.K, 0.6, 0, 0, Math.PI * 2); g.fill(); bigText(g, n, x + dx * R * 0.12, y, R * 0.032, C * 0.25);
+      }
+    }
     // Madrid, la A-1 y Buitrago
     const [mx, my, mv] = ortho(...MADRID, lat0, lon0, rad, cx, cy), [bx, by, bv] = ortho(...BUITRAGO, lat0, lon0, rad, cx, cy);
     if (e > 0.45) {
       gray(g, 0.95); g.lineWidth = Math.max(0.3, Math.min(1.4, rad / R * 0.004)); g.beginPath();
       A1.forEach(([la, lo], i) => { const [x, y] = ortho(la, lo, lat0, lon0, rad, cx, cy); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.stroke();
-      if (mv) { gray(g, 1); g.beginPath(); g.arc(mx, my, 0.8, 0, Math.PI * 2); g.fill(); bigText(g, 'MADRID', mx + R * 0.12, my, R * 0.045, C * 0.3); }
-      if (e > 0.7) { const [ax, ay] = ortho(40.9, -3.61, lat0, lon0, rad, cx, cy); bigText(g, 'A-1 · SALIDA 76', ax + R * 0.2, ay, R * 0.045, C * 0.4); }
+      if (mv && my < R * 0.82) { gray(g, 1); g.beginPath(); g.arc(mx, my, 0.8, 0, Math.PI * 2); g.fill(); bigText(g, 'MADRID', mx + R * 0.12, my, R * 0.045, C * 0.3); }
+      else if (mv) bigText(g, ES() ? '↓ MADRID · 75 km' : '↓ MADRID · 75 km', mx, R * 0.78, R * 0.04, C * 0.4);   // Madrid se queda abajo, fuera
+      if (e > 0.7) { const [ax, ay] = ortho(40.86, -3.6, lat0, lon0, rad, cx, cy); bigText(g, 'A-1 · SALIDA 76', ax + R * 0.3, ay, R * 0.04, C * 0.4); }
     }
     if (bv && e > 0.25) {
       const pin = 1 + (P.pin || 0) * 0.5, pr = Math.max(1.2, R * 0.03) * pin;
@@ -3820,6 +3847,69 @@ Object.assign(PIECE_D, {
   },
 });
 
+/* ---------- MODO DEMO: todo lo que puede salir, una cosa detrás de otra, con su título y sin música ---------- */
+const DEMO = { on: false, i: -1, t: 0, kickT: 0, kick: false, list: [] };
+function demoList() {
+  const E = ES(), L2 = (es, en) => (E ? es : en);
+  const piece = (n, act, es, en) => ({ t: L2(es, en), act, run: () => startPiece(n), done: () => !PC.cur && !PC.paused });
+  const timed = (secs, act, es, en, run, stop) => ({ t: L2(es, en), act, secs, run, stop });
+  const items = [
+    piece('habla', 0, 'La nevera hablando', 'The talking fridge'),
+    piece('ojos', 0, 'Los ojos', 'The eyes'),
+    piece('mapa', 1, 'Del planeta a Buitrago', 'From the planet to Buitrago'),
+    piece('neveras', 1, 'Lluvia de neveras', 'Raining fridges'),
+    piece('letras', 1, 'FUGA DE FREÓN en grande', 'FUGA DE FREÓN, huge'),
+    piece('peligro', 1, 'Peligro: fuga de gas', 'Danger: gas leak'),
+    piece('ojos', 1, 'Los ojos (preocupada)', 'The eyes (worried)'),
+    timed(9, 1, 'El logo de gas', 'The gas logo', () => asciiLogo(), () => { bodyOff('blast', 'logoAscii'); asciiCalm(); }),
+    piece('apunala', 2, 'Buitrago, 2010: el cuchillazo', 'Buitrago, 2010: the stabbing'),
+    piece('rueda', 2, 'Rueda de reconocimiento', 'Police lineup'),
+    piece('nombres', 2, 'Los nombres', 'The names'),
+    piece('cuchillo', 2, 'El cuchillazo', 'The knife'),
+    piece('duelo', 2, 'Cuchillos contra cubitos', 'Knives vs ice cubes'),
+    piece('grietas', 2, 'La pantalla se agrieta', 'The screen cracks'),
+    piece('ojos', 2, 'Los ojos (enfadada)', 'The eyes (angry)'),
+    piece('persecucion', 3, 'La nevera persigue a la banda', 'The fridge chases the band'),
+    piece('termometro', 3, 'El termómetro', 'The thermometer'),
+    piece('ojos', 3, 'Los ojos del demonio', 'The demon eyes'),
+    piece('habla', 3, 'La nevera demonio hablando', 'The demon fridge talking'),
+    timed(8, 2, 'FU-GA-DE-FRE-ÓN', 'FU-GA-DE-FRE-ÓN', () => startChant('tecla', false), () => { if (climaxOn) endClimax(true); }),
+    timed(10, 3, 'Cantad conmigo', 'Sing along', () => startChant('tecla', true), () => { if (climaxOn) endClimax(true); }),
+    timed(8, 3, 'El logo con estrobo', 'The strobing logo', () => toggleLogo(), () => { if (climaxOn) endClimax(true); }),
+    timed(8, 3, 'Clímax', 'Climax', () => startClimax('tecla'), () => { if (climaxOn) endClimax(true); }),
+    ...PHOTOS.map((p, k) => timed(6, p.act, (E ? 'Prueba nº ' : 'Exhibit ') + (k + 1), (E ? 'Prueba nº ' : 'Exhibit ') + (k + 1), () => { photoShown = new Set(PHOTOS.map((_, j) => j).filter(j => j !== k)); showPhoto(true); }, () => closePhoto())),
+    timed(10, 3, 'El final (subida de tempo)', 'The finale (tempo rise)', () => startFinale(), () => {}),
+    timed(30, 3, 'Negro y R.I.P.', 'Black and R.I.P.', () => endShow(), () => {}),
+  ];
+  return items;
+}
+function demoStart() {
+  if (waiting) waiting();
+  if (finale) return;
+  story.active = false; story.q = []; finishTyping(); if (PC.cur) endPiece(); PC.paused = null; if (climaxOn) endClimax(true); closePhoto();
+  FL.mapPend = false; revealed = 3; DEMO.list = demoList(); DEMO.i = -1; DEMO.on = true; ev('DEMO');
+  demoNext();
+}
+function demoNext() {
+  const cur = DEMO.list[DEMO.i]; if (cur && cur.stop) try { cur.stop(); } catch (e) {}
+  if (PC.cur) endPiece(); PC.paused = null;
+  DEMO.i++; const it = DEMO.list[DEMO.i];
+  if (!it) { DEMO.on = false; return; }
+  knownAct = it.act; stageOffset = 0; nextChatter = now + 9999; lastSpoke = now;
+  DEMO.t = now; try { it.run(); } catch (e) { report(e); }
+}
+// cada fotograma: un «bombo» falso cada medio segundo (para que todo se mueva sin música), el título y el paso al siguiente
+function demoTick() {
+  if (!DEMO.on) return;
+  if (now - DEMO.kickT > 0.5) { DEMO.kickT = now; DEMO.kick = true; st.lastKickT = now; }
+  story.active = false; nextChatter = now + 9999;
+  const it = DEMO.list[DEMO.i]; if (!it) { DEMO.on = false; return; }
+  const el = now - DEMO.t;
+  if (finale !== 2 && AS.ok) solid(c => bigText(c, `DEMO ${DEMO.i + 1}/${DEMO.list.length} · ${it.t}`, AS.cols / 2, AS.rows * 0.965, AS.rows * 0.03, AS.cols * 0.9));
+  const over = it.done ? el > 1 && it.done() : el > it.secs;
+  if (over && finale !== 2) demoNext();
+}
+
 // INTENSIDAD del show: todas las reacciones nuevas pasan por aquí. Empieza muy comedida (0,1), crece despacio
 // y se dispara en el último cuarto; en los últimos minutos (DESCONTROL) todo va a tope y se mezcla.
 const kickLast = () => now - st.lastKickT < 0.03;
@@ -3983,7 +4073,7 @@ function flTick(dt) {
   if (showStart && !waiting) {
     const el = (now - showStart) / 60 / CFG.showMinutes;
     if (!finale && autoFinale() && el >= 0.6 && FL.run && (FL.bpm || 0) > 180 && flRamp()) { if (climaxOn) endClimax(true); startFinale(); ev('FINAL AUTO · SUBIDA ' + FL.bpm + ' bpm'); }
-    else if (finale === 1 && FL.stopFor > 0.3) endShow();
+    else if (finale === 1 && FL.stopFor > 0.3 && !DEMO.on) endShow();
   }
 }
 // ¿se está disparando el tempo? Sube al menos 8 bpm en 10 s y ya va un 30 % por encima del tempo habitual del show
@@ -4016,6 +4106,7 @@ function frame(ts) {
     try { r = analyse(Math.min(0.1, anaDt)); lastSilent = r.silent; } catch (e) { report(e); }
     anaDt = 0;
   }
+  try { demoTick(); if (DEMO.on && DEMO.kick) { r.kick = true; DEMO.kick = false; } } catch (e) { report(e); }
   try { flTick(dt); } catch (e) { report(e); }
   if (finale === 2) { try { asciiEndTick(dt); } catch (e) {} return; }
   try { brain(dt, r); } catch (e) { report(e); }    // pase lo que pase, el destello se apaga y el texto sigue
@@ -4112,6 +4203,7 @@ addEventListener('keydown', e => {
   }
   else if (k === ']' || k === '[') { stageOffset = Math.max(-3, Math.min(3, stageOffset + (k === ']' ? 1 : -1))); applyLook(); toast((ES() ? 'ETAPA ' : 'STAGE ') + stage() + ' / 3'); }
   else if (k === 'v' && !finale) { if (PC.cur) endPiece(); else { const a = act(), n = ['neveras', 'letras', 'duelo', 'persecucion', 'habla', 'mapa', 'rueda', 'apunala', 'peligro', 'ojos', 'grietas', 'cuchillo', 'nombres', 'termometro'].filter(x => !['persecucion', 'rueda', 'apunala'].includes(x) || a >= 2); if (climaxOn) endClimax(true); startPiece(n[Math.random() * n.length | 0]); } }   // V: escena visual
+  else if (A === 'data' && e.shiftKey) { if (DEMO.on) { DEMO.on = false; } else demoStart(); }   // Mayús+D: modo demo (otra vez: se para)
   else if (A === 'data') { const d = $('debug'); d.style.display = d.style.display === 'block' ? 'none' : 'block'; }
   else if (A === 'help') { $('help').classList.toggle('hide'); }
   else if (A === 'logo') { if (!finale) toggleLogo(); }
