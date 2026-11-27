@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="google" content="notranslate">
-<title>FUGA DE FREÓN · LA NEVERA v35 · FREON MACHINE</title>
+<title>FUGA DE FREÓN · LA NEVERA v36 · FREON MACHINE</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
   :root { --fg:#e6e6e6; --bg:#000; --fs:4.1vw; }
@@ -2103,7 +2103,7 @@ function detect(b) {
   const context = now - st.lastDrop < 20 || now - st.lastBuild < 25 || st.topFor >= 8 || st.aboveFor >= S.hold * 2;
   if (now - showStart >= CFG.firstClimaxMin * 60 * TS() && histLen >= Math.min(120, 120 * TS() + 20) && st.aboveFor >= S.hold && context &&
       (kickish || st.aboveFor >= S.hold * 3) &&
-      now - lastClimaxEnd >= STAGES[stage()].cool * TS() && !story.active && !asciiBusy()) {   // espera a que acabe el logo de gas (una foto, en cambio, se quita)
+      now - lastClimaxEnd >= STAGES[stage()].cool * TS() && !story.active && !asciiBusy() && !PC.cur && !PC.paused) {   // espera a que acabe el logo de gas (una foto, en cambio, se quita)
     if (stage() >= 2 && now - (cool.chantT ?? -999) > 240 * TS() && Math.random() < 0.4) { cool.chantDone = 1; cool.chantT = now; startChant('auto'); } else startClimax('auto');
   }
 }
@@ -2490,7 +2490,7 @@ function asciiBlast() {
 // ¿hay ahora mismo un momento de gas que no se debe tapar (logo que se forma, explosión)?
 function asciiBusy() { return AS.ok && (AS.lp.length > 0 || now - (AS.blastT ?? -99) < 4.2); }
 // un logo de gas automático solo si no hay historia, clímax, final ni foto (si no, lo taparía o se lo comería)
-const logoFree = () => !story.active && !climaxOn && !finale && !photoOff;
+const logoFree = () => !story.active && !climaxOn && !finale && !photoOff && !PC.cur && !PC.paused;
 // el final manda: fuera tormenta, logo de gas, explosión y recuerdo en pantalla
 function asciiCalm() { AS.stormUntil = 0; AS.lp = []; AS.logoSolo = false; AS.scene = null; AS.splitStory = false; AS.blastT = -99; }
 /* ---------- EL GAS INUNDA LA PANTALLA (tecla G o solo, al final) ---------- */
@@ -2924,7 +2924,7 @@ function brain(dt, { kick, silent }) {
   if (story.active && !climaxOn) { if (!photoOff) storyTick(); return; }   // un clímax manual o una foto interrumpen la historia; luego sigue
   if (climaxOn && logoMode) { logoTick(kick); return; }
   if (finale) { finaleTick(kick); return; }
-  if (act() > revealed && !climaxOn) {                     // toca nuevo capítulo: en cuanto haya un hueco (máx. 8 s de espera)
+  if (act() > revealed && !climaxOn && !PC.cur && !PC.paused) {   // toca nuevo capítulo (tras la escena, si hay una): en cuanto haya un hueco (máx. 8 s de espera)
     revealWait ??= now;
     if ((!typing && now - lastSpoke > 3) || now - revealWait > 8) { revealWait = null; startStory(revealed + 1); return; }   // capítulos en orden, sin saltarse ninguno
   }
@@ -3293,13 +3293,22 @@ function startPiece(name) {
   if (PC.cur || !AS.ok || !PIECE_T[name]) return false;
   finishTyping(); if (LT.cur) lettersBreak(0.8);
   PC.cur = { name, t0: now, until: now + (PIECE_BARS[name] || 8) * barSec(), a: [], b: [], sc: [0, 0] };
-  document.body.classList.add('piece'); asciiGlitch(0.25); ev('ESCENA ' + name);
+  document.body.classList.add('piece'); asciiGlitch(0.25); ev('ESCENA ' + name); progMark(name);
   return true;
 }
-function endPiece() { if (!PC.cur) return; PC.cur = null; document.body.classList.remove('piece'); lastSpoke = now; nextChatter = Math.max(nextChatter, now + 4); }
+function endPiece() { if (!PC.cur) return; PC.cur = null; PROG.lastEnd = now; document.body.classList.remove('piece'); lastSpoke = now; nextChatter = Math.max(nextChatter, now + 4); }
 function pieceTick(dt, kick) {
+  // una escena que se cortó (un clímax a mano, una foto, la historia) sigue donde iba en cuanto hay hueco
+  if (PC.paused && finale) PC.paused = null;
+  if (!PC.cur && PC.paused && !story.active && !climaxOn && !photoOff && !finale) {
+    const q = PC.paused; PC.paused = null; q.P.t0 += now - q.at; q.P.until = now + q.left; PC.cur = q.P;
+    document.body.classList.add('piece'); ev('ESCENA SIGUE ' + q.P.name);
+  }
   const P = PC.cur; if (!P) return;
-  if (now > P.until + 1.6 || story.active || finale || (climaxOn && !logoMode)) { endPiece(); return; }
+  if (now > P.until + 1.6 || finale) { endPiece(); return; }
+  if (story.active || (climaxOn && !logoMode) || photoOff) {   // se pausa, no se pierde
+    PC.paused = { P, left: Math.max(0, P.until - now), at: now }; PC.cur = null; document.body.classList.remove('piece'); ev('ESCENA EN PAUSA ' + P.name); return;
+  }
   const clk = FL.on && FL.run, beat = clk ? !!AS.onBeat : kick, e8 = clk ? !!AS.on8 : kick;
   PIECE_T[P.name](P, dt, beat, e8, kick, now > P.until);
 }
@@ -3665,6 +3674,120 @@ Object.assign(PIECE_D, {
   },
 });
 
+/* ---------- v36: golpes a pantalla completa (2 compases, a corte) y el programa de escenas ---------- */
+Object.assign(PIECE_BARS, { boca: 2, cuchillo: 2, nombres: 2, termometro: 4 });
+// PROGRAMA: lo que sale siempre en cada show, cada cosa en su acto (el mapa sale aparte, tras recordar Buitrago).
+// Si un acto pasa del 65 % y falta algo, sale en el siguiente compás libre; lo de un acto anterior que no salió, también.
+const PROGRAM = [['habla', 0], ['ojos', 0], ['neveras', 1], ['ojos', 1], ['peligro', 1], ['letras', 1], ['habla', 1],
+  ['apunala', 2], ['nombres', 2], ['rueda', 2], ['ojos', 2], ['cuchillo', 2], ['duelo', 2], ['grietas', 2],
+  ['persecucion', 3], ['boca', 3], ['ojos', 3], ['termometro', 3], ['cuchillo', 3], ['neveras', 3]];
+const PROG = { done: new Set(), lastEnd: -99 };
+const progReady = (n) => !['apunala', 'rueda', 'persecucion', 'nombres'].includes(n) || revealed >= (n === 'nombres' ? 1 : 2);
+function progMark(name) { const a = act(); const i = PROGRAM.findIndex(([n, pa], k) => n === name && pa <= a && !PROG.done.has(k)); if (i >= 0) PROG.done.add(i); }
+// en cada compás: ¿toca algo del programa? (con 2 compases de aire entre escenas)
+function progTick(bar) {
+  if (PC.cur || PC.paused || story.active || climaxOn || photoOff || finale || waiting || !showStart || !AS.ok || FL.mapPend) return;
+  if (now - PROG.lastEnd < 2 * barSec()) return;
+  const a = act(), fr = Math.min(1, Math.max(0, progress() * 4 - stage()));
+  const pend = PROGRAM.map(([n, pa], k) => ({ n, pa, k })).filter(p => p.pa <= a && !PROG.done.has(p.k) && progReady(p.n));
+  if (!pend.length) return;
+  const late = pend.some(p => p.pa < a), urgent = late || fr > 0.65;
+  if (urgent || (bar % 4 === 0 && Math.random() < 0.35 + 0.4 * fr)) { const p = pend[0]; PROG.done.add(p.k); startPiece(p.n); ev('PROGRAMA ' + p.n); }
+}
+// GOLPES sueltos (además del programa): ojos, boca, cuchillo, nombres… cada vez más a menudo; los ojos, los que más
+function golpeTick(bar) {
+  if (PC.cur || PC.paused || story.active || climaxOn || photoOff || finale || !showStart || !AS.ok || act() < 1) return;
+  const every = CHAOS() > 0.3 ? 4 : act() >= 3 ? 8 : act() === 2 ? 12 : 16;
+  if (bar % every !== 0 || now - PROG.lastEnd < 2 * barSec() || Math.random() > 0.6) return;
+  const opts = [['ojos', 4], ['boca', act() >= 2 ? 2 : 1], ['cuchillo', revealed >= 2 ? 2 : 0], ['nombres', revealed >= 1 ? 2 : 0], ['termometro', 1]].filter(([k, w]) => w > 0 && k !== FL.lastGolpe);
+  let r = Math.random() * opts.reduce((s, [, w]) => s + w, 0), pick = opts[0][0]; for (const [k, w] of opts) if ((r -= w) <= 0) { pick = k; break; }
+  FL.lastGolpe = pick; startPiece(pick); ev('GOLPE ' + pick);
+}
+
+Object.assign(PIECE_T, {
+  // la boca de la nevera, enorme, gritando: se abre con cada bombo
+  boca(P, dt, beat, e8, kick, end) {
+    if (P.o === undefined) { P.o = 0.2; P.v = 0; }
+    if (kick || beat) P.v = 6;
+    P.v -= dt * 22; P.o = Math.max(0.12, Math.min(1, P.o + P.v * dt));
+    if (kick) AS.kickAmp = Math.max(AS.kickAmp || 0, 1);
+  },
+  // el cuchillazo: un cuchillo gigante cruza la pantalla en cada compás y la deja partida en dos
+  cuchillo(P, dt, beat, e8, kick, end) {
+    if (P.ts === undefined) { P.ts = now; P.n = 0; }
+    if ((AS.onBar || (!FL.run && now - P.ts > 2)) && !end) { P.ts = now; P.n++; }
+    if (now - P.ts < 0.05) { AS.kickAmp = Math.max(AS.kickAmp || 0, 1.2); shatter(AS.cols / 2, AS.rows / 2, 18); }
+  },
+  // los cinco nombres, uno por tiempo y enormes; en negativo uno sí y otro no
+  nombres(P, dt, beat, e8, kick, end) {
+    if (P.i === undefined) P.i = 0;
+    if (beat && !end) P.i++;
+  },
+  // el termómetro de la nevera: sube con la música hasta reventar
+  termometro(P, dt, beat, e8, kick, end) {
+    if (P.v === undefined) { P.v = 0.05; P.bump = 0; }
+    const f = Math.min(1, (now - P.t0) / (P.until - P.t0));
+    P.bump = Math.max(0, P.bump - dt * 3); if (kick) P.bump = 0.06;
+    P.v = Math.min(1, 0.05 + 0.95 * Math.pow(f, 1.4) + P.bump);
+    if (end && !P.boom) { P.boom = true; for (let k = 0; k < 10; k++) shatter(AS.cols / 2, AS.rows * 0.2, 14); burst(AS.cols / 2, AS.rows * 0.2, 120);
+      if (CFG.strobe && now - lastFlash >= 1 / CFG.strobeMaxHz) { lastFlash = now; flashOff = now + 0.08; document.body.classList.add('flash'); } }
+  },
+});
+// los ojos: tres maneras de mirar (a saltos, de lado a lado, girando) y al final se cierran despacio
+{
+  const ojosT = PIECE_T.ojos;
+  PIECE_T.ojos = function (P, dt, beat, e8, kick, end) {
+    if (P.v === undefined) P.v = Math.random() * 3 | 0;
+    ojosT(P, dt, beat, e8, kick, end);
+    if (P.v === 1 && beat) { P.side = -(P.side || 1); P.tx = P.side * 0.8; P.ty = 0; }
+    if (P.v === 2) { const a = now * 3; P.tx = Math.cos(a) * 0.8; P.ty = Math.sin(a) * 0.7; }
+    const left = P.until - now; if (left < barSec() * 0.6) P.bl = Math.max(P.bl || 0, 1 - left / (barSec() * 0.6));
+  };
+}
+Object.assign(PIECE_D, {
+  boca(g, P) {
+    const R = AS.rows, C = AS.cols, mood = MOOD(), o = P.o || 0.2, mh = R * (0.12 + 0.7 * o), mw = C * 0.86, cy = R * 0.52;
+    gray(g, 0.75); rrect(g, C / 2 - mw / 2 - 2, cy - mh / 2 - 2, mw + 4, mh + 4, Math.min(mh / 2, R * 0.2)); g.fill();   // labios
+    gray(g, 0); rrect(g, C / 2 - mw / 2, cy - mh / 2, mw, mh, Math.min(mh / 2, R * 0.18)); g.fill();
+    gray(g, 1); const tn = 7, tw = mw / tn;
+    for (let k = 0; k < tn; k++) {
+      const x = C / 2 - mw / 2 + k * tw;
+      if (mood >= 3) { g.beginPath(); g.moveTo(x + 1, cy - mh / 2); g.lineTo(x + tw / 2, cy - mh / 2 + R * 0.12); g.lineTo(x + tw - 1, cy - mh / 2); g.fill();
+        g.beginPath(); g.moveTo(x + 1, cy + mh / 2); g.lineTo(x + tw / 2, cy + mh / 2 - R * 0.1); g.lineTo(x + tw - 1, cy + mh / 2); g.fill(); }
+      else { g.fillRect(x + 1, cy - mh / 2, tw - 2, R * 0.08); g.fillRect(x + 1, cy + mh / 2 - R * 0.07, tw - 2, R * 0.07); }   // dientes: cubitos
+    }
+    if (o > 0.55) bigText(g, 'PSSSSSSSS', C / 2, cy, R * 0.16 * Math.min(1, (o - 0.4) * 2), mw * 0.85);
+  },
+  cuchillo(g, P) {
+    const R = AS.rows, C = AS.cols, e = (now - (P.ts || now)) / 0.6, split = Math.min(1, Math.max(0, e - 0.7) * 2);
+    // la pantalla partida: dos mitades de «hielo» que se separan tras el corte
+    gray(g, 0.13); const off = split * R * 0.07;
+    g.beginPath(); g.moveTo(0, 0); g.lineTo(C, 0); g.lineTo(C, R * 0.35 - off); g.lineTo(0, R * 0.65 - off); g.closePath(); g.fill();
+    g.beginPath(); g.moveTo(0, R * 0.65 + off); g.lineTo(C, R * 0.35 + off); g.lineTo(C, R); g.lineTo(0, R); g.closePath(); g.fill();
+    // la raja, blanca, por donde ha pasado el cuchillo
+    const xs = Math.min(1.2, e) * C; gray(g, 1); g.lineWidth = 1.2; g.beginPath(); g.moveTo(0, R * 0.65); g.lineTo(Math.min(C, xs), R * 0.65 - (R * 0.3) * Math.min(C, xs) / C); g.stroke();
+    if (e < 1.3) { const x = -C * 0.2 + e * C * 1.2, y = R * 0.65 - R * 0.3 * Math.max(0, x) / C;
+      sprite(g, x, y, q => drawKnife(q, R * 1.1), -0.3); }
+  },
+  nombres(g, P) {
+    const R = AS.rows, C = AS.cols, i = P.i || 0, inv = i % 2 === 1;
+    const list = [...NAMES, act() >= 2 ? (ES() ? 'CULPABLES' : 'GUILTY') : 'FUGA DE FREÓN'];
+    if (inv) { gray(g, 1); g.fillRect(0, 0, C, R); }
+    g.save(); g.font = `bold ${R * 0.42}px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle'; gray(g, inv ? 0 : 1);
+    const t = list[i % list.length]; g.translate(C / 2, R * 0.52); g.scale(AS.K, 1); const w = g.measureText(t).width * AS.K; if (w > C * 0.94) g.scale(C * 0.94 / w, 1);
+    g.fillText(t, 0, 0); g.restore();
+  },
+  termometro(g, P) {
+    const R = AS.rows, C = AS.cols, v = P.v || 0, tw = R * 0.12 * AS.K, x = C / 2, top = R * 0.1, bot = R * 0.78;
+    gray(g, 1); g.lineWidth = 0.8; rrect(g, x - tw / 2, top, tw, bot - top, tw / 2); g.stroke();                       // tubo
+    g.beginPath(); g.ellipse(x, bot + R * 0.08, tw * 0.9, R * 0.1, 0, 0, Math.PI * 2); g.fill();                        // bulbo
+    const lvl = bot - (bot - top) * v; g.fillRect(x - tw * 0.3, lvl, tw * 0.6, bot - lvl + R * 0.05);                   // mercurio
+    for (let k = 0; k <= 8; k++) { const y = bot - (bot - top) * k / 8; g.fillRect(x + tw * 0.7, y, tw * 0.5, 0.5); AS.labels.push({ txt: `${-20 + k * 10}°`, x: x + tw * 1.4, y: y - 0.5, a: 0.8 }); }
+    bigText(g, `${Math.round(-20 + v * 80)}°`, C * 0.22, R * 0.5, R * 0.3, C * 0.38);
+    if (v > 0.8) bigText(g, ES() ? 'PELIGRO' : 'DANGER', C * 0.78, R * 0.5, R * 0.1, C * 0.36);
+  },
+});
+
 // INTENSIDAD del show: todas las reacciones nuevas pasan por aquí. Empieza muy comedida (0,1), crece despacio
 // y se dispara en el último cuarto; en los últimos minutos (DESCONTROL) todo va a tope y se mezcla.
 const kickLast = () => now - st.lastKickT < 0.03;
@@ -3679,7 +3802,7 @@ function flMoment(why, only = null) {
   if (!FL.run || finale || story.active || climaxOn || photoOff || waiting || asciiBusy() || !showStart) return false;
   const a = act(), named = revealed >= 2;
   if (a < 1 || now - (FL.momentT ?? -999) < (110 - 85 * IX() - 10 * CHAOS()) * TS()) return false;
-  if (PC.cur) return false;
+  if (PC.cur || PC.paused) return false;
   const opts = [['fuga', 3], ['cards', 2], ['letras', 2], ['neveras', a >= 2 ? 2 : 0], ['habla', 2], ['peligro', 2], ['ojos', 2], ['grietas', a >= 2 ? 2 : 1]];
   if (named) opts.push(['chant', 2], ['logo', 2], ['gaslogo', AS.ok && !AS.lp.length ? 1 : 0], ['duelo', 2], ['apunala', 2]);
   if (named && a >= 2) opts.push(['rueda', 2]);
@@ -3769,7 +3892,8 @@ function flTick(dt) {
   FL.q4 = q4; FL.e8 = e8; FL.bar = bar;
   AS.beatEnv = FL.run ? Math.exp(-((pn / 4) % 1) * 5) : 0;
   AS.hatAmp = Math.max((AS.hatAmp || 0) * Math.pow(0.002, dt), FL.hitsAcc & 0x60 ? 1 : 0);
-  if (FL.mapPend && !story.active && !PC.cur && !climaxOn && !photoOff && !finale && AS.ok && (AS.onBar || !FL.run)) { FL.mapPend = false; startPiece('mapa'); }
+  if (FL.mapPend && !story.active && !PC.cur && !PC.paused && !climaxOn && !photoOff && !finale && AS.ok && (AS.onBar || !FL.run)) { FL.mapPend = false; startPiece('mapa'); }
+  if (AS.onBar && !finale && AS.ok) { progTick(bar); golpeTick(bar); }
   if (AS.onBar && !finale && AS.ok) {
     if (bar % 16 === 0 && bar > 0) { newLeaks(); asciiGlitch(0.15); }     // cada 16 compases cambia el paisaje
     else if (bar % 4 === 0 && act() >= 2) asciiGlitch(0.05);
@@ -3955,7 +4079,7 @@ addEventListener('keydown', e => {
     toast(`GAIN ${CFG.gainDb > 0 ? '+' : ''}${CFG.gainDb} dB   ·   ${st.loudDb.toFixed(0)} dBFS`);
   }
   else if (k === ']' || k === '[') { stageOffset = Math.max(-3, Math.min(3, stageOffset + (k === ']' ? 1 : -1))); applyLook(); toast((ES() ? 'ETAPA ' : 'STAGE ') + stage() + ' / 3'); }
-  else if (k === 'v' && !finale) { if (PC.cur) endPiece(); else { const a = act(), n = ['neveras', 'letras', 'duelo', 'persecucion', 'habla', 'mapa', 'rueda', 'apunala', 'peligro', 'ojos', 'grietas'].filter(x => !['persecucion', 'rueda', 'apunala'].includes(x) || a >= 2); if (climaxOn) endClimax(true); startPiece(n[Math.random() * n.length | 0]); } }   // V: escena visual
+  else if (k === 'v' && !finale) { if (PC.cur) endPiece(); else { const a = act(), n = ['neveras', 'letras', 'duelo', 'persecucion', 'habla', 'mapa', 'rueda', 'apunala', 'peligro', 'ojos', 'grietas', 'boca', 'cuchillo', 'nombres', 'termometro'].filter(x => !['persecucion', 'rueda', 'apunala'].includes(x) || a >= 2); if (climaxOn) endClimax(true); startPiece(n[Math.random() * n.length | 0]); } }   // V: escena visual
   else if (A === 'data') { const d = $('debug'); d.style.display = d.style.display === 'block' ? 'none' : 'block'; }
   else if (A === 'help') { $('help').classList.toggle('hide'); }
   else if (A === 'logo') { if (!finale) toggleLogo(); }
@@ -4089,7 +4213,7 @@ async function go(deviceId, cont = false, freon = false) {
   readStartForm();
   if (cont && prog) lang = okLang(prog.lang || lang);
   setLang(lang);
-  if (!cont) { newLive(); climaxUsed.clear(); lsDel('fdf-progress'); }
+  if (!cont) { newLive(); climaxUsed.clear(); lsDel('fdf-progress'); PROG.done.clear(); }
   try { if (freon) freonAudio(); else { makeContext(); await initAudio(deviceId); } }
   catch (err) { starting = false; alert('Audio: ' + (err.name || '') + ' ' + (err.message || '')); return; }
   if (deviceId) { lsSet('fdf-dev', deviceId); const o = $('devSel').selectedOptions?.[0]; if (o) lsSet('fdf-dev-label', o.textContent); }

@@ -182,7 +182,8 @@ Hecho (falta probarlo en la Pi con el proyector):
 - [x] v34-v35 (25/26-11-2026): cara de buena a demonio; escenas nuevas (la nevera hablando, mapa hasta Buitrago siempre en el acto 1, rueda de reconocimiento, el cuchillazo, cinta de peligro, ojos gigantes, grietas); 4 pruebas nuevas (salida 76, el manual, el ensayo en Buitrago, El club de la lucha); logo sólido en la despedida; cortes y destellos; cada efecto del máster con su imagen; final automático solo por encima de 180 BPM y botón para apagarlo.
 - [x] Efectos de envío (25-11-2026): con el envío al 100 % el efecto sale tan fuerte como lo que entra (medido; antes, de 0,5 a 9 dB por debajo).
 - [x] Breaks (25-11-2026): se paran con el Stop del Oxi y esperan al Play; si se desenchufa el aparato del reloj, vuelven a ir solos.
-- [ ] Probar la v35 con música en la tele y ajustar cuánto salen las escenas, los cortes y los destellos.
+- [x] v36 (27-11-2026): todas las escenas salen en cada show (programa por actos); nada las interrumpe y, si se cortan, siguen donde iban; golpes a pantalla completa (ojos con tres maneras de mirar, boca, cuchillazo, nombres, termómetro).
+- [ ] Probar la v36 con música en la tele y ajustar cuánto salen las escenas, los golpes, los cortes y los destellos.
   - Arreglos: durante una escena ya no se gastan frases ni salen fotos; las frases de la historia no se rompen hasta la venganza; la lluvia de neveras sale desde el acto 3.
 - [x] v28 (24-11-2026), tras la revisión con Jorge:
   - La reso ya no hace vibrar la pantalla por estar alta (la 303 y el Moog suelen ir así): vibra al *moverla*. El filtro de T1-T3 cambia el brillo entre 70 % y 125 %, y moverlo da un destello.
