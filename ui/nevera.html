@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="google" content="notranslate">
-<title>FUGA DE FREÓN · LA NEVERA v39 · FREON MACHINE</title>
+<title>FUGA DE FREÓN · LA NEVERA v40 · FREON MACHINE</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
   :root { --fg:#e6e6e6; --bg:#000; --fs:4.1vw; }
@@ -2163,12 +2163,52 @@ const POW16 = Float32Array.from({ length: 256 }, (_, i) => Math.pow(i / 255, 1.6
 const POW14 = Float32Array.from({ length: 1024 }, (_, i) => Math.pow(i / 1023, 1.4));
 const FONT = 'Menlo, "SF Mono", Consolas, "DejaVu Sans Mono", "Liberation Mono", monospace';
 
+/* ---------- v40: ESTILO MAPA. Todo lo que se dibuja pasa a polígono, como el borde de la Comunidad de Madrid:
+   las curvas (arcos, elipses, curvas) se hacen con tramos rectos y cada recta larga se parte en tramos con un pequeño
+   quiebro irregular. El quiebro sale de la posición (no del azar), así que una forma quieta no tiembla.
+   Las esquinas redondeadas pasan a chaflanes y los trazos acaban en esquina, no en redondo. ?suave lo apaga. ---------- */
+const POLY_ON = !/[?&]suave\b/.test(location.search);
+function polyCtx(g) {
+  if (!POLY_ON || !g || g.__poly) return; g.__poly = true;
+  const P = CanvasRenderingContext2D.prototype, SEG = 1.1, J = 0.11;   // unidades de celda: tramos de ~1,1 celdas, quiebro de ±0,11
+  let cx0 = 0, cy0 = 0, sx = 0, sy = 0, has = false;
+  const hsh = (x, y) => { const n = Math.sin(Math.round(x * 3) * 12.9898 + Math.round(y * 3) * 78.233) * 43758.5453; return n - Math.floor(n) - 0.5; };
+  const jag = (x2, y2) => {
+    if (!has) { P.moveTo.call(g, x2, y2); cx0 = sx = x2; cy0 = sy = y2; has = true; return; }
+    const dx = x2 - cx0, dy = y2 - cy0, L = Math.hypot(dx, dy), n = L > 80 || g.__polyOff ? 0 : Math.min(24, Math.floor(L / SEG));   // las muy largas (casi siempre fuera de pantalla), rectas: no gastan
+    if (n >= 2) { const nx = -dy / L, ny = dx / L; for (let i = 1; i < n; i++) { const t = i / n, px = cx0 + dx * t, py = cy0 + dy * t, j = hsh(px, py) * 2 * J; P.lineTo.call(g, px + nx * j, py + ny * j); } }
+    P.lineTo.call(g, x2, y2); cx0 = x2; cy0 = y2;
+  };
+  const arcPts = (x, y, rx, ry, rot, a0, a1, ccw) => {
+    let sw = a1 - a0; if (!ccw && sw < 0) sw = sw % (Math.PI * 2) + Math.PI * 2; if (ccw && sw > 0) sw = sw % (Math.PI * 2) - Math.PI * 2; if (Math.abs(sw) > Math.PI * 2) sw = Math.sign(sw) * Math.PI * 2;
+    const r = Math.max(Math.abs(rx), Math.abs(ry)), n = Math.max(5, Math.min(36, Math.round(Math.abs(sw) * Math.sqrt(Math.max(0.01, r)) * 1.0))), c = Math.cos(rot), s2 = Math.sin(rot);
+    for (let k = 0; k <= n; k++) { const a = a0 + sw * k / n, ex = Math.cos(a) * rx, ey = Math.sin(a) * ry; jag(x + ex * c - ey * s2, y + ex * s2 + ey * c); }
+  };
+  g.beginPath = function () { P.beginPath.call(g); has = false; };
+  g.moveTo = function (x, y) { P.moveTo.call(g, x, y); cx0 = sx = x; cy0 = sy = y; has = true; };
+  g.lineTo = function (x, y) { jag(x, y); };
+  g.closePath = function () { if (has && (cx0 !== sx || cy0 !== sy)) jag(sx, sy); P.closePath.call(g); cx0 = sx; cy0 = sy; };
+  g.arc = function (x, y, r, a0, a1, ccw) { arcPts(x, y, r, r, 0, a0, a1, !!ccw); };
+  g.ellipse = function (x, y, rx, ry, rot, a0, a1, ccw) { arcPts(x, y, rx, ry, rot, a0, a1, !!ccw); };
+  g.quadraticCurveTo = function (qx, qy, x, y) { const x0 = cx0, y0 = cy0, n = 6; for (let k = 1; k <= n; k++) { const t = k / n, u = 1 - t; jag(u * u * x0 + 2 * u * t * qx + t * t * x, u * u * y0 + 2 * u * t * qy + t * t * y); } };
+  g.bezierCurveTo = function (ax, ay, bx, by, x, y) { const x0 = cx0, y0 = cy0, n = 8; for (let k = 1; k <= n; k++) { const t = k / n, u = 1 - t; jag(u * u * u * x0 + 3 * u * u * t * ax + 3 * u * t * t * bx + t * t * t * x, u * u * u * y0 + 3 * u * u * t * ay + 3 * u * t * t * by + t * t * t * y); } };
+  g.arcTo = function (x1, y1, x2, y2, r) {   // esquina en chaflán
+    const ax = x1 - cx0, ay = y1 - cy0, la = Math.hypot(ax, ay) || 1, bx = x2 - x1, by = y2 - y1, lb = Math.hypot(bx, by) || 1, k = Math.min(r * 0.7, la * 0.5, lb * 0.5);
+    jag(x1 - ax / la * k, y1 - ay / la * k); jag(x1 + bx / lb * k, y1 + by / lb * k); };
+  g.rect = function (x, y, w, h) { g.moveTo(x, y); jag(x + w, y); jag(x + w, y + h); jag(x, y + h); g.closePath(); };
+  // trazos con esquinas y finales rectos, como un mapa
+  const dc = Object.getOwnPropertyDescriptor(P, 'lineCap'), dj = Object.getOwnPropertyDescriptor(P, 'lineJoin');
+  Object.defineProperty(g, 'lineCap', { get() { return dc.get.call(g); }, set() { dc.set.call(g, 'butt'); }, configurable: true });
+  Object.defineProperty(g, 'lineJoin', { get() { return dj.get.call(g); }, set() { dj.set.call(g, 'miter'); }, configurable: true });
+}
+
 function asciiInit() {
   AS.cv = document.getElementById('ascii'); if (!AS.cv) return;
   AS.cx = AS.cv.getContext('2d');
   AS.bg = document.createElement('canvas'); AS.fg = document.createElement('canvas');
   AS.gb = AS.bg.getContext('2d'); AS.gf = AS.fg.getContext('2d');   // v39: sin ASCII: el fondo se pinta a resolución de pantalla
   AS.ok = !!(AS.cx && AS.gb && AS.gf); if (!AS.ok) return;
+  polyCtx(AS.cx); polyCtx(AS.gb); polyCtx(AS.gf);   // v40: estilo mapa
   asciiResize(); addEventListener('resize', asciiResize);
   newLeaks();
   AS.logoImg = new Image(); AS.logoImg.src = LOGO_SRC; AS.nextLogo = now + 300;
@@ -3611,7 +3651,8 @@ Object.assign(PIECE_D, {
     });
     bigText(g, ES() ? 'BUITRAGO · SEPTIEMBRE 2010' : 'BUITRAGO · SEPTEMBER 2010', C / 2, R * 0.1, R * 0.06, C * 0.9);
   },
-  mapa(g, P) {
+  mapa(g, P) { g.__polyOff = true; try { PIECE_D.mapa0(g, P); } finally { g.__polyOff = false; } },   // el mapa ya es de tramos rectos: sin quiebro extra (y gasta la mitad)
+  mapa0(g, P) {
     const R = AS.rows, C = AS.cols, f = P.f || 0, e = f * f * (3 - 2 * f);
     // de un planeta que gira a Europa y, al final, a la sierra norte de Madrid
     const lat0 = 20 + (BUITRAGO[0] - 20) * Math.min(1, e * 1.6), lon0 = -50 + (BUITRAGO[1] + 50) * Math.min(1, e * 1.6);
