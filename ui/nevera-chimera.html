@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FUGA DE FREÓN · ESPÉCIMEN (prototipo Chimera)</title>
+<style>
+  html, body { margin:0; height:100%; background:#000; overflow:hidden; cursor:none; }
+  canvas { display:block; width:100vw; height:100vh; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+/* =====================================================================
+   PROTOTIPO «CHIMERA»: la nevera como espécimen científico.
+   Contornos de neón finos y dobles sobre negro, piezas rotuladas con líneas finas,
+   pocos colores con significado y lecturas grandes abajo.
+   Cada color es un canal: verde = bombo (flujo), naranja = caja (presión),
+   rosa = sintes (compresor), blanco = máster (fuga).
+   Escucha a la Freon por WebSocket (como la nevera); sin Freon, simula un bombo a 124 BPM.
+   Teclas: ← → cambian de lámina, espacio para o sigue el paso automático (cada 16 compases).
+   ===================================================================== */
+const cv = document.getElementById('c'), g = cv.getContext('2d');
+let W = 0, H = 0, DPR = 1;
+function fit() { DPR = Math.min(2, devicePixelRatio || 1); W = innerWidth; H = innerHeight; cv.width = W * DPR; cv.height = H * DPR; g.setTransform(DPR, 0, 0, DPR, 0, 0); }
+addEventListener('resize', fit); fit();
+
+const COL = { line: '#B5D4F4', glow: '#378ADD', dim: '#7F93A3', text: '#D8E4EC', green: '#9FE1CB', greenG: '#1D9E75', orange: '#EF9F27', orangeG: '#BA7517', pink: '#ED93B1', pinkG: '#D4537E', white: '#F1EFE8' };
+const MONO = 'Menlo, "DejaVu Sans Mono", monospace', SANS = '"Helvetica Neue", Helvetica, Arial, sans-serif';
+
+// bordes reales (OpenStreetMap, simplificados)
+const MADRID_CA = [[40.217,-4.579],[40.207,-4.575],[40.201,-4.528],[40.219,-4.51],[40.237,-4.438],[40.259,-4.436],[40.289,-4.384],[40.318,-4.381],[40.31,-4.357],[40.237,-4.348],[40.225,-4.322],[40.233,-4.308],[40.219,-4.296],[40.234,-4.271],[40.274,-4.245],[40.269,-4.204],[40.297,-4.191],[40.264,-4.144],[40.245,-4.145],[40.242,-4.104],[40.265,-4.072],[40.249,-4.024],[40.237,-4.026],[40.21,-3.992],[40.212,-3.953],[40.189,-3.95],[40.204,-3.931],[40.19,-3.91],[40.191,-3.876],[40.161,-3.835],[40.177,-3.806],[40.14,-3.772],[40.133,-3.745],[40.148,-3.722],[40.133,-3.691],[40.143,-3.667],[40.124,-3.656],[40.11,-3.608],[40.085,-3.609],[40.076,-3.628],[40.056,-3.621],[40.014,-3.685],[40.02,-3.7],[39.977,-3.736],[39.981,-3.746],[39.965,-3.728],[39.972,-3.76],[39.95,-3.755],[39.949,-3.77],[39.966,-3.765],[39.947,-3.788],[39.955,-3.807],[39.947,-3.825],[39.93,-3.831],[39.942,-3.839],[39.929,-3.875],[39.905,-3.869],[39.885,-3.804],[39.941,-3.744],[39.966,-3.635],[39.989,-3.638],[40.001,-3.595],[40.013,-3.59],[40.021,-3.52],[40.049,-3.507],[40.035,-3.394],[40.048,-3.392],[40.052,-3.376],[40.074,-3.378],[40.082,-3.336],[40.054,-3.303],[40.047,-3.275],[40.06,-3.201],[40.083,-3.189],[40.091,-3.166],[40.065,-3.161],[40.071,-3.089],[40.099,-3.053],[40.131,-3.072],[40.142,-3.097],[40.163,-3.089],[40.158,-3.068],[40.186,-3.086],[40.227,-3.08],[40.27,-3.097],[40.285,-3.11],[40.257,-3.16],[40.234,-3.173],[40.243,-3.183],[40.258,-3.196],[40.269,-3.184],[40.312,-3.181],[40.351,-3.141],[40.368,-3.153],[40.376,-3.139],[40.387,-3.144],[40.405,-3.13],[40.439,-3.156],[40.442,-3.199],[40.514,-3.2],[40.544,-3.25],[40.537,-3.297],[40.552,-3.282],[40.571,-3.283],[40.597,-3.33],[40.612,-3.322],[40.625,-3.338],[40.63,-3.323],[40.654,-3.317],[40.637,-3.343],[40.648,-3.365],[40.679,-3.373],[40.693,-3.393],[40.67,-3.405],[40.69,-3.469],[40.729,-3.434],[40.736,-3.451],[40.761,-3.443],[40.784,-3.466],[40.789,-3.511],[40.825,-3.477],[40.864,-3.473],[40.876,-3.441],[40.892,-3.44],[40.907,-3.461],[40.908,-3.445],[40.988,-3.418],[41.0,-3.395],[41.043,-3.438],[41.083,-3.426],[41.095,-3.489],[41.128,-3.502],[41.15,-3.541],[41.166,-3.544],[41.149,-3.612],[41.087,-3.676],[41.055,-3.738],[41.0,-3.781],[40.975,-3.879],[40.955,-3.907],[40.894,-3.952],[40.889,-3.943],[40.865,-3.947],[40.784,-3.98],[40.789,-4.079],[40.748,-4.097],[40.742,-4.116],[40.696,-4.144],[40.68,-4.172],[40.63,-4.173],[40.623,-4.161],[40.602,-4.244],[40.606,-4.262],[40.629,-4.272],[40.628,-4.29],[40.608,-4.29],[40.603,-4.279],[40.564,-4.289],[40.551,-4.323],[40.535,-4.329],[40.465,-4.316],[40.429,-4.34],[40.41,-4.321],[40.406,-4.422],[40.386,-4.443],[40.35,-4.44],[40.34,-4.461],[40.32,-4.456],[40.315,-4.504],[40.345,-4.526],[40.342,-4.546],[40.293,-4.529],[40.257,-4.569],[40.223,-4.561],[40.217,-4.579]];
+const BUITRAGO_T = [[40.992,-3.669],[40.98,-3.654],[40.979,-3.657],[40.974,-3.657],[40.976,-3.647],[40.96,-3.654],[40.954,-3.644],[40.962,-3.629],[40.971,-3.624],[40.973,-3.608],[40.984,-3.598],[40.982,-3.59],[40.991,-3.581],[40.998,-3.593],[40.998,-3.6],[41.01,-3.61],[41.011,-3.618],[41.021,-3.619],[41.025,-3.624],[41.019,-3.636],[41.003,-3.634],[41.004,-3.648],[41.001,-3.65],[41.008,-3.656],[41.003,-3.661],[40.997,-3.652],[40.995,-3.666],[40.992,-3.669]];
+const BUITRAGO = [40.988, -3.636], MADRID = [40.4168, -3.7038];
+
+/* ---------- el sonido: de la Freon o simulado ---------- */
+const S = { bpm: 124, run: true, kick: 0, snare: 0, hat: 0, synth: 0, master: 0, spec: new Float32Array(64), live: false, lastFrame: 0, beats: 0, bar: 0, lastBeat: 0, kicks: 0, snares: 0 };
+let ws = null;
+function connect() {
+  if (!/^https?:$/.test(location.protocol)) return;
+  try { ws = new WebSocket(`ws://${location.host}`); } catch (e) { return; }
+  ws.onopen = () => { ws.send('hello'); ws.send('vis 1'); };
+  ws.onclose = () => { ws = null; setTimeout(connect, 2000); };
+  ws.onmessage = e => { const m = String(e.data), sp = m.indexOf(' '), op = m.slice(0, sp), rest = m.slice(sp + 1);
+    if (op === 'vis') onVis(rest); else if (op === 'lvl') { const l = rest.split(' ').map(Number); S.synth = Math.max(S.synth, l[3] || 0, l[4] || 0, l[5] || 0); } };
+}
+function onVis(rest) {
+  const p = rest.split(' '); if (p.length < 8) return;
+  const hits = +p[0], bpm = +p[3], run = p[4] === '1', db = +p[6], s = atob(p[7]);
+  S.live = true; S.lastFrame = performance.now(); S.run = run; if (bpm >= 40 && bpm <= 300) S.bpm = bpm;
+  if (hits & 3) S.lastHit = T;   // golpe de verdad: deja de simular
+  if (hits & 1) hitKick(); if (hits & 2) hitSnare(); if (hits & 0x60) S.hat = 1;
+  S.master = Math.max(S.master * 0.6, Math.min(1, Math.pow(10, db / 20) * 1.6));
+  const n = Math.min(s.length, 512), step = n / 64;
+  for (let i = 0; i < 64; i++) { let v = 0; for (let k = Math.floor(i * step); k < Math.floor((i + 1) * step); k++) v = Math.max(v, s.charCodeAt(k)); S.spec[i] = Math.max(S.spec[i] * 0.7, v / 255); }
+}
+function hitKick() { S.kick = 1; S.kicks++; rings.push({ t: T, x: 0, y: 0 }); }
+function hitSnare() { S.snare = 1; S.snares++; }
+connect();
+
+/* ---------- tiempo, compases y láminas ---------- */
+let T = 0, last = performance.now(), auto = true, view = 0, viewT = 0, rings = [];
+const VIEWS = ['ESPÉCIMEN', 'AUTOPSIA', 'MAPA', 'SOSPECHOSOS', 'PRESIÓN'];
+function go(v) { view = (v + VIEWS.length) % VIEWS.length; viewT = T; }
+addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight') go(view + 1); else if (e.key === 'ArrowLeft') go(view - 1);
+  else if (e.key === ' ') auto = !auto; else if (/^[1-5]$/.test(e.key)) go(+e.key - 1);
+});
+
+function tick(dt) {
+  T += dt;
+  const sim = !S.live || performance.now() - S.lastFrame > 2000 || T - (S.lastHit ?? -99) > 4;   // sin Freon o sin música: bombo simulado
+  S.sim = sim; if (sim) { S.run = true; S.bpm = 124; }
+  const beatLen = 60 / S.bpm;
+  if (S.run && T - S.lastBeat >= beatLen) {
+    S.lastBeat = T; S.beats++; if (S.beats % 4 === 0) { S.bar++; if (auto && S.bar % 16 === 0) go(view + 1); }
+    if (sim) { hitKick(); if (S.beats % 2 === 1) hitSnare(); S.synth = 0.3 + 0.4 * Math.abs(Math.sin(T * 0.3)); S.master = 0.45 + 0.3 * Math.random();
+      for (let i = 0; i < 64; i++) S.spec[i] = Math.max(0, (1 - i / 64) * (0.5 + 0.5 * Math.random()) * (0.6 + 0.4 * S.master)); }
+  }
+  if (sim && S.run && (T * S.bpm / 30) % 1 < dt * S.bpm / 30) S.hat = 1;
+  const k = Math.pow(0.004, dt);
+  S.kick *= k; S.snare *= Math.pow(0.02, dt); S.hat *= Math.pow(0.001, dt); S.synth *= Math.pow(0.5, dt); S.master *= Math.pow(0.6, dt);
+  for (let i = 0; i < 64; i++) S.spec[i] *= Math.pow(0.15, dt);
+  rings = rings.filter(r => T - r.t < 1.6);
+}
+
+/* ---------- dibujo: neón fino y doble ---------- */
+function neon(path, col = COL.line, glow = COL.glow, w = 1.4, dash = null, off = 0) {
+  g.save(); g.lineCap = 'round'; g.lineJoin = 'round'; if (dash) { g.setLineDash(dash); g.lineDashOffset = off; }
+  g.strokeStyle = glow; g.globalAlpha = 0.28; g.lineWidth = w * 4.5; g.beginPath(); path(); g.stroke();
+  g.globalAlpha = 1; g.strokeStyle = col; g.lineWidth = w; g.beginPath(); path(); g.stroke(); g.restore();
+}
+function txt(t, x, y, { size = 11, col = COL.text, font = MONO, align = 'left', base = 'alphabetic', spacing = 1 } = {}) {
+  g.save(); g.font = `${size}px ${font}`; g.fillStyle = col; g.textAlign = align; g.textBaseline = base;
+  if ('letterSpacing' in g) g.letterSpacing = spacing + 'px'; g.fillText(t, x, y); g.restore();
+}
+function tag(px, py, tx, ty, t, col = COL.text) {   // rótulo con línea fina
+  g.save(); g.strokeStyle = COL.dim; g.lineWidth = 0.7; g.beginPath(); g.moveTo(px, py); g.lineTo(tx, ty); g.stroke();
+  g.fillStyle = col; g.beginPath(); g.arc(px, py, 2, 0, Math.PI * 2); g.fill(); g.restore();
+  txt(t, tx + (tx >= px ? 6 : -6), ty + 4, { size: 11, col, align: tx >= px ? 'left' : 'right' });
+}
+function cross(x, y, r, col, glow) { neon(() => { g.arc(x, y, r, 0, Math.PI * 2); g.moveTo(x - r * 1.5, y); g.lineTo(x + r * 1.5, y); g.moveTo(x, y - r * 1.5); g.lineTo(x, y + r * 1.5); }, col, glow, 1.2); }
+function rr(x, y, w, h, r) { g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
+function button(x, y, w, t, on, col = COL.line) {
+  g.save(); g.strokeStyle = on ? col : COL.dim; g.globalAlpha = on ? 1 : 0.6; g.lineWidth = 1; g.strokeRect(x + 0.5, y + 0.5, w, 22); g.restore();
+  txt((on ? '▪ ' : '') + t, x + w / 2, y + 15, { size: 10, col: on ? col : COL.dim, align: 'center' });
+}
+function readouts(items, y0) {   // las lecturas grandes de abajo
+  const n = items.length, cw = (W - 96) / n;
+  items.forEach((it, i) => { const x = 48 + i * cw;
+    g.fillStyle = it.col; g.beginPath(); g.arc(x + 4, y0, 4, 0, Math.PI * 2); g.fill();
+    txt(it.label, x + 14, y0 + 4, { size: 10, col: it.col });
+    txt(it.value, x, y0 + 46, { size: Math.min(44, H * 0.06), col: it.col, font: SANS, spacing: 0 });
+    if (it.unit) txt(it.unit, x, y0 + 64, { size: 10, col: it.col }); });
+}
+
+/* ---------- el marco común: barra de arriba, marco de la lámina, barra de abajo ---------- */
+function chrome() {
+  txt('FUGA DE FREÓN', 24, 34, { size: 18, col: COL.text, font: SANS, spacing: 6 });
+  let x = W - 24; const items = VIEWS.map((v, i) => ({ v, i, w: v.length * 8 + 26 })).reverse();
+  for (const it of items) { x -= it.w; if (it.i === view) { g.strokeStyle = COL.line; g.lineWidth = 1; g.strokeRect(x + 0.5, 14.5, it.w - 8, 26); }
+    txt(it.v, x + (it.w - 8) / 2, 32, { size: 11, col: it.i === view ? COL.text : COL.dim, align: 'center' }); }
+  g.strokeStyle = '#1F4E79'; g.lineWidth = 1; g.strokeRect(16.5, 52.5, W - 33, H - 128);
+  // abajo: estado del show
+  const by = H - 62;
+  g.strokeStyle = COL.orange; g.strokeRect(16.5, by + 0.5, 150, 44); txt('▶  EN DIRECTO', 91, by + 27, { size: 13, col: COL.orange, align: 'center', font: SANS, spacing: 2 });
+  g.strokeStyle = '#1F4E79'; g.strokeRect(180.5, by + 0.5, 210, 44); txt('♪  ' + (!S.sim ? 'FREON MACHINE' : S.live ? 'SIN MÚSICA · SIMULADO' : 'SIN SEÑAL · SIMULADO'), 196, by + 27, { size: 11, col: !S.sim ? COL.text : COL.orange });
+  txt(`${Math.round(S.bpm)} BPM · COMPÁS ${S.bar + 1}${auto ? '' : ' · PAUSA'}`, W - 24, by + 27, { size: 11, col: COL.dim, align: 'right' });
+}
+function header(title, latin, desc, status, statusVal) {
+  txt(title, 40, 92, { size: 26, col: COL.text, font: SANS, spacing: 6 });
+  txt(latin, 40, 112, { size: 10, col: COL.dim, spacing: 1.5 });
+  txt(desc, 40, 132, { size: 11, col: COL.text, spacing: 0 });
+  txt(status, W - 40, 90, { size: 11, col: COL.orange, align: 'right' });
+  txt(statusVal, W - 40, 108, { size: 11, col: COL.orange, align: 'right' });
+}
+
+/* ---------- lámina 1: la nevera en corte ---------- */
+function fridgeGeom(cx, cy, h) { const w = h * 0.56; return { x: cx - w / 2, y: cy - h / 2, w, h, split: cy - h / 2 + h * 0.34 }; }
+function drawFridge(F, o = {}) {
+  const { x, y, w, h, split } = F;
+  neon(() => rr(x, y, w, h * 0.96, h * 0.05));
+  neon(() => rr(x + 7, y + 7, w - 14, h * 0.96 - 14, h * 0.035), COL.line, COL.glow, 0.7);
+  neon(() => { g.moveTo(x + 2, split); g.lineTo(x + w - 2, split); });
+  neon(() => { g.moveTo(x + w * 0.84, y + h * 0.1); g.lineTo(x + w * 0.84, y + h * 0.26); g.moveTo(x + w * 0.84, split + h * 0.06); g.lineTo(x + w * 0.84, split + h * 0.3); }, COL.line, COL.glow, 2);
+  neon(() => { g.moveTo(x + w * 0.1, y + h * 0.96); g.lineTo(x + w * 0.1, y + h); g.moveTo(x + w * 0.9, y + h * 0.96); g.lineTo(x + w * 0.9, y + h); });
+  // ojos: miran y parpadean; con la caja, el ceño
+  const blink = (T % 4.3) < 0.12 ? 1 : 0, look = Math.sin(T * 0.7) * 0.5, ey = y + h * 0.17, er = w * 0.12;
+  for (const ex of [x + w * 0.32, x + w * 0.62]) {
+    const ry = er * 0.75 * (1 - blink);
+    if (ry > 0.5) { neon(() => g.ellipse(ex, ey, er, ry, 0, 0, Math.PI * 2));
+      g.save(); g.beginPath(); g.ellipse(ex, ey, er, ry, 0, 0, Math.PI * 2); g.clip(); g.fillStyle = COL.line; g.beginPath(); g.arc(ex + look * er * 0.5, ey, er * 0.32, 0, Math.PI * 2); g.fill(); g.restore(); }
+    const inner = ex < x + w / 2 ? 1 : -1, ang = 0.15 + S.snare * 0.35, by = ey - er * 1.25;   // ceja: el lado de dentro baja (enfado) con la caja
+    neon(() => { g.moveTo(ex - inner * er, by); g.lineTo(ex + inner * er, by + ang * er); }, COL.line, COL.glow, 1.4);
+  }
+  if (o.wound) {   // la cuchillada: una grieta naranja
+    const gx = x + w * 0.18, gy = split + h * 0.06, s = h * 0.18;
+    neon(() => { [[0.1, 0], [0.4, 0.18], [0.15, 0.36], [0.5, 0.55], [0.25, 0.75], [0.6, 1]].forEach(([u, v], i) => i ? g.lineTo(gx + u * s, gy + v * s) : g.moveTo(gx + u * s, gy + v * s)); }, COL.orange, COL.orangeG, 1.6);
+  }
+}
+function viewEspecimen() {
+  header('NEVERA', 'FRIGORIFICUS DOMESTICUS · BUITRAGO DEL LOZOYA, 2010', 'Un circuito cerrado de freón y un compresor que late con el bombo.', 'HERIDA ABIERTA', `${(-18 + S.master * 30).toFixed(1)} °C`);
+  const togg = [['PRESIÓN', S.bar % 8 < 6], ['FLUJO DE FREÓN', true], ['ETIQUETAS', S.bar % 4 !== 3]];
+  let bx = W - 40; for (const [t, on] of togg.slice().reverse()) { const w = t.length * 7.5 + 30; bx -= w + 8; button(bx, 122, w, t, on); }
+  const fh = Math.min(H * 0.5, W * 0.6), F = fridgeGeom(W / 2, H * 0.47, fh), { x, y, w, h, split } = F;
+  // presión sonora: ondas desde el compresor con cada bombo
+  const cx0 = x + w * 0.5, cy0 = y + h * 0.86;
+  if (togg[0][1]) for (const r of rings) { const e = (T - r.t) / 1.6; g.save(); g.globalAlpha = (1 - e) * 0.6; g.strokeStyle = COL.green; g.lineWidth = 1; g.beginPath(); g.arc(cx0, cy0, 12 + e * h * 0.7, Math.PI * 1.05, Math.PI * 1.95); g.stroke(); g.restore(); }
+  drawFridge(F, { wound: true });
+  // circuito de freón: discontinuo y corriendo al tempo (más deprisa con el bombo)
+  const circ = () => { const L = x + w * 0.2, Rr = x + w * 0.72, top = split + h * 0.12;
+    g.moveTo(x + w * 0.74, y + h * 0.27); g.lineTo(x + w * 0.2, y + h * 0.27);
+    g.lineTo(x + w * 0.2, split + h * 0.06); g.lineTo(Rr, split + h * 0.06);
+    for (let k = 0; k < 6; k++) { const yy = top + k * h * 0.065; g.lineTo(k % 2 ? L : Rr, yy); g.lineTo(k % 2 ? Rr : L, yy + h * 0.0325); }
+    g.lineTo(cx0, cy0); };
+  if (togg[1][1]) neon(circ, COL.green, COL.greenG, 1.5, [7, 6], -(T * S.bpm * 0.9 + S.kicks * 6));
+  const cr = h * 0.035 * (1 + S.kick * 0.5);
+  cross(cx0, cy0, cr, COL.pink, COL.pinkG);
+  if (togg[2][1]) {
+    tag(x + w * 0.62, y + h * 0.17, x + w + 60, y + h * 0.1, 'OJOS');
+    tag(x + w * 0.05, y + h * 0.2, x - 60, y + h * 0.16, 'CONGELADOR');
+    tag(x + w * 0.74, y + h * 0.27, x + w + 60, y + h * 0.3, 'EVAPORADOR', COL.green);
+    tag(x + w * 0.3, split + h * 0.12, x - 60, split + h * 0.12, 'CUCHILLADA', COL.orange);
+    tag(x + w * 0.72, split + h * 0.32, x + w + 60, split + h * 0.36, 'CIRCUITO DE FREÓN', COL.green);
+    tag(cx0 + cr, cy0, x + w + 60, cy0 + 10, 'COMPRESOR', COL.pink);
+  }
+  // escala
+  g.strokeStyle = COL.text; g.lineWidth = 1; g.beginPath(); g.moveTo(40, H - 175); g.lineTo(40 + h * 0.1, H - 175); g.moveTo(40, H - 179); g.lineTo(40, H - 171); g.moveTo(40 + h * 0.1, H - 179); g.lineTo(40 + h * 0.1, H - 171); g.stroke();
+  txt('20 CM', 48 + h * 0.1, H - 171, { size: 10 });
+  readouts([{ label: 'FLUJO · BOMBO', value: String(Math.round(S.bpm)), unit: 'BPM', col: COL.green },
+    { label: 'PRESIÓN · CAJA', value: (1 + S.snare * 3.5).toFixed(1), unit: 'BAR', col: COL.orange },
+    { label: 'COMPRESOR · SINTES', value: Math.min(1, S.synth).toFixed(2), unit: '', col: COL.pink },
+    { label: 'FUGA · MÁSTER', value: Math.round(S.master * 100) + '%', unit: '', col: COL.white }], H - 150);
+}
+
+/* ---------- lámina 2: la autopsia (el cuchillazo de 2010) ---------- */
+function person(cx, base, h, armA, col = COL.line, glow = COL.glow, w = 1.4) {   // persona de perfil, en contorno
+  const hr = h * 0.075, hy = base - h + hr, sh = hy + hr * 1.55;
+  neon(() => { g.arc(cx, hy, hr, 0, Math.PI * 2); }, col, glow, w);
+  neon(() => { g.moveTo(cx - h * 0.09, base); g.lineTo(cx - h * 0.07, base - h * 0.45); g.quadraticCurveTo(cx - h * 0.12, sh, cx, sh - hr * 0.3); g.quadraticCurveTo(cx + h * 0.12, sh, cx + h * 0.07, base - h * 0.45); g.lineTo(cx + h * 0.09, base); }, col, glow, w);
+  if (armA == null) return [cx, sh, sh];   // sin brazo (de frente, en la rueda)
+  const ax = cx + Math.cos(armA) * h * 0.32, ay = sh + hr * 0.4 + Math.sin(armA) * h * 0.32;
+  neon(() => { g.moveTo(cx, sh + hr * 0.4); g.lineTo(ax, ay); }, col, glow, w);
+  return [ax, ay, sh + hr * 0.4];
+}
+function viewAutopsia() {
+  header('AUTOPSIA', 'BUITRAGO DEL LOZOYA · SEPTIEMBRE 2010', 'Reconstrucción del golpe. Cada caja, una risa.', 'CASO ABIERTO', `${S.kicks % 1000} GOLPES`);
+  const base = H * 0.72, fh = Math.min(H * 0.46, W * 0.5), F = fridgeGeom(W * 0.36, base - fh * 0.5, fh);
+  drawFridge(F, { wound: true });
+  const swing = Math.pow(S.kick, 0.6), armA = Math.PI + 0.9 - swing * 0.85, px = W * 0.36 + F.w * 0.95;
+  const [ax, ay, shY] = person(px, base, fh * 0.92, armA);
+  // el cuchillo: sigue al brazo, filo abajo
+  const kl = fh * 0.2, kx = ax + Math.cos(armA) * kl, ky = ay + Math.sin(armA) * kl;
+  neon(() => { g.moveTo(ax, ay); g.lineTo(kx, ky); }, COL.orange, COL.orangeG, 2.4);
+  // la trayectoria y su ángulo
+  neon(() => { g.arc(px, shY, fh * 0.32 + kl, Math.PI + 0.05, Math.PI + 0.9); }, COL.dim, COL.glow, 0.8, [3, 5]);
+  const deg = Math.round((Math.PI + 0.9 - armA) / Math.PI * 180);
+  tag(kx, ky, kx - 70, ky - 50, `ÁNGULO ${deg}°`, COL.orange);
+  tag(px, shY - fh * 0.12, px + 80, shY - fh * 0.2, 'PHIBS');
+  // los otros cuatro, riéndose con la caja
+  ['KAKS', 'JASJ', 'MOX', 'MIKI'].forEach((n, i) => {
+    const cx = W * 0.62 + i * W * 0.085, jump = S.snare * 8 * ((i + S.snares) % 2);
+    person(cx, base - jump, fh * 0.55, -0.8 + Math.sin(T * 9 + i) * 0.25, COL.dim, '#1F4E79', 1.1);
+    txt(n, cx, base + 22, { size: 10, col: COL.dim, align: 'center' });
+    if (S.snare > 0.4 && (i + S.snares) % 2 === 0) txt('JA', cx + 12, base - fh * 0.62 - jump, { size: 12, col: COL.pink });
+  });
+  readouts([{ label: 'GOLPES · BOMBO', value: String(S.kicks % 1000), col: COL.green },
+    { label: 'RISAS · CAJA', value: String(S.snares % 1000), col: COL.orange },
+    { label: 'FUERZA', value: (swing * 9.8).toFixed(1), unit: 'N·M', col: COL.pink },
+    { label: 'TESTIGOS', value: '4', col: COL.white }], H - 150);
+}
+
+/* ---------- lámina 3: el mapa (Comunidad de Madrid → término de Buitrago) ---------- */
+function viewMapa() {
+  header('MAPA', 'COMUNIDAD DE MADRID → BUITRAGO DEL LOZOYA', 'Aquí murió una nevera.', 'LOCALIZADO', '40°59\'18.2"N 3°38\'11.6"W');
+  const e0 = Math.min(1, Math.max(0, ((T - viewT) / (60 / S.bpm * 4) - 4) / 8)), e = e0 * e0 * (3 - 2 * e0);   // 4 compases Madrid, 8 de zoom
+  const box = (pts) => { let a = 90, b = -90, c = 180, d = -180; for (const [la, lo] of pts) { a = Math.min(a, la); b = Math.max(b, la); c = Math.min(c, lo); d = Math.max(d, lo); } return [a, b, c, d]; };
+  const A = box(MADRID_CA), B = box(BUITRAGO_T).map((v, i) => v + [-0.02, 0.02, -0.03, 0.03][i]);
+  const L = A.map((v, i) => v + (B[i] - v) * e), k = Math.cos(41 * Math.PI / 180);
+  const pw = W - 120, ph = H - 330, sc = Math.min(pw / ((L[3] - L[2]) * k), ph / (L[1] - L[0])), cx = W / 2, cy = 150 + ph / 2;
+  const P = (la, lo) => [cx + (lo - (L[2] + L[3]) / 2) * k * sc, cy - (la - (L[0] + L[1]) / 2) * sc];
+  // rejilla
+  const stp = sc > 4000 ? 0.01 : sc > 800 ? 0.05 : 0.25;
+  g.save(); g.strokeStyle = '#163A5C'; g.lineWidth = 0.6;
+  for (let la = Math.floor(L[0] / stp) * stp - stp * 4; la < L[1] + stp * 4; la += stp) { const [, yy] = P(la, 0); g.beginPath(); g.moveTo(40, yy); g.lineTo(W - 40, yy); g.stroke(); }
+  for (let lo = Math.floor(L[2] / stp) * stp - stp * 6; lo < L[3] + stp * 6; lo += stp) { const [xx] = P(0, lo); g.beginPath(); g.moveTo(xx, 140); g.lineTo(xx, H - 180); g.stroke(); }
+  g.restore();
+  g.save(); g.beginPath(); g.rect(17, 53, W - 34, H - 130); g.clip();
+  neon(() => MADRID_CA.forEach(([la, lo], i) => { const [x, y] = P(la, lo); i ? g.lineTo(x, y) : g.moveTo(x, y); }), COL.line, COL.glow, 1.3);
+  neon(() => { BUITRAGO_T.forEach(([la, lo], i) => { const [x, y] = P(la, lo); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.closePath(); }, COL.green, COL.greenG, 1.2 + e);
+  const [bx, by] = P(...BUITRAGO), [mx, my] = P(...MADRID);
+  // la A-1: de Madrid a Buitrago, discontinua, corriendo al tempo
+  neon(() => { g.moveTo(mx, my); g.lineTo(bx, by); }, COL.dim, COL.glow, 0.9, [4, 6], -T * S.bpm * 0.4);
+  if (my < H - 190) { cross(mx, my, 5, COL.text, COL.glow); tag(mx, my, mx + 60, my + 20, 'MADRID'); }
+  cross(bx, by, 7 + S.kick * 6, COL.orange, COL.orangeG);
+  tag(bx, by, bx + 90, by - 50, 'BUITRAGO DEL LOZOYA', COL.orange);
+  if (e < 0.5) tag(...P(40.2, -4.3), ...P(40.0, -4.7), 'COMUNIDAD DE MADRID'); else tag(...P(40.97, -3.665), ...P(40.95, -3.72), 'TÉRMINO MUNICIPAL', COL.green);
+  g.restore();
+  const km = Math.round(75 * (1 - e) + 0.5);
+  readouts([{ label: 'LATITUD', value: '40.988', unit: '° N', col: COL.green }, { label: 'LONGITUD', value: '3.636', unit: '° O', col: COL.orange },
+    { label: 'ZOOM', value: '×' + Math.round(sc / 300), col: COL.pink }, { label: 'A MADRID', value: '75', unit: 'KM · A-1, SALIDA 76', col: COL.white }], H - 150);
+}
+
+/* ---------- lámina 4: rueda de reconocimiento ---------- */
+const SUSP = [['KAKS', 178, 'SECADOR DE PELO'], ['JASJ', 183, 'ESTABA EN EL BAÑO'], ['PHIBS', 175, 'NINGUNA'], ['MOX', 180, 'DORMÍA'], ['MIKI', 172, 'COMPRABA HIELO']];
+function viewSospechosos() {
+  const i = S.beats % 5, [n, cm, al] = SUSP[i];
+  header('SOSPECHOSOS', 'RUEDA DE RECONOCIMIENTO · 5 INDIVIDUOS', 'Uno de ellos lo hizo. Cada tiempo, otro sospechoso.', 'SEÑALADO', n);
+  const base = H * 0.72, top = H * 0.3, hpx = (base - top) / 215;   // píxeles por cm, desde el suelo
+  g.save(); g.strokeStyle = '#163A5C'; g.lineWidth = 0.7;
+  for (let c = 150; c <= 210; c += 10) { const y = base - c * hpx; g.beginPath(); g.moveTo(60, y); g.lineTo(W - 60, y); g.stroke(); txt(String(c), 48, y + 4, { size: 10, col: COL.dim, align: 'right' }); }
+  g.restore();
+  SUSP.forEach(([nm, c], j) => {
+    const cx = W * (0.2 + j * 0.15), h = c * hpx, on = j === i;
+    person(cx, base, h, null, on ? COL.pink : COL.dim, on ? COL.pinkG : '#1F4E79', on ? 1.6 : 1.1);
+    txt(nm, cx, base + 22, { size: 11, col: on ? COL.pink : COL.dim, align: 'center' });
+    if (on) cross(cx, base - h + h * 0.075, 10 + S.kick * 8, COL.pink, COL.pinkG);
+  });
+  readouts([{ label: 'NOMBRE', value: n, col: COL.pink }, { label: 'ALTURA', value: String(cm), unit: 'CM', col: COL.green },
+    { label: 'COARTADA', value: al.split(' ')[0], unit: al, col: COL.orange }, { label: 'CULPA', value: (n === 'PHIBS' ? 97 : 20 + (S.beats * 7) % 60) + '%', col: COL.white }], H - 150);
+}
+
+/* ---------- lámina 5: la presión del freón (el espectro, dentro de la tubería) ---------- */
+function viewPresion() {
+  const peak = Math.max(...S.spec);
+  header('PRESIÓN', 'CIRCUITO DE FREÓN · CORTE TRANSVERSAL', 'El sonido de la Freon, dentro de la tubería.', peak > 0.85 ? 'FUGA' : 'ESTABLE', `${(1 + peak * 4).toFixed(2)} BAR`);
+  const x0 = 60, x1 = W - 60, cy = H * 0.47, r = H * 0.18;
+  neon(() => { g.moveTo(x0, cy - r); g.lineTo(x1, cy - r); g.moveTo(x0, cy + r); g.lineTo(x1, cy + r); });
+  neon(() => { g.moveTo(x0, cy - r - 8); g.lineTo(x1, cy - r - 8); g.moveTo(x0, cy + r + 8); g.lineTo(x1, cy + r + 8); }, COL.line, COL.glow, 0.6);
+  const n = 64, dx = (x1 - x0) / (n - 1);
+  const wave = s => () => { for (let i = 0; i < n; i++) { const v = S.spec[i] * r * 0.95 * s; i ? g.lineTo(x0 + i * dx, cy - v) : g.moveTo(x0, cy - v); } };
+  neon(wave(1), COL.green, COL.greenG, 1.5); neon(wave(-1), COL.green, COL.greenG, 1.5);
+  // partículas de freón que corren por la tubería al tempo
+  g.save(); g.fillStyle = COL.text;
+  for (let k = 0; k < 40; k++) { const u = ((k * 0.137 + T * S.bpm / 240) % 1), yy = cy + Math.sin(k * 12.9) * r * 0.8; g.globalAlpha = 0.5; g.fillRect(x0 + u * (x1 - x0), yy, 2, 2); }
+  g.restore();
+  let hi = 0; for (let i = 1; i < n; i++) if (S.spec[i] > S.spec[hi]) hi = i;
+  tag(x0 + hi * dx, cy - S.spec[hi] * r * 0.95, x0 + hi * dx + 60, cy - r - 30, `PICO · ${Math.round(40 * Math.pow(500, hi / n))} HZ`, COL.orange);
+  tag(x1 - 10, cy + r, x1 - 40, cy + r + 40, 'PARED DE COBRE', COL.dim);
+  readouts([{ label: 'GRAVES', value: (S.spec.slice(0, 8).reduce((a, b) => a + b, 0) / 8).toFixed(2), col: COL.green },
+    { label: 'MEDIOS', value: (S.spec.slice(8, 32).reduce((a, b) => a + b, 0) / 24).toFixed(2), col: COL.orange },
+    { label: 'AGUDOS', value: (S.spec.slice(32).reduce((a, b) => a + b, 0) / 32).toFixed(2), col: COL.pink },
+    { label: 'FUGA · MÁSTER', value: Math.round(S.master * 100) + '%', col: COL.white }], H - 150);
+}
+
+/* ---------- bucle ---------- */
+const DRAW = [viewEspecimen, viewAutopsia, viewMapa, viewSospechosos, viewPresion];
+function frame(t) {
+  const dt = Math.min(0.1, (t - last) / 1000); last = t; tick(dt);
+  g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
+  // al cambiar de lámina: un barrido de escaneo
+  const sw = (T - viewT) / 0.5;
+  try { DRAW[view](); } catch (e) { console.error(e); }
+  chrome();
+  if (sw < 1) { g.save(); g.fillStyle = '#000'; g.fillRect(0, 53 + (H - 130) * sw, W, (H - 130) * (1 - sw)); g.strokeStyle = COL.line; g.globalAlpha = 0.8; g.beginPath(); g.moveTo(17, 53 + (H - 130) * sw); g.lineTo(W - 17, 53 + (H - 130) * sw); g.stroke(); g.restore(); }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
