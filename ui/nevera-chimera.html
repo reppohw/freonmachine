@@ -48,6 +48,7 @@ function connect() {
 function onVis(rest) {
   const p = rest.split(' '); if (p.length < 8) return;
   const hits = +p[0], bpm = +p[3], run = p[4] === '1', db = +p[6], s = atob(p[7]);
+  if (p.length >= 11) S.notes = [+p[8], +p[9], +p[10]];   // última nota de T1-T3
   S.live = true; S.lastFrame = performance.now(); S.run = run; if (bpm >= 40 && bpm <= 300) S.bpm = bpm;
   if (hits & 3) S.lastHit = T;   // golpe de verdad: deja de simular
   if (hits & 1) hitKick(); if (hits & 2) hitSnare(); if (hits & 0x60) S.hat = 1;
@@ -62,7 +63,8 @@ connect();
 /* ---------- tiempo, compases y láminas ---------- */
 let T = 0, last = performance.now(), auto = true, view = 0, viewT = 0, rings = [];
 const VIEWS = ['ESPÉCIMEN', 'AUTOPSIA', 'MAPA', 'SOSPECHOSOS', 'PRESIÓN'];
-function go(v) { view = (v + VIEWS.length) % VIEWS.length; viewT = T; }
+let viewMs = 0;
+function go(v) { view = (v + VIEWS.length) % VIEWS.length; viewT = T; viewMs = performance.now(); }
 addEventListener('keydown', e => {
   if (e.key === 'ArrowRight') go(view + 1); else if (e.key === 'ArrowLeft') go(view - 1);
   else if (e.key === ' ') auto = !auto; else if (/^[1-5]$/.test(e.key)) go(+e.key - 1);
@@ -159,39 +161,135 @@ function drawFridge(F, o = {}) {
     neon(() => { [[0.1, 0], [0.4, 0.18], [0.15, 0.36], [0.5, 0.55], [0.25, 0.75], [0.6, 1]].forEach(([u, v], i) => i ? g.lineTo(gx + u * s, gy + v * s) : g.moveTo(gx + u * s, gy + v * s)); }, COL.orange, COL.orangeG, 1.6);
   }
 }
+/* ---------- lámina 1: la nevera en corte de perfil, con el detalle de una lámina de anatomía ---------- */
+// contorno en dos líneas paralelas (como la piel y el hueso de Chimera): un trazo ancho y, encima, uno negro más estrecho
+function dbl(path, gap = 4, col = COL.line, glow = COL.glow, w = 1.1) {
+  g.save(); g.lineCap = 'round'; g.lineJoin = 'round';
+  g.strokeStyle = glow; g.globalAlpha = 0.22; g.lineWidth = gap + w * 2 + 6; g.beginPath(); path(); g.stroke();
+  g.globalAlpha = 1; g.strokeStyle = col; g.lineWidth = gap + w * 2; g.beginPath(); path(); g.stroke();
+  g.strokeStyle = '#000'; g.lineWidth = gap; g.beginPath(); path(); g.stroke(); g.restore();
+}
+function thin(path, col = '#3D6E9E', w = 0.8, dash = null) { g.save(); g.strokeStyle = col; g.lineWidth = w; g.lineCap = 'round'; g.lineJoin = 'round'; if (dash) g.setLineDash(dash); g.beginPath(); path(); g.stroke(); g.restore(); }
+const noteHz = n => n > 0 ? 440 * Math.pow(2, (n - 69) / 12) : 0;
+function wire3d(x, y, s) {   // la neverita en alambre que gira (como el icono 3D de Chimera)
+  const a = T * 0.8, P = (px, py, pz) => { const c = Math.cos(a), si = Math.sin(a), X = px * c - pz * si, Z = px * si + pz * c; return [x + X * s + Z * s * 0.15, y + py * s - Z * s * 0.25]; };
+  const V = [[-0.3, -1, -0.32], [0.3, -1, -0.32], [0.3, -1, 0.32], [-0.3, -1, 0.32], [-0.3, 1, -0.32], [0.3, 1, -0.32], [0.3, 1, 0.32], [-0.3, 1, 0.32]].map(v => P(...v));
+  thin(() => { for (const [i, j] of [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7]]) { g.moveTo(...V[i]); g.lineTo(...V[j]); } }, COL.line, 0.9);
+}
 function viewEspecimen() {
-  header('NEVERA', 'FRIGORIFICUS DOMESTICUS · BUITRAGO DEL LOZOYA, 2010', 'Un circuito cerrado de freón y un compresor que late con el bombo.', 'HERIDA ABIERTA', `${(-18 + S.master * 30).toFixed(1)} °C`);
-  const togg = [['PRESIÓN', S.bar % 8 < 6], ['FLUJO DE FREÓN', true], ['ETIQUETAS', S.bar % 4 !== 3]];
-  let bx = W - 40; for (const [t, on] of togg.slice().reverse()) { const w = t.length * 7.5 + 30; bx -= w + 8; button(bx, 122, w, t, on); }
-  const fh = Math.min(H * 0.5, W * 0.6), F = fridgeGeom(W / 2, H * 0.47, fh), { x, y, w, h, split } = F;
-  // presión sonora: ondas desde el compresor con cada bombo
-  const cx0 = x + w * 0.5, cy0 = y + h * 0.86;
-  if (togg[0][1]) for (const r of rings) { const e = (T - r.t) / 1.6; g.save(); g.globalAlpha = (1 - e) * 0.6; g.strokeStyle = COL.green; g.lineWidth = 1; g.beginPath(); g.arc(cx0, cy0, 12 + e * h * 0.7, Math.PI * 1.05, Math.PI * 1.95); g.stroke(); g.restore(); }
-  drawFridge(F, { wound: true });
-  // circuito de freón: discontinuo y corriendo al tempo (más deprisa con el bombo)
-  const circ = () => { const L = x + w * 0.2, Rr = x + w * 0.72, top = split + h * 0.12;
-    g.moveTo(x + w * 0.74, y + h * 0.27); g.lineTo(x + w * 0.2, y + h * 0.27);
-    g.lineTo(x + w * 0.2, split + h * 0.06); g.lineTo(Rr, split + h * 0.06);
-    for (let k = 0; k < 6; k++) { const yy = top + k * h * 0.065; g.lineTo(k % 2 ? L : Rr, yy); g.lineTo(k % 2 ? Rr : L, yy + h * 0.0325); }
-    g.lineTo(cx0, cy0); };
-  if (togg[1][1]) neon(circ, COL.green, COL.greenG, 1.5, [7, 6], -(T * S.bpm * 0.9 + S.kicks * 6));
-  const cr = h * 0.035 * (1 + S.kick * 0.5);
-  cross(cx0, cy0, cr, COL.pink, COL.pinkG);
-  if (togg[2][1]) {
-    tag(x + w * 0.62, y + h * 0.17, x + w + 60, y + h * 0.1, 'OJOS');
-    tag(x + w * 0.05, y + h * 0.2, x - 60, y + h * 0.16, 'CONGELADOR');
-    tag(x + w * 0.74, y + h * 0.27, x + w + 60, y + h * 0.3, 'EVAPORADOR', COL.green);
-    tag(x + w * 0.3, split + h * 0.12, x - 60, split + h * 0.12, 'CUCHILLADA', COL.orange);
-    tag(x + w * 0.72, split + h * 0.32, x + w + 60, split + h * 0.36, 'CIRCUITO DE FREÓN', COL.green);
-    tag(cx0 + cr, cy0, x + w + 60, cy0 + 10, 'COMPRESOR', COL.pink);
+  const bars = S.bar, actN = Math.min(3, Math.floor(bars / 32)), on = { pres: bars % 8 < 6, flow: true, meas: bars % 16 >= 8, grid: true };
+  // arriba, dentro del marco: actos (como MALE / FEMALE / CHILD) y la neverita 3D
+  ['ACTO I', 'ACTO II', 'ACTO III', 'ACTO IV'].forEach((t, i) => { const x = 30 + i * 76; if (i === actN) { g.strokeStyle = COL.line; g.lineWidth = 1; g.strokeRect(x + 0.5, 64.5, 66, 22); } txt(t, x + 33, 80, { size: 10, col: i === actN ? COL.text : COL.dim, align: 'center' }); });
+  wire3d(350, 76, 11);
+  let bx = W - 30; for (const [t, o] of [['REJILLA', on.grid], ['MEDIDAS', on.meas], ['FLUJO', on.flow], ['PRESIÓN', on.pres], ['3D', true]]) { const w = t.length * 7.5 + 26; bx -= w + 6; button(bx, 64, w, t, o && t !== 'REJILLA' && t !== '3D', COL.line); }
+  // frecuencias de T1-T3 (como F1 F2 F3)
+  const N = S.notes && S.notes.some(n => n > 0) && !S.sim ? S.notes : [57, 64, 69];
+  ['T1', 'T2', 'T3'].forEach((t, i) => { txt(t, W - 120, 118 + i * 18, { size: 10, col: COL.orange }); txt(String(Math.round(noteHz(N[i]) * (S.live ? 1 : 1 + 0.02 * Math.sin(T + i)))), W - 34, 118 + i * 18, { size: 12, col: COL.orange, align: 'right' }); });
+  txt('HZ', W - 34, 168, { size: 9, col: COL.orange, align: 'right' });
+  txt(S.master > 0.8 ? 'FUGA' : 'SELLADO', W - 34, 196, { size: 10, col: COL.text, align: 'right' });
+
+  const h = Math.min(H * 0.64, (W - 300) / 0.9), d = h * 0.6, x0 = W * 0.37 - d / 2, y0 = H * 0.5 - h * 0.48, x1 = x0 + d, y1 = y0 + h, t = h * 0.075;
+  const split = y0 + h * 0.3, inL = x0 + h * 0.045, inR = x1 - t - h * 0.012, inT = y0 + h * 0.045, inB = y1 - h * 0.145, mcT = y1 - h * 0.12, mcR = x0 + d * 0.42;   // mcT/mcR: hueco de máquinas abajo detrás
+  if (on.grid) { g.save(); g.strokeStyle = '#0E2A44'; g.lineWidth = 0.5; for (let x = 40; x < W - 30; x += 24) { g.beginPath(); g.moveTo(x, 100); g.lineTo(x, H - 90); g.stroke(); } for (let y = 100; y < H - 90; y += 24) { g.beginPath(); g.moveTo(30, y); g.lineTo(W - 30, y); g.stroke(); } g.restore(); }
+  // ondas de presión desde el compresor
+  const cpx = x0 + d * 0.17, cpy = y1 - h * 0.045;
+  if (on.pres) for (const r of rings) { const e = (T - r.t) / 1.6; g.save(); g.globalAlpha = (1 - e) * 0.55; g.strokeStyle = COL.green; g.lineWidth = 1; g.beginPath(); g.arc(cpx, cpy, 10 + e * h * 0.55, Math.PI * 0.9, Math.PI * 2.1); g.stroke(); g.restore(); }
+
+  // 1. el casco: dos líneas; aislante (fina) y forro interior (dos líneas finas)
+  const shell = () => { g.moveTo(x0 + 14, y0); g.lineTo(x1 - 10, y0); g.quadraticCurveTo(x1, y0, x1, y0 + 10); g.lineTo(x1, y1 - 10); g.quadraticCurveTo(x1, y1, x1 - 10, y1);
+    g.lineTo(mcR + 8, y1); g.lineTo(mcR, mcT + 6); g.quadraticCurveTo(mcR - 2, mcT, mcR - 10, mcT); g.lineTo(x0 + 6, mcT); g.quadraticCurveTo(x0, mcT, x0, mcT - 8); g.lineTo(x0, y0 + 14); g.quadraticCurveTo(x0, y0, x0 + 14, y0); };
+  dbl(shell, 5);
+  thin(() => rr(x0 + h * 0.022, y0 + h * 0.022, x1 - t - x0 - h * 0.03, mcT - y0 - h * 0.035, 10), '#2E5F8E', 0.8, [2, 3]);   // aislante
+  dbl(() => { g.moveTo(inL, split - 6); g.lineTo(inL, inT + 8); g.quadraticCurveTo(inL, inT, inL + 8, inT); g.lineTo(inR, inT); g.lineTo(inR, split - 6); }, 2.5, '#7FB0DC', '#1F4E79', 0.8);
+  dbl(() => { g.moveTo(inL, split + 6); g.lineTo(inL, inB - 8); g.quadraticCurveTo(inL, inB, inL + 8, inB); g.lineTo(inR, inB); g.lineTo(inR, split + 6); }, 2.5, '#7FB0DC', '#1F4E79', 0.8);
+  dbl(() => { g.moveTo(inL - 2, split); g.lineTo(x1 - t, split); }, 6, COL.line, COL.glow, 1);   // separación congelador
+  // 2. las puertas, de perfil: grosor, bisagras y junta (lentes apiladas, como los cornetes)
+  dbl(() => { g.moveTo(x1 - t, y0 + 4); g.lineTo(x1 - t, split - 3); g.moveTo(x1 - t, split + 3); g.lineTo(x1 - t, y1 - 6); }, 3);
+  for (const yy of [y0 + h * 0.02, split - h * 0.02, split + h * 0.02, y1 - h * 0.03]) thin(() => { g.arc(x1 - t, yy, 3, 0, Math.PI * 2); }, COL.line, 1);
+  thin(() => { for (let k = 0; k < 14; k++) { const yy = y0 + h * 0.06 + k * h * 0.062; if (Math.abs(yy - split) < h * 0.03) continue; g.moveTo(x1 - t - 3, yy); g.quadraticCurveTo(x1 - t - 9, yy + h * 0.022, x1 - t - 3, yy + h * 0.044); } }, '#5B8DBF', 0.9);
+  // 3. los cajones de la puerta (apilados como vértebras), con huevos y una botella
+  const bw = h * 0.07, bxx = inR - bw;
+  for (let k = 0; k < 4; k++) dbl(() => rr(bxx, split + h * 0.06 + k * h * 0.12, bw, h * 0.07, 5), 2, '#9CC6EC', '#1F4E79', 0.8);
+  dbl(() => rr(bxx, y0 + h * 0.12, bw, h * 0.08, 5), 2, '#9CC6EC', '#1F4E79', 0.8);
+  thin(() => { for (let k = 0; k < 3; k++) g.ellipse(bxx + bw * 0.5, split + h * 0.045 - k * 0 + 0, bw * 0.16, bw * 0.2, 0, 0, Math.PI * 2); }, COL.line, 0.9);
+  const btx = bxx + bw * 0.5, bty = split + h * 0.3;
+  thin(() => { g.moveTo(btx - bw * 0.22, bty + h * 0.12); g.lineTo(btx - bw * 0.22, bty + h * 0.03); g.quadraticCurveTo(btx - bw * 0.22, bty, btx - bw * 0.08, bty - h * 0.02); g.lineTo(btx - bw * 0.08, bty - h * 0.05); g.lineTo(btx + bw * 0.08, bty - h * 0.05); g.lineTo(btx + bw * 0.08, bty - h * 0.02); g.quadraticCurveTo(btx + bw * 0.22, bty, btx + bw * 0.22, bty + h * 0.03); g.lineTo(btx + bw * 0.22, bty + h * 0.12); }, COL.text, 1);
+  // 4. baldas de cristal con sus botes, y el cajón de verduras
+  const shelves = [split + h * 0.2, split + h * 0.36];
+  for (const sy of shelves) { dbl(() => { g.moveTo(inL + 4, sy); g.lineTo(bxx - 6, sy); }, 2.2, '#9CC6EC', '#1F4E79', 0.8); thin(() => { g.moveTo(inL + 4, sy + 4); g.lineTo(inL + 14, sy + 4); }, COL.line, 1); }
+  const jar = (jx, jy, jw, jh) => { thin(() => { rr(jx, jy - jh, jw, jh, 3); g.moveTo(jx - 2, jy - jh); g.lineTo(jx + jw + 2, jy - jh); rr(jx + jw * 0.15, jy - jh - jh * 0.18, jw * 0.7, jh * 0.18, 2); }, '#B5D4F4', 0.9); };
+  jar(inL + h * 0.05, shelves[0] - 2, h * 0.06, h * 0.08); jar(inL + h * 0.14, shelves[0] - 2, h * 0.045, h * 0.11); jar(inL + h * 0.08, shelves[1] - 2, h * 0.09, h * 0.06);
+  const crT = inB - h * 0.11;
+  dbl(() => { g.moveTo(inL + 4, crT); g.lineTo(bxx - 10, crT); g.quadraticCurveTo(bxx - 4, crT + h * 0.05, bxx - 10, inB - 4); g.lineTo(inL + 4, inB - 4); }, 2.2, '#9CC6EC', '#1F4E79', 0.8);
+  thin(() => { for (let k = 0; k < 4; k++) { g.moveTo(inL + h * (0.05 + k * 0.05) + h * 0.018, crT + h * 0.06); g.arc(inL + h * (0.05 + k * 0.05), crT + h * 0.06, h * 0.018, 0, Math.PI * 2); } }, '#5DCAA5', 0.9);
+  // 5. termostato: esfera con marcas y aguja que sigue al máster
+  const thx = inL + (bxx - inL) * 0.55, thy = split + h * 0.07, thr = h * 0.032;
+  thin(() => { g.arc(thx, thy, thr, 0, Math.PI * 2); for (let k = 0; k <= 10; k++) { const a = Math.PI * (0.8 + k * 0.14); g.moveTo(thx + Math.cos(a) * thr * 0.75, thy + Math.sin(a) * thr * 0.75); g.lineTo(thx + Math.cos(a) * thr, thy + Math.sin(a) * thr); } }, COL.line, 0.9);
+  const na = Math.PI * (0.8 + 1.4 * Math.min(1, S.master)); neon(() => { g.moveTo(thx, thy); g.lineTo(thx + Math.cos(na) * thr * 0.9, thy + Math.sin(na) * thr * 0.9); }, COL.orange, COL.orangeG, 1.3);
+  // 6. el congelador: evaporador en serpentín por la pared del fondo, cristales de hielo y el cajón
+  const ev = () => { const ex0 = inL + h * 0.02, ex1 = inL + h * 0.085; g.moveTo(ex0, inT + h * 0.02); for (let k = 0; k < 7; k++) { const yy = inT + h * 0.02 + k * h * 0.032; g.lineTo(k % 2 ? ex0 : ex1, yy); g.lineTo(k % 2 ? ex0 : ex1, yy + h * 0.032); } };
+  dbl(ev, 3, '#9FE1CB', COL.greenG, 0.9);
+  thin(() => { for (let k = 0; k < 9; k++) { const cx = inL + h * (0.13 + (k * 0.037) % 0.2), cy = inT + h * (0.03 + ((k * 7) % 5) * 0.04), r = h * 0.01; for (let a = 0; a < 3; a++) { const an = a * Math.PI / 3; g.moveTo(cx - Math.cos(an) * r, cy - Math.sin(an) * r); g.lineTo(cx + Math.cos(an) * r, cy + Math.sin(an) * r); } } }, '#B5D4F4', 0.8);
+  dbl(() => rr(inL + h * 0.11, split - h * 0.12, bxx - inL - h * 0.13, h * 0.1, 6), 2, '#9CC6EC', '#1F4E79', 0.8);
+  // 7. el ojo, de perfil, junto a la puerta del congelador: párpados, iris en anillos y pupila que mira
+  const ox = x1 - t - h * 0.075, oy = y0 + h * 0.1, orx = h * 0.05, blink = (T % 4.3) < 0.12 ? 1 : 0;
+  dbl(() => { g.moveTo(ox - orx, oy); g.quadraticCurveTo(ox, oy - orx * (0.9 - 0.85 * blink), ox + orx, oy); g.quadraticCurveTo(ox, oy + orx * (0.9 - 0.85 * blink), ox - orx, oy); }, 2.5);
+  if (!blink) { const lk = Math.sin(T * 0.7) * orx * 0.3; g.save(); g.beginPath(); g.moveTo(ox - orx, oy); g.quadraticCurveTo(ox, oy - orx * 0.9, ox + orx, oy); g.quadraticCurveTo(ox, oy + orx * 0.9, ox - orx, oy); g.clip();
+    thin(() => { g.arc(ox + lk, oy, orx * 0.48, 0, Math.PI * 2); }, COL.line, 1); thin(() => { g.arc(ox + lk, oy, orx * 0.36, 0, Math.PI * 2); }, '#5B8DBF', 0.8);
+    g.fillStyle = COL.line; g.beginPath(); g.arc(ox + lk, oy, orx * 0.2 * (1 + S.kick * 0.3), 0, Math.PI * 2); g.fill(); g.restore(); }
+  const ang = 0.1 + S.snare * 0.4; dbl(() => { g.moveTo(ox - orx * 1.1, oy - orx * 0.95); g.quadraticCurveTo(ox, oy - orx * (1.15 + ang), ox + orx * 1.1, oy - orx * (0.85 - ang * 1.5)); }, 2.2);
+  // 8. la cuchillada: en la puerta de abajo, naranja
+  const wx = x1 - t * 0.5, wy = split + h * 0.18;
+  neon(() => { [[0, -0.05], [-0.4, 0], [0.3, 0.04], [-0.3, 0.09], [0.2, 0.13]].forEach(([u, v], i) => i ? g.lineTo(wx + u * t * 0.8, wy + v * h) : g.moveTo(wx + u * t * 0.8, wy + v * h)); }, COL.orange, COL.orangeG, 1.5);
+  // 9. detrás: el condensador (serpentín con aletas, como una columna) y el hueco de máquinas
+  const cx0 = x0 - h * 0.05, cTop = y0 + h * 0.08, cBot = mcT - h * 0.02;
+  const cond = () => { g.moveTo(cx0 + h * 0.015, cBot); for (let k = 0; k < 12; k++) { const yy = cBot - k * (cBot - cTop) / 12; g.lineTo(cx0 + (k % 2 ? h * 0.015 : -h * 0.015), yy - (cBot - cTop) / 12); } };
+  dbl(cond, 3, '#9FE1CB', COL.greenG, 0.9);
+  thin(() => { for (let yy = cTop; yy < cBot; yy += 5) { g.moveTo(cx0 - h * 0.028, yy); g.lineTo(cx0 + h * 0.028, yy); } }, '#1E5A74', 0.6);
+  thin(() => { g.moveTo(cx0, cTop); g.lineTo(x0, cTop); g.moveTo(cx0, cBot); g.lineTo(x0, cBot); }, COL.dim, 0.8);
+  // compresor (cúpula) y ventilador (abanico de rayos que gira al tempo, como la lengua de Chimera)
+  dbl(() => { g.moveTo(cpx - h * 0.05, y1 - h * 0.01); g.lineTo(cpx - h * 0.05, cpy); g.quadraticCurveTo(cpx - h * 0.05, cpy - h * 0.055, cpx, cpy - h * 0.055); g.quadraticCurveTo(cpx + h * 0.05, cpy - h * 0.055, cpx + h * 0.05, cpy); g.lineTo(cpx + h * 0.05, y1 - h * 0.01); }, 3, COL.pink, COL.pinkG, 1);
+  cross(cpx, cpy - h * 0.015, h * 0.013 * (1 + S.kick * 0.6), COL.pink, COL.pinkG);
+  const fx = x0 + d * 0.32, fy = y1 - h * 0.058, fr = h * 0.045, rot = T * S.bpm / 60 * Math.PI * 0.5;
+  thin(() => { for (let k = 0; k < 18; k++) { const a = rot + k * Math.PI * 2 / 18; g.moveTo(fx, fy); g.lineTo(fx + Math.cos(a) * fr, fy + Math.sin(a) * fr); } }, '#5DCAA5', 0.8);
+  thin(() => { g.arc(fx, fy, fr, 0, Math.PI * 2); }, '#5DCAA5', 1); cross(fx, fy, h * 0.01, COL.green, COL.greenG);
+  // 10. el freón: tubería en dos líneas y el flujo discontinuo que corre al tempo
+  const pipe = () => { g.moveTo(cpx + h * 0.05, cpy + h * 0.02); g.lineTo(fx - fr - 4, cpy + h * 0.02); g.moveTo(cpx - h * 0.05, cpy); g.lineTo(cx0 + h * 0.015, cBot);
+    g.moveTo(cx0 - h * 0.015, cTop); g.quadraticCurveTo(cx0, y0 - h * 0.04, x0 + h * 0.1, y0 - h * 0.012); g.lineTo(inL + h * 0.05, y0 - h * 0.012); g.lineTo(inL + h * 0.05, inT + h * 0.02); };
+  dbl(pipe, 2.5, '#5B8DBF', '#1F4E79', 0.7);
+  if (on.flow) { neon(pipe, COL.green, COL.greenG, 1.2, [5, 7], -(T * S.bpm * 0.8 + S.kicks * 5)); neon(ev, COL.green, COL.greenG, 1.1, [4, 6], -(T * S.bpm * 0.8 + S.kicks * 5)); neon(cond, COL.green, COL.greenG, 1.1, [4, 6], -(T * S.bpm * 0.8)); }
+  // patas
+  dbl(() => { g.moveTo(mcR + h * 0.04, y1); g.lineTo(mcR + h * 0.04, y1 + h * 0.03); g.moveTo(x1 - h * 0.05, y1); g.lineTo(x1 - h * 0.05, y1 + h * 0.03); }, 2.5);
+  // 11. medidas
+  if (on.meas) {
+    thin(() => { const mx = x1 + h * 0.06; g.moveTo(mx, y0); g.lineTo(mx, y1); g.moveTo(mx - 5, y0); g.lineTo(mx + 5, y0); g.moveTo(mx - 5, y1); g.lineTo(mx + 5, y1);
+      const my = y1 + h * 0.07; g.moveTo(x0, my); g.lineTo(x1, my); g.moveTo(x0, my - 5); g.lineTo(x0, my + 5); g.moveTo(x1, my - 5); g.lineTo(x1, my + 5); }, COL.text, 0.8);
+    txt('172 CM', x1 + h * 0.06, y0 - 8, { size: 10, align: 'center' }); txt('64 CM', (x0 + x1) / 2, y1 + h * 0.07 + 16, { size: 10, align: 'center' });
+  }
+  // 12. rótulos
+  const LX = Math.max(140, x0 - h * 0.3);
+  tag(cx0, (cTop + cBot) / 2, LX, (cTop + cBot) / 2 - h * 0.1, 'CONDENSADOR', COL.green);
+  tag(inL + h * 0.05, inT + h * 0.08, LX, inT + h * 0.02, 'EVAPORADOR', COL.green);
+  tag(fx - fr * 0.7, fy - fr * 0.7, LX, fy - h * 0.12, 'VENTILADOR', COL.green);
+  tag(cpx, cpy - h * 0.07, LX, y1 + h * 0.02, 'COMPRESOR', COL.pink);
+  tag(x1 - t - 6, y0 + h * 0.25, x1 + h * 0.22, y0 + h * 0.2, 'JUNTA');
+  tag(ox + orx, oy, x1 + h * 0.22, y0 + h * 0.06, 'OJO');
+  tag(thx + thr, thy, x1 + h * 0.22, split + h * 0.04, 'TERMOSTATO', COL.orange);
+  tag(wx + t * 0.4, wy + h * 0.04, x1 + h * 0.22, split + h * 0.2, 'CUCHILLADA', COL.orange);
+  tag(bxx + bw, split + h * 0.42, x1 + h * 0.22, split + h * 0.38, 'CAJONES DE LA PUERTA');
+  tag(inL + h * 0.2, crT + h * 0.06, x1 + h * 0.22, inB - h * 0.02, 'VERDURAS', COL.green);
+  // 13. lecturas junto al dibujo (como LENGUA / MANDÍBULA / LABIOS)
+  const rx = W - 180, ry = 236;
+  const big = (lx, ly, col, label, val, unit) => { g.fillStyle = col; g.beginPath(); g.arc(lx + 4, ly - 4, 3.5, 0, Math.PI * 2); g.fill(); txt(label, lx + 14, ly, { size: 10, col }); txt(val, lx, ly + 34, { size: Math.min(30, H * 0.042), col, font: SANS, spacing: 0 }); if (unit) txt(unit, lx + (val.length * Math.min(30, H * 0.042) * 0.55) + 6, ly + 34, { size: 10, col }); };
+  if (rx > x1 + h * 0.22 + 150) {   // en columna, en la esquina (como LENGUA / MANDÍBULA / LABIOS)
+    big(rx, ry, COL.green, 'VENTILADOR', String(Math.round(S.bpm * 10)), 'RPM');
+    big(rx, ry + 66, COL.orange, 'TERMOSTATO', (-18 + S.master * 30).toFixed(1), '°C');
+    big(rx, ry + 132, COL.pink, 'COMPRESOR', (1 + S.kick * 2.4).toFixed(1), 'BAR');
+    big(rx, ry + 198, COL.white, 'PUERTA', S.snare > 0.6 ? 'ABIERTA' : 'CERRADA', '');
   }
   // escala
-  g.strokeStyle = COL.text; g.lineWidth = 1; g.beginPath(); g.moveTo(40, H - 175); g.lineTo(40 + h * 0.1, H - 175); g.moveTo(40, H - 179); g.lineTo(40, H - 171); g.moveTo(40 + h * 0.1, H - 179); g.lineTo(40 + h * 0.1, H - 171); g.stroke();
-  txt('20 CM', 48 + h * 0.1, H - 171, { size: 10 });
-  readouts([{ label: 'FLUJO · BOMBO', value: String(Math.round(S.bpm)), unit: 'BPM', col: COL.green },
-    { label: 'PRESIÓN · CAJA', value: (1 + S.snare * 3.5).toFixed(1), unit: 'BAR', col: COL.orange },
-    { label: 'COMPRESOR · SINTES', value: Math.min(1, S.synth).toFixed(2), unit: '', col: COL.pink },
-    { label: 'FUGA · MÁSTER', value: Math.round(S.master * 100) + '%', unit: '', col: COL.white }], H - 150);
+  thin(() => { g.moveTo(40, H - 104); g.lineTo(40 + h * 0.058, H - 104); g.moveTo(40, H - 108); g.lineTo(40, H - 100); g.moveTo(40 + h * 0.058, H - 108); g.lineTo(40 + h * 0.058, H - 100); }, COL.text, 1);
+  txt('10 CM', 48 + h * 0.058, H - 100, { size: 10 });
 }
 
 /* ---------- lámina 2: la autopsia (el cuchillazo de 2010) ---------- */
@@ -310,7 +408,7 @@ function frame(t) {
   const dt = Math.min(0.1, (t - last) / 1000); last = t; tick(dt);
   g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
   // al cambiar de lámina: un barrido de escaneo
-  const sw = (T - viewT) / 0.5;
+  const sw = (performance.now() - viewMs) / 500;   // barrido a tiempo real
   try { DRAW[view](); } catch (e) { console.error(e); }
   chrome();
   if (sw < 1) { g.save(); g.fillStyle = '#000'; g.fillRect(0, 53 + (H - 130) * sw, W, (H - 130) * (1 - sw)); g.strokeStyle = COL.line; g.globalAlpha = 0.8; g.beginPath(); g.moveTo(17, 53 + (H - 130) * sw); g.lineTo(W - 17, 53 + (H - 130) * sw); g.stroke(); g.restore(); }
