@@ -1404,7 +1404,8 @@ struct Control {
     }
     void comboClear(int n) {
         if (n < 0 || n >= kCombos) return;
-        if (learn_ == n) learn_ = -1; if (cbCur_ == n) comboOff();
+        if (learn_ == n) learn_ = -1;
+        if (cbCur_ == n) comboOff();
         const std::string P = "cb." + std::to_string(n) + "."; sset(P + "keys", "", -1);
         for (const auto& f : cbFx()) { cbPublish(P + f.amt, 0); }
         set(P + "on", 0, -1);
@@ -1458,7 +1459,8 @@ struct Control {
     }
     static std::string memName(const std::string& n) {
         std::string o; for (char c : n) { const unsigned char u = static_cast<unsigned char>(c); if (std::isalnum(u) || c == ' ' || c == '-' || c == '_' || u >= 0x80) o += c; }
-        while (!o.empty() && o.back() == ' ') o.pop_back(); while (!o.empty() && o.front() == ' ') o.erase(o.begin());
+        while (!o.empty() && o.back() == ' ') o.pop_back();
+        while (!o.empty() && o.front() == ' ') o.erase(o.begin());
         return o.substr(0, 40);
     }
     std::string memList() {
@@ -1486,12 +1488,14 @@ struct Control {
                 srv.broadcast("memmsg damaged " + n + " (not loaded)"); return;
             }
         }
-        if (learn_ >= 0) learnStop(); comboOff();
+        if (learn_ >= 0) learnStop();
+        comboOff();
         std::map<std::string, float> keepF; std::map<std::string, std::string> keepS;   // el montaje MIDI no cambia
         for (auto& [k, v] : st) if (k.rfind("midi.", 0) == 0 || k == "rec.stems") keepF[k] = v;   // el montaje (MIDI) y si se graba multipista no cambian
         for (auto& [k, v] : ss) if (k.rfind("midi.", 0) == 0) keepS[k] = v;
         const std::string keep = file; file = f; load(); file = keep;
-        for (auto& [k, v] : keepF) st[k] = v; for (auto& [k, v] : keepS) ss[k] = v;
+        for (auto& [k, v] : keepF) st[k] = v;
+        for (auto& [k, v] : keepS) ss[k] = v;
         performanceOff();
         au.cmds.push({K_ALLOFF, 0, 0, 0, 0});   // notas sueltas de la configuración anterior, fuera
         pushAll(); mapDirty = true; dirty = true; dirtyAt = std::chrono::steady_clock::now();
@@ -1527,7 +1531,8 @@ struct Control {
         std::string o = "["; for (size_t i = 0; i < v.size(); ++i) { if (i) o += ","; o += "[" + jstr(v[i].second.c_str()) + "," + std::to_string(v[i].first) + "]"; } return o + "]";
     }
     void useSave() {
-        if (!useDirty_) return; useDirty_ = false;
+        if (!useDirty_) return;
+        useDirty_ = false;
         const std::string f = useFile(), tmp = f + ".tmp", js = useJson();
         FILE* o = std::fopen(tmp.c_str(), "wb"); bool ok = o && std::fwrite(js.data(), 1, js.size(), o) == js.size();
         if (o) ok = std::fclose(o) == 0 && ok;
@@ -1617,12 +1622,14 @@ struct Control {
     std::string rpPrevFile() const { return base + "/cache/replay-antes.json"; }
     // carga un estado completo (de un archivo) como una memoria, pero sin apagar los efectos de actuación: tal cual era
     void loadStateFile(const std::string& f) {
-        if (learn_ >= 0) learnStop(); comboOff();
+        if (learn_ >= 0) learnStop();
+        comboOff();
         std::map<std::string, float> keepF; std::map<std::string, std::string> keepS;
         for (auto& [k, v] : st) if (k.rfind("midi.", 0) == 0 || k == "rec.stems") keepF[k] = v;
         for (auto& [k, v] : ss) if (k.rfind("midi.", 0) == 0) keepS[k] = v;
         const std::string keep = file; file = f; load(); file = keep;
-        for (auto& [k, v] : keepF) st[k] = v; for (auto& [k, v] : keepS) ss[k] = v;
+        for (auto& [k, v] : keepF) st[k] = v;
+        for (auto& [k, v] : keepS) ss[k] = v;
         pushAll(); mapDirty = true; dirty = true; dirtyAt = std::chrono::steady_clock::now();
     }
     void loadStateString(const std::string& js) {
@@ -1820,7 +1827,8 @@ struct Control {
         if (!std::filesystem::exists(recDir() + "/" + take)) return false;
         std::vector<std::pair<double, std::string>> marks;
         { std::ifstream in(f); std::string line; while (std::getline(in, line)) { int h = 0, m = 0; double x = 0; const size_t tab = line.find('\t');
-            if (tab == std::string::npos || std::sscanf(line.c_str(), "%d:%d:%lf", &h, &m, &x) != 3) continue; marks.push_back({h * 3600 + m * 60 + x, line.substr(tab + 1)}); } }
+            if (tab == std::string::npos || std::sscanf(line.c_str(), "%d:%d:%lf", &h, &m, &x) != 3) continue;
+            marks.push_back({h * 3600 + m * 60 + x, line.substr(tab + 1)}); } }
         if (remove) marks.erase(std::remove_if(marks.begin(), marks.end(), [&](const auto& mk) { return std::fabs(mk.first - sec) < 0.002; }), marks.end());
         else { std::string l; for (char c : label) l += (c == '\t' || c == '\n' || c == '\r') ? ' ' : c; if (l.empty()) l = "Mark"; marks.push_back({sec, l.substr(0, 80)}); }
         std::stable_sort(marks.begin(), marks.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
@@ -2034,7 +2042,8 @@ struct Control {
                     std::vector<unsigned char> m; std::istringstream hs(line); std::string h;
                     while (hs >> h) m.push_back(static_cast<unsigned char>(std::strtol(h.c_str(), nullptr, 16)));
                     if (m.size() < 8 || m.front() != 0xF0 || m.back() != 0xF7) continue;
-                    if (lpdOut) lpdOut(m); ++n; std::this_thread::sleep_for(std::chrono::milliseconds(400));
+                    if (lpdOut) lpdOut(m);
+                    ++n; std::this_thread::sleep_for(std::chrono::milliseconds(400));
                 }
                 lpdReprog_ = true; srv.broadcast("note LPD8|" + (n ? std::to_string(n) + " programs written" : std::string("nothing written: is it connected?")));
             }).detach(); }
@@ -2241,7 +2250,8 @@ struct Control {
     }
     // todos los efectos del máster a cero y la combinación activa fuera (como «All off» en la web)
     void masterAllOff() {
-        if (learn_ >= 0) learnStop(); comboOff();
+        if (learn_ >= 0) learnStop();
+        comboOff();
         for (const char* k : {"m.filt", "m.rep", "m.gate", "m.riser", "m.space", "m.throw", "m.tape", "m.comb", "m.sweep", "m.chorus", "m.width", "m.lofi", "m.spFrz", "m.thFrz", "m.lpf", "m.hpf"}) if (st[k] != 0) set(k, 0, -1);
         topNote("Master effects", "all off");
     }
@@ -2846,7 +2856,8 @@ struct Control {
                     l += " s"; for (auto& sp : au.gran.segPk) l += " " + jnum(std::round(sp.load() * 100) / 100);
                     srv.broadcast(l);
                 }
-                if (au.recState.load() == 2) finishRec(); recSavedCheck(); lpdTick(); xlTick(); trecPoll(); rpPoll();
+                if (au.recState.load() == 2) finishRec();
+                recSavedCheck(); lpdTick(); xlTick(); trecPoll(); rpPoll();
                 // monitor MIDI: puertos abiertos y último mensaje
                 { const unsigned c = gMidiCount.load();
                   std::string ports; { std::lock_guard<std::mutex> lk(gMidiNamesMx); for (size_t i = 0; i < gMidiNames.size(); ++i) { if (i) ports += " | "; ports += gMidiNames[i]; } }
@@ -2944,7 +2955,8 @@ int oxiExport(const std::string& dir) {
     struct KitDef { const char* title; const char* abbr; int uiKit; }; static const KitDef kKits[3] = {{"Freon Drums", "FDRM", 1}, {"Freon Drums FM", "FDFM", 2}, {"Freon Drums Chip", "FDCH", 3}};
     const auto lbl = [](const std::string& k, bool fm) -> std::pair<std::string, std::string> {
         static const std::map<std::string, std::pair<std::string, std::string>> A = {{"level", {"Level", "LVL"}}, {"tune", {"Pitch", "PIT"}}, {"decay", {"Decay", "DEC"}}, {"tone", {"Tone", "TON"}}, {"snap", {"Snap", "SNP"}}, {"sweep", {"Sweep", "SWP"}}, {"filt", {"Filter", "FLT"}}, {"reso", {"Reso", "RES"}}, {"vel", {"Velocity", "VEL"}}, {"color", {"FM", "FMA"}}, {"shape", {"Ratio", "RAT"}}, {"contour", {"FM decay", "FMD"}}, {"pan", {"Pan", "PAN"}}};
-        if (fm && k == "snap") return {"Noise", "NOI"}; return A.at(k); };
+        if (fm && k == "snap") return {"Noise", "NOI"};
+        return A.at(k); };
     for (const auto& kit : kKits) {
         std::vector<OxiP> ps; ps.push_back({"Kit", "KIT", 3, 0, 4, kit.uiKit, false}); const char* extra = nullptr; const char* const* sl = drumSlots(kit.uiKit, extra); const bool fm = kit.uiKit == 2;
         for (int c = 0; c < 8; ++c) {
@@ -3566,8 +3578,13 @@ int main(int argc, char** argv) {
         ctl.onNetCheck = [ap = false, due = 0]() mutable {
 #ifdef __linux__
             bool nowAp = false; ifaddrs* ifa = nullptr;
-            if (getifaddrs(&ifa) == 0) { for (ifaddrs* i = ifa; i; i = i->ifa_next) if (i->ifa_addr && i->ifa_addr->sa_family == AF_INET && std::string(i->ifa_name) == "wlan0" &&
-                ntohl(reinterpret_cast<sockaddr_in*>(i->ifa_addr)->sin_addr.s_addr) == 0x0A2A0001u) nowAp = true; freeifaddrs(ifa); }
+            if (getifaddrs(&ifa) == 0) {
+                for (ifaddrs* i = ifa; i; i = i->ifa_next) {
+                    if (i->ifa_addr && i->ifa_addr->sa_family == AF_INET && std::string(i->ifa_name) == "wlan0" &&
+                        ntohl(reinterpret_cast<sockaddr_in*>(i->ifa_addr)->sin_addr.s_addr) == 0x0A2A0001u) nowAp = true;
+                }
+                freeifaddrs(ifa);
+            }
             if (nowAp != ap) { ap = nowAp; due = 2; }   // comprobación cada 2 s: 2 vueltas = 4 s
             if (due > 0 && --due == 0) gReopen = true;
 #else

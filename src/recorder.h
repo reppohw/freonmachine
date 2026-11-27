@@ -232,7 +232,8 @@ private:
         for (;;) {
             std::deque<Cmd> cmds;
             { std::unique_lock<std::mutex> lk(mx_); cv_.wait_for(lk, std::chrono::milliseconds(20), [this] { return quit_ || !q_.empty(); });
-              if (quit_) break; cmds.swap(q_); }
+              if (quit_) break;
+              cmds.swap(q_); }
             drainMaster(); drainStems(); drainEvents();   // primero lo que ya sonó: una orden se aplica en este punto de la toma
             for (auto& c : cmds) handle(c);
             if (open_) keepSafe(false);

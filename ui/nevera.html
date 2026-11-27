@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="google" content="notranslate">
-<title>FUGA DE FREÓN · LA NEVERA v44 · FREON MACHINE</title>
+<title>FUGA DE FREÓN · LA NEVERA v45 · FREON MACHINE</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
   :root { --fg:#e6e6e6; --bg:#000; --fs:4.1vw; }
@@ -3361,12 +3361,22 @@ const PIECE_T = {
   // lluvia de neveras: caen en cada tiempo, rebotan y se apilan; con el bombo se abren todas; al final, revientan en cubitos
   neveras(P, dt, beat, e8, kick, end) {
     const R = AS.rows, C = AS.cols;
-    if (beat && !end && P.a.length < 14) { const s = R * (0.24 + Math.random() * 0.14); P.a.push({ x: C * (0.07 + Math.random() * 0.86), y: -s, vy: 0, s, rot: (Math.random() - 0.5) * 0.4, open: 0, land: false }); }
+    // v45: se llena la pantalla. Columnas de neveras que se apilan; cada nueva cae en la columna más baja.
+    // Primero una por tiempo; luego dos y tres por tiempo, hasta que no cabe ni una más (llena hacia el sexto compás).
+    if (!P.h) { P.sz = R * 0.3; P.nc = Math.max(3, Math.round(C / (P.sz * 0.56 * AS.K * 1.04))); P.h = new Array(P.nc).fill(0); }
+    const el = (now - P.t0) / barSec(), many = !end && beat ? (el < 1.5 ? 1 : el < 3 ? 2 : 3) : 0;
+    for (let n = 0; n < many; n++) {
+      const free = P.h.map((n, c) => ({ n, c })).filter(o => R - P.sz * 0.96 * (o.n + 1) > -P.sz * 0.35);   // aún cabe una (la de arriba puede asomar un poco)
+      if (free.length) {
+        const lo = Math.min(...free.map(o => o.n)), pick = free.filter(o => o.n === lo), { c } = pick[Math.random() * pick.length | 0];
+        const s = P.sz * (0.96 + Math.random() * 0.06), floor = R - P.sz * 0.48 - P.h[c] * P.sz * 0.96; P.h[c]++;
+        P.a.push({ x: (c + 0.5) * C / P.nc, y: -s, vy: 0, s, rot: (Math.random() - 0.5) * 0.3, open: 0, land: false, floor });
+      }
+    }
     for (const f of P.a) {
       if (!f.land) {
         f.vy += R * 2.2 * dt; f.y += f.vy * dt;
-        let floor = R - f.s * 0.48;
-        for (const o of P.a) if (o !== f && o.land && Math.abs(o.x - f.x) < (o.s + f.s) * 0.28 * AS.K) floor = Math.min(floor, o.y - (o.s + f.s) * 0.48);
+        const floor = f.floor;
         if (f.y >= floor) { f.y = floor; if (f.vy > R * 0.35) { f.vy *= -0.3; shatter(f.x, f.y + f.s * 0.45, 6); AS.kickAmp = Math.max(AS.kickAmp, 0.6); } else { f.vy = 0; f.land = true; f.rot *= 0.3; } }
       }
       if (kick) f.open = 1; f.open *= Math.pow(0.04, dt);
