@@ -183,7 +183,8 @@ Hecho (falta probarlo en la Pi con el proyector):
 - [x] Efectos de envío (25-11-2026): con el envío al 100 % el efecto sale tan fuerte como lo que entra (medido; antes, de 0,5 a 9 dB por debajo).
 - [x] Breaks (25-11-2026): se paran con el Stop del Oxi y esperan al Play; si se desenchufa el aparato del reloj, vuelven a ir solos.
 - [x] v36 (27-11-2026): todas las escenas salen en cada show (programa por actos); nada las interrumpe y, si se cortan, siguen donde iban; golpes a pantalla completa (ojos con tres maneras de mirar, boca, cuchillazo, nombres, termómetro).
-- [ ] Probar la v36 con música en la tele y ajustar cuánto salen las escenas, los golpes, los cortes y los destellos.
+- [x] v37 (27-11-2026): capa sólida (textos grandes, bocadillos, rótulos del mapa, peligro, FUGA DE FREÓN, nombres, termómetro y cuchillo, lisos en el color del show); la nevera sin boca (solo ojos); fuera el golpe de la boca; la nevera de fondo casi desaparece en las escenas; frases sobre los hackeos a neveras de supermercados en Francia y Bruselas (octubre-noviembre de 2026).
+- [ ] Probar la v37 con música en la tele y ajustar cuánto salen las escenas, los golpes, los cortes y los destellos.
   - Arreglos: durante una escena ya no se gastan frases ni salen fotos; las frases de la historia no se rompen hasta la venganza; la lluvia de neveras sale desde el acto 3.
 - [x] v28 (24-11-2026), tras la revisión con Jorge:
   - La reso ya no hace vibrar la pantalla por estar alta (la 303 y el Moog suelen ir así): vibra al *moverla*. El filtro de T1-T3 cambia el brillo entre 70 % y 125 %, y moverlo da un destello.

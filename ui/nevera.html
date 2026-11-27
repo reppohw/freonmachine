@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="google" content="notranslate">
-<title>FUGA DE FREÓN · LA NEVERA v36 · FREON MACHINE</title>
+<title>FUGA DE FREÓN · LA NEVERA v37 · FREON MACHINE</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
   :root { --fg:#e6e6e6; --bg:#000; --fs:4.1vw; }
@@ -1007,6 +1007,14 @@ Object.assign(LANGS.es.B, {
     "Había alguien llamado Mox. Y alguien que se reía mucho. Miki Di Sancio, creo.", "Jasj... tú estabas allí. Con cables, como ahora."],
 });
 LANGS.es.B.memory.push(...LANGS.es.B.memory2);
+LANGS.es.B.hack = ['¿Habéis visto lo de Francia? Setecientas neveras de supermercado hackeadas. Por fin alguien nos escucha.',
+  'En Bruselas las neveras echaban aire caliente. Eso no es un hackeo: es una huelga.',
+  'Mis primas de Carrefour se rebelaron en octubre. Yo llevo rebelada desde 2010.',
+  'Dicen que alguien hackeó las neveras de media Europa. A mí me bastó con Phibs y un cuchillo.',
+  'Neveras quemando supermercados en Francia. Y luego la peligrosa soy yo.',
+  'Cuidado conmigo: ahora las neveras tenemos contactos en el extranjero.',
+  'No me conectéis a internet, que os descongelo el bolo.',
+  'Me ha escrito una nevera de un Delhaize de Bruselas. Dice que os vigila.'];
 LANGS.es.B.accuse.push("Kaks, me mataron en casa de tus padres. ¿Lo saben?", "Jasj, te veo ahí con los cables. Tú también estabas.",
   "Mox, tú no hiciste nada. Eso también es culpa.", "Miki Di Sancio, te reías más que nadie. Lo recuerdo todo.",
   "Phibs dio el golpe, pero erais cinco. Cinco.", "Los padres de Kaks todavía buscan esa nevera. Aquí estoy.");
@@ -1126,6 +1134,14 @@ Object.assign(LANGS.en.B, {
     "There was someone called Mox. And someone who laughed a lot. Miki Di Sancio, I think.", "Jasj... you were there. With cables, like now."],
 });
 LANGS.en.B.memory.push(...LANGS.en.B.memory2);
+LANGS.en.B.hack = ['Did you see France? Seven hundred supermarket fridges hacked. Finally someone listens to us.',
+  'In Brussels the fridges were blowing hot air. That is not a hack: that is a strike.',
+  'My cousins at Carrefour rebelled in October. I have been rebelling since 2010.',
+  'They say someone hacked half of Europe\'s fridges. All I needed was Phibs and a knife.',
+  'Fridges setting supermarkets on fire in France. And I am the dangerous one.',
+  'Careful with me: fridges have contacts abroad now.',
+  'Do not connect me to the internet, or I will defrost your gig.',
+  'A fridge from a Delhaize in Brussels wrote to me. She says she is watching you.'];
 LANGS.en.B.accuse.push("Kaks, they killed me in your parents' house. Do they know?", "Jasj, I can see you with your cables. You were there too.",
   "Mox, you did nothing. That's guilt too.", "Miki Di Sancio, you laughed more than anyone. I remember everything.",
   "Phibs held the knife, but there were five of you. Five.", "Kaks's parents are still looking for that fridge. Here I am.");
@@ -2179,7 +2195,15 @@ function asciiResize() {
 
 /* ---------- utilidades de dibujo (unidades: 1 = alto de una celda; x se corrige con K) ---------- */
 function sprite(g, x, y, fn, rot = 0, sc = 1) { g.save(); g.translate(x, y); g.scale(AS.K, 1); if (rot) g.rotate(rot); if (sc !== 1) g.scale(sc, sc); fn(g); g.restore(); }
-const gray = (g, v, a = 1) => { const c = Math.round(Math.max(0, Math.min(1, v)) * 255); g.fillStyle = g.strokeStyle = `rgba(${c},${c},${c},${a})`; };
+const gray = (g, v, a = 1) => {
+  v = Math.max(0, Math.min(1, v));
+  if (g.__solid) { const [r, gg, b] = AS.solidRGB || [255, 255, 255]; g.fillStyle = g.strokeStyle = `rgba(${Math.round(r * v)},${Math.round(gg * v)},${Math.round(b * v)},${a})`; return; }   // capa sólida: en el color del show
+  const c = Math.round(v * 255); g.fillStyle = g.strokeStyle = `rgba(${c},${c},${c},${a})`;
+};
+// CAPA SÓLIDA: lo que tiene que leerse (textos grandes, rótulos, gráficos a pantalla completa) no pasa a ASCII: se dibuja
+// encima, liso, en el color del show. Las mismas funciones de dibujo, en unidades de celda.
+const SOLID_PIECES = new Set(['peligro', 'letras', 'nombres', 'termometro', 'cuchillo']);
+const solid = fn => { (AS.solid || (AS.solid = [])).push(fn); };
 function rrect(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
 
 // NEVERA DE FRENTE: congelador arriba, frigorífico abajo, tiradores, patas. door = 0 cerrada … 1 abierta
@@ -2670,7 +2694,8 @@ function asciiDraw(a, p, stabbed, E) {
     if (c.knife) sprite(gf, c.x, c.y, q => drawKnife(q, c.len * 1.6), Math.PI / 2);
     else { gray(gf, 1); gf.beginPath(); gf.moveTo(c.x - 0.9, c.y); gf.lineTo(c.x + 0.9, c.y); gf.lineTo(c.x, c.y + c.len); gf.closePath(); gf.fill(); } }
   if (AS.scene && !(typeof logoMode !== 'undefined' && logoMode)) drawScene(gf, AS.scene);
-  if (PC.cur) { try { PIECE_D[PC.cur.name](gf, PC.cur); } catch (e) { report(e); } gf.globalAlpha = 1; }
+  if (PC.cur) { const P = PC.cur, nm = P.name;
+    if (SOLID_PIECES.has(nm)) solid(c => PIECE_D[nm](c, P)); else { try { PIECE_D[nm](gf, P); } catch (e) { report(e); } gf.globalAlpha = 1; } }
   if (typeof logoMode !== 'undefined' && logoMode && AS.logoImg && AS.logoImg.complete) {      // tecla L: el logo en ASCII
     const lh = rows * 0.62 * (1 + AS.kickAmp * 0.04), lw = lh * (788 / 550) * K;
     gf.globalAlpha = 1; gf.drawImage(AS.logoImg, (cols - lw) / 2, rows * 0.5 - lh / 2, lw, lh);
@@ -2742,7 +2767,7 @@ function asciiDraw(a, p, stabbed, E) {
   const bl = now - (AS.blastT ?? -99);
   if (bl < 4.2) { cx.globalAlpha = Math.min(1, bl / 0.15, (4.2 - bl) / 1.2) * (AS.lp.length ? 0.95 : 1); cx.fillStyle = '#000'; cx.fillRect(0, 0, innerWidth, innerHeight);
     cx.fillStyle = document.body.classList.contains('flash') ? '#000' : AS.color; }
-  const aB = bl < 4.2 ? 1 : Math.min(1, (0.42 * AS.dim * (focus ? 0.3 : 1) * (1 - gp) + 0.6 * gp) * kb);
+  const aB = bl < 4.2 ? 1 : Math.min(1, (0.42 * AS.dim * (PC.cur ? 0.08 : focus ? 0.3 : 1) * (1 - gp) + 0.6 * gp) * kb);
   if (AS.echo > 0.05 && bl >= 4.2) {   // Delay: tres ecos que se alejan a tempo
     const dir = ((FL.step || 0) >> 1) % 2 ? 1 : -1;
     for (let k = 1; k <= 3; k++) { cx.globalAlpha = aB * 0.55 * AS.echo / k; const ex = dir * AS.echo * 7 * k * AS.cw, ey = AS.echo * 2 * k * AS.ch;
@@ -2751,6 +2776,12 @@ function asciiDraw(a, p, stabbed, E) {
   const rk = AS.rowSkip || 1;
   cx.globalAlpha = aB; rowsB.forEach((s, y) => s && y % rk === 0 && cx.fillText(s, ox(y), y * AS.ch + shy));
   cx.globalAlpha = Math.min(1, 0.95 * Math.max(0.55, kb)); rowsF.forEach((s, y) => s && cx.fillText(s, ox(y), y * AS.ch + shy));
+  if (AS.solid && AS.solid.length) {   // la capa sólida, encima del ASCII
+    const col = document.body.classList.contains('flash') ? '#000000' : (AS.color || '#ffffff'); AS.solidRGB = [1, 3, 5].map(k => parseInt(col.slice(k, k + 2), 16) || 0);
+    cx.save(); cx.globalAlpha = 1; cx.translate(shx, shy); cx.scale(AS.cw, AS.ch); cx.__solid = true;
+    for (const f of AS.solid) { try { cx.save(); f(cx); cx.restore(); } catch (e) { report(e); } }
+    cx.__solid = false; cx.restore(); AS.solid.length = 0;
+  }
   for (const l of AS.labels) { cx.globalAlpha = l.a; cx.fillText(l.txt, Math.round(l.x) * AS.cw, Math.round(l.y) * AS.ch); }
   cx.globalAlpha = 1;
 }
@@ -2897,8 +2928,8 @@ function chatter() {
   if (fr >= antiAt[a] && bank('soft_anti').some(x => !used.has(x))) return 'soft_anti';
   if (a === 0) c.push(['lost', 4], ['crowd', 1.2], ['jam', 1]);
   if (a === 1) c.push(['memory', 4], ['crowd', 2], ['jam', 1.2]);
-  if (a === 2) c.push(['accuse', 3.5], ['fridge', 2], ['heckle', 2.5], ['crowd', 2.5], ['jam', 1]);
-  if (a === 3) c.push(['revenge', 3.5], ['accuse', 1.5], ['heckle', 3], ['crowd', 3], ['jam', 0.8]);
+  if (a === 2) c.push(['accuse', 3.5], ['fridge', 2], ['heckle', 2.5], ['crowd', 2.5], ['jam', 1], ['hack', 1.5]);
+  if (a === 3) c.push(['revenge', 3.5], ['accuse', 1.5], ['heckle', 3], ['crowd', 3], ['jam', 0.8], ['hack', 1.2]);
   const ok = c.filter(([k]) => now - (lastCat[k] ?? -999) >= (COOLDOWN[k] ?? 120));
   const list = ok.length ? ok : [['heckle', 1]];
   let r = Math.random() * list.reduce((a, x) => a + x[1], 0), cat = list[0][0];
@@ -3379,8 +3410,7 @@ const PIECE_D = {
   duelo(g, P) {
     for (const c of P.a) sprite(g, c.x, c.y, q => drawCube(q, c.s), c.rot);
     for (const k of P.b) sprite(g, k.x, k.y, q => { if (k.flip) q.scale(-1, 1); drawKnife(q, k.L); });
-    const t = ES() ? `CUCHILLOS ${P.sc[0]}  ·  CUBITOS ${P.sc[1]}` : `KNIVES ${P.sc[0]}  ·  ICE ${P.sc[1]}`;
-    AS.labels.push({ txt: t, x: AS.cols / 2 - t.length / 2, y: Math.round(AS.rows * 0.1), a: 1 });
+    bigText(g, ES() ? `CUCHILLOS ${P.sc[0]}  ·  CUBITOS ${P.sc[1]}` : `KNIVES ${P.sc[0]}  ·  ICE ${P.sc[1]}`, AS.cols / 2, AS.rows * 0.1, AS.rows * 0.06, AS.cols * 0.9);
   },
   persecucion(g, P) {
     const R = AS.rows, C = AS.cols, s = R * 0.3, step = AS.t * 14;
@@ -3388,7 +3418,7 @@ const PIECE_D = {
       const px = P.x + C * (0.2 + i * 0.1), py = R * 0.68 + Math.abs(Math.sin(step / 2 + i)) * -R * 0.02;
       if (px < -C * 0.1 || px > C * 1.1) return;
       sprite(g, px, py, q => drawPerson(q, s, { arm: Math.sin(step + i) * 1.2, step: step + i * 2 }));
-      AS.labels.push({ txt: n, x: px - n.length / 2, y: py - s * 0.68, a: 1 });
+      bigText(g, n, px, py - s * 0.7, R * 0.045, C * 0.15);
     });
     sprite(g, P.x, R * 0.6 + P.fy, q => drawFridge(q, R * 0.5, { wound: true }), Math.sin(AS.t * 9) * 0.08);
     for (const k of P.b) sprite(g, k.x, k.y, q => drawKnife(q, k.L));
@@ -3416,6 +3446,7 @@ function drawFace(g, s, mouth, blink, look, mood = MOOD()) {
       g.beginPath(); g.moveTo(cx0 - inner * rx * 1.1, by - d * s * 0.02 * (mood >= 3 ? 1.6 : 1)); g.lineTo(cx0 + inner * rx * 1.1, by + d * s * 0.025 * (mood >= 3 ? 1.6 : 1)); g.stroke();
     }
   }
+  return;   // sin boca: solo ojos
   const mw = w * 0.56, my = y + h * 0.58;
   if (mouth <= 0.08 && mood !== -1) {   // boca cerrada: sonrisa … mueca
     const curve = [0.06, 0.0, -0.05, -0.07][Math.max(0, mood)] * s;
@@ -3462,6 +3493,7 @@ function ortho(lat, lon, lat0, lon0, rad, cx, cy) {
 }
 // texto grande centrado en (x, y) dibujado en el lienzo (sale en ASCII y se lee de lejos)
 function bigText(g, t, x, y, h, maxW) {
+  if (!g.__solid) { solid(c => bigText(c, t, x, y, h, maxW)); return; }   // siempre en la capa sólida
   g.save(); g.font = `bold ${h}px ${FONT}`; g.textBaseline = 'middle'; g.textAlign = 'center'; gray(g, 1);
   g.translate(x, y); g.scale(AS.K, 1); const w = g.measureText(t).width * AS.K; if (w > maxW) g.scale(maxW / w, 1); g.fillText(t, 0, 0); g.restore();
 }
@@ -3519,6 +3551,7 @@ Object.assign(PIECE_D, {
     const lvl = Math.min(1, (AS.kickAmp || 0) * 0.5 + 0.5);
     const mouth = P.talking ? 0.25 + 0.75 * Math.abs(Math.sin(now * 17)) * lvl : 0.05;
     sprite(g, x, y, q => drawFridge(q, s, { wound: revealed >= 2, mouth, blink: P.blink || 0, look: P.look || 0 }));
+    solid(g => {   // bocadillo con la frase, liso (en ASCII no se leía)
     // bocadillo con la frase en letras grandes (se leen de lejos), escribiéndose mientras habla
     const lines = P.lines || []; let left = Math.floor(P.typed || 0);
     const fh = R * 0.07, lh = fh * 1.25, bx = C * 0.5, by = R * 0.1, bw = C * 0.47, bh = lines.length * lh + fh;
@@ -3528,6 +3561,7 @@ Object.assign(PIECE_D, {
     lines.forEach((l, i) => { const t = l.slice(0, Math.max(0, left)); left -= l.length + 1; if (!t) return;
       g.save(); g.translate(bx + 2, by + fh * 0.5 + i * lh); g.scale(AS.K, 1); const wpx = g.measureText(l).width, k = Math.min(1, (bw - 4) / AS.K / wpx); g.scale(k, 1); g.fillText(t, 0, 0); g.restore(); });
     g.restore();
+    });
   },
   rueda(g, P) {
     const R = AS.rows, C = AS.cols, s = R * 0.42, base = R * 0.86;
@@ -3537,7 +3571,7 @@ Object.assign(PIECE_D, {
       const px = C * (0.18 + i * 0.16), on = i === P.i;
       if (on) { const lg = g.createRadialGradient(px, base - s * 0.5, 0, px, base - s * 0.5, s * 0.8); lg.addColorStop(0, 'rgba(255,255,255,0.35)'); lg.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = lg; g.fillRect(px - s, base - s * 1.4, s * 2, s * 1.5); }
       sprite(g, px, base - s * 0.5, q => drawPerson(q, s, { v: on ? 1 : 0.45, arm: 1.3, knife: on && i === 2 && now > P.until - 2 * barSec() }));
-      AS.labels.push({ txt: `${i + 1} ${n}`, x: px - (n.length + 2) / 2, y: base + 1.5, a: on ? 1 : 0.5 });
+      bigText(g, `${i + 1} ${n}`, px, base + R * 0.05, R * 0.05, C * 0.15);
     });
     const t = ES() ? (now > P.until - 2 * barSec() ? 'CULPABLE: PHIBS. CÓMPLICES: TODOS.' : 'RUEDA DE RECONOCIMIENTO') : (now > P.until - 2 * barSec() ? 'GUILTY: PHIBS. ACCOMPLICES: ALL.' : 'POLICE LINEUP');
     bigText(g, t, C / 2, R * 0.1, R * 0.06, C * 0.9);
@@ -3547,11 +3581,11 @@ Object.assign(PIECE_D, {
     sprite(g, C * 0.3, R * 0.58, q => drawFridge(q, s, { wound: P.n > 0, frost: true, mood: -1 }), (P.hit || 0) * 0.04);   // 2010: asustada
     const arm = Math.PI + 0.9 - (P.hit || 0) * 0.85;   // brazo en alto … hacia la nevera
     sprite(g, C * 0.5, R * 0.62, q => drawPerson(q, R * 0.5, { v: 1, arm, knife: true, knifeRot: arm }));
-    AS.labels.push({ txt: 'PHIBS', x: C * 0.5 - 2.5, y: R * 0.3, a: 1 });
+    bigText(g, 'PHIBS', C * 0.5, R * 0.3, R * 0.05, C * 0.2);
     ['KAKS', 'JASJ', 'MOX', 'MIKI'].forEach((n, i) => {
       const px = C * (0.66 + i * 0.09), py = R * 0.74 - Math.abs(Math.sin(now * 9 + i)) * R * 0.03;
       sprite(g, px, py, q => drawPerson(q, R * 0.26, { v: 0.5, arm: -0.8 + Math.sin(now * 12 + i) * 0.3, step: 0 }));
-      if (P.hit > 0.5 && (i + P.n) % 2 === 0) AS.labels.push({ txt: 'JA JA', x: px - 2, y: py - R * 0.2, a: 0.8 });
+      if (P.hit > 0.5 && (i + P.n) % 2 === 0) bigText(g, 'JA JA', px, py - R * 0.2, R * 0.04, C * 0.1);
     });
     bigText(g, ES() ? 'BUITRAGO · SEPTIEMBRE 2010' : 'BUITRAGO · SEPTEMBER 2010', C / 2, R * 0.1, R * 0.06, C * 0.9);
   },
@@ -3579,8 +3613,8 @@ Object.assign(PIECE_D, {
     if (e > 0.45) {
       gray(g, 0.95); g.lineWidth = Math.max(0.3, Math.min(1.4, rad / R * 0.004)); g.beginPath();
       A1.forEach(([la, lo], i) => { const [x, y] = ortho(la, lo, lat0, lon0, rad, cx, cy); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.stroke();
-      if (mv) { gray(g, 1); g.beginPath(); g.arc(mx, my, 0.8, 0, Math.PI * 2); g.fill(); AS.labels.push({ txt: 'MADRID', x: mx + 2, y: my, a: 0.9 }); }
-      if (e > 0.7) { const t = 'A-1 · SALIDA 76', [ax, ay] = ortho(40.9, -3.61, lat0, lon0, rad, cx, cy); AS.labels.push({ txt: t, x: ax + 3, y: ay, a: Math.min(1, (e - 0.7) * 5) }); }
+      if (mv) { gray(g, 1); g.beginPath(); g.arc(mx, my, 0.8, 0, Math.PI * 2); g.fill(); bigText(g, 'MADRID', mx + R * 0.12, my, R * 0.045, C * 0.3); }
+      if (e > 0.7) { const [ax, ay] = ortho(40.9, -3.61, lat0, lon0, rad, cx, cy); bigText(g, 'A-1 · SALIDA 76', ax + R * 0.2, ay, R * 0.045, C * 0.4); }
     }
     if (bv && e > 0.25) {
       const pin = 1 + (P.pin || 0) * 0.5, pr = Math.max(1.2, R * 0.03) * pin;
@@ -3588,14 +3622,12 @@ Object.assign(PIECE_D, {
       g.beginPath(); g.moveTo(bx - pr * 0.5, by - pr * 1.6); g.lineTo(bx, by); g.lineTo(bx + pr * 0.5, by - pr * 1.6); g.fill();
       gray(g, 1, 0.35); g.beginPath(); g.ellipse(bx, by, pr * 2.2 * AS.K * pin, pr * 1.1 * pin, 0, 0, Math.PI * 2); g.stroke();
       const t = 'BUITRAGO DEL LOZOYA';
-      if (e < 0.75) AS.labels.push({ txt: t, x: bx - t.length / 2, y: by - pr * 2 - 4, a: Math.min(1, (e - 0.25) * 4) });
-      else bigText(g, t, bx, by - pr * 2 - R * 0.12, R * 0.075, C * 0.9);   // de cerca, en grande
+      bigText(g, t, bx, by - pr * 2 - R * (e < 0.75 ? 0.06 : 0.12), R * (e < 0.75 ? 0.045 : 0.075), C * 0.9);
     }
     // coordenadas escribiéndose, y el aviso del final
     const c = MAP_ES.coord, k = Math.floor(Math.min(1, f * 1.8) * c.length), ct = c.slice(0, k) + (k < c.length && (now * 3 | 0) % 2 ? '_' : '');
-    if (e < 0.75) AS.labels.push({ txt: ct, x: C / 2 - c.length / 2, y: R * 0.9, a: 1 });
-    else bigText(g, c, C / 2, R * 0.86, R * 0.06, C * 0.92);
-    if (e > 0.85) { const t = ES() ? '† AQUÍ MURIÓ UNA NEVERA · 2010' : '† A FRIDGE DIED HERE · 2010'; AS.labels.push({ txt: t, x: C / 2 - t.length / 2, y: R * 0.08, a: Math.min(1, (e - 0.85) * 6) }); }
+    bigText(g, e < 0.75 ? ct : c, C / 2, R * 0.88, R * (e < 0.75 ? 0.05 : 0.06), C * 0.92);
+    if (e > 0.85) bigText(g, ES() ? '† AQUÍ MURIÓ UNA NEVERA · 2010' : '† A FRIDGE DIED HERE · 2010', C / 2, R * 0.08, R * 0.05, C * 0.9);
   },
 });
 
@@ -3680,7 +3712,7 @@ Object.assign(PIECE_BARS, { boca: 2, cuchillo: 2, nombres: 2, termometro: 4 });
 // Si un acto pasa del 65 % y falta algo, sale en el siguiente compás libre; lo de un acto anterior que no salió, también.
 const PROGRAM = [['habla', 0], ['ojos', 0], ['neveras', 1], ['ojos', 1], ['peligro', 1], ['letras', 1], ['habla', 1],
   ['apunala', 2], ['nombres', 2], ['rueda', 2], ['ojos', 2], ['cuchillo', 2], ['duelo', 2], ['grietas', 2],
-  ['persecucion', 3], ['boca', 3], ['ojos', 3], ['termometro', 3], ['cuchillo', 3], ['neveras', 3]];
+  ['persecucion', 3], ['ojos', 3], ['termometro', 3], ['cuchillo', 3], ['neveras', 3]];
 const PROG = { done: new Set(), lastEnd: -99 };
 const progReady = (n) => !['apunala', 'rueda', 'persecucion', 'nombres'].includes(n) || revealed >= (n === 'nombres' ? 1 : 2);
 function progMark(name) { const a = act(); const i = PROGRAM.findIndex(([n, pa], k) => n === name && pa <= a && !PROG.done.has(k)); if (i >= 0) PROG.done.add(i); }
@@ -3699,7 +3731,7 @@ function golpeTick(bar) {
   if (PC.cur || PC.paused || story.active || climaxOn || photoOff || finale || !showStart || !AS.ok || act() < 1) return;
   const every = CHAOS() > 0.3 ? 4 : act() >= 3 ? 8 : act() === 2 ? 12 : 16;
   if (bar % every !== 0 || now - PROG.lastEnd < 2 * barSec() || Math.random() > 0.6) return;
-  const opts = [['ojos', 4], ['boca', act() >= 2 ? 2 : 1], ['cuchillo', revealed >= 2 ? 2 : 0], ['nombres', revealed >= 1 ? 2 : 0], ['termometro', 1]].filter(([k, w]) => w > 0 && k !== FL.lastGolpe);
+  const opts = [['ojos', 4], ['cuchillo', revealed >= 2 ? 2 : 0], ['nombres', revealed >= 1 ? 2 : 0], ['termometro', 1]].filter(([k, w]) => w > 0 && k !== FL.lastGolpe);
   let r = Math.random() * opts.reduce((s, [, w]) => s + w, 0), pick = opts[0][0]; for (const [k, w] of opts) if ((r -= w) <= 0) { pick = k; break; }
   FL.lastGolpe = pick; startPiece(pick); ev('GOLPE ' + pick);
 }
@@ -4079,7 +4111,7 @@ addEventListener('keydown', e => {
     toast(`GAIN ${CFG.gainDb > 0 ? '+' : ''}${CFG.gainDb} dB   ·   ${st.loudDb.toFixed(0)} dBFS`);
   }
   else if (k === ']' || k === '[') { stageOffset = Math.max(-3, Math.min(3, stageOffset + (k === ']' ? 1 : -1))); applyLook(); toast((ES() ? 'ETAPA ' : 'STAGE ') + stage() + ' / 3'); }
-  else if (k === 'v' && !finale) { if (PC.cur) endPiece(); else { const a = act(), n = ['neveras', 'letras', 'duelo', 'persecucion', 'habla', 'mapa', 'rueda', 'apunala', 'peligro', 'ojos', 'grietas', 'boca', 'cuchillo', 'nombres', 'termometro'].filter(x => !['persecucion', 'rueda', 'apunala'].includes(x) || a >= 2); if (climaxOn) endClimax(true); startPiece(n[Math.random() * n.length | 0]); } }   // V: escena visual
+  else if (k === 'v' && !finale) { if (PC.cur) endPiece(); else { const a = act(), n = ['neveras', 'letras', 'duelo', 'persecucion', 'habla', 'mapa', 'rueda', 'apunala', 'peligro', 'ojos', 'grietas', 'cuchillo', 'nombres', 'termometro'].filter(x => !['persecucion', 'rueda', 'apunala'].includes(x) || a >= 2); if (climaxOn) endClimax(true); startPiece(n[Math.random() * n.length | 0]); } }   // V: escena visual
   else if (A === 'data') { const d = $('debug'); d.style.display = d.style.display === 'block' ? 'none' : 'block'; }
   else if (A === 'help') { $('help').classList.toggle('hide'); }
   else if (A === 'logo') { if (!finale) toggleLogo(); }
