@@ -191,7 +191,8 @@ Hecho (falta probarlo en la Pi con el proyector):
 - [x] 27-11-2026: vuelta a la v37 como nevera principal (mucho ASCII y algunas cosas en sólido); el estilo de las v38-v41 no convenció. La v41 queda en `ui/nevera-v41.html` (de ahí se pueden rescatar: modo demo, mapa con bordes reales, bocadillo de una pieza, logos sólidos, sin nevera de fondo en las escenas, Mayús+D en la espera, demo adelante/atrás).
 - [x] v42 (27-11-2026): la v37 (ASCII) más lo bueno de la v38: modo demo (Mayús+D, también en la espera; ← →; botones en la web), mapa liso con los bordes reales de la Comunidad de Madrid y del término de Buitrago, bocadillo de una pieza con el texto encajado, logos sólidos (estrobo y logo de gas), escenas limpias (sin el recuerdo de fondo ni cubitos, cuchillos o carámbanos por delante), sin las fotos de Berlín y del club de la lucha.
 - [x] v43 (27-11-2026): ojos gigantes en sólido con párpados (la pupila no se aplasta y se cierran del todo); la nevera con ojos grandes y la grieta en la puerta; FUGA DE FREÓN y PELIGRO centrados; el cuchillo de Phibs con el filo abajo; rueda con triángulo selector sobre cada uno (el señalado, relleno y saltando); fuera el cuchillo que corta la pantalla; cuchillos contra cubitos en sólido y con cuchillos más grandes; una grieta que crece y echa ramas; termómetro de punta recta y sin salirse.
-- [ ] Seguir desde la v43.
+- [x] v44 (27-11-2026): rueda de reconocimiento y cuchillos contra cubitos otra vez en ASCII; prueba de la nevera sin cara (sin ojos ni cuernos; `FACE_ON` en nevera.html la vuelve a poner). Los ojos gigantes siguen.
+- [ ] Seguir desde la v44.
 - [ ] Reducir el glitch horizontal.
 - [ ] Probar la v38 con música en la tele y ajustar cuánto salen las escenas, los golpes, los cortes y los destellos.
   - Arreglos: durante una escena ya no se gastan frases ni salen fotos; las frases de la historia no se rompen hasta la venganza; la lluvia de neveras sale desde el acto 3.
