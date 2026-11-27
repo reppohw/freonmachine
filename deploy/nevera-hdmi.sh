@@ -11,7 +11,7 @@
 DIR="$(cd "$(dirname "$0")" && pwd)"
 # sin cursor del ratón en la pantalla: un tema de cursor invisible (un punto transparente para todas las flechas)
 T="$HOME/.icons/freon-vacio/cursors"; mkdir -p "$T"; cp -f "$DIR/cursor-vacio" "$T/default"
-for n in left_ptr arrow top_left_arrow pointer hand1 hand2 text xterm watch wait progress crosshair grab grabbing; do ln -sf default "$T/$n"; done
+for n in left_ptr arrow top_left_arrow pointer hand1 hand2 text xterm ibeam watch wait progress left_ptr_watch crosshair grab grabbing help question_arrow move fleur all-scroll copy alias no-drop not-allowed crossed_circle dnd-none context-menu cell vertical-text zoom-in zoom-out col-resize row-resize ew-resize ns-resize nesw-resize nwse-resize n-resize s-resize e-resize w-resize ne-resize nw-resize se-resize sw-resize sb_h_double_arrow sb_v_double_arrow; do ln -sf default "$T/$n"; done
 printf '[Icon Theme]\nName=freon-vacio\n' > "$HOME/.icons/freon-vacio/index.theme"
 export XCURSOR_THEME=freon-vacio XCURSOR_PATH="$HOME/.icons:/usr/share/icons" XCURSOR_SIZE=24
 hdmi() { cat /sys/class/drm/card*-HDMI-A-*/status 2>/dev/null | grep -qx connected; }
