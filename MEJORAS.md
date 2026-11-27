@@ -189,7 +189,8 @@ Hecho (falta probarlo en la Pi con el proyector):
 - [x] v40 (27-11-2026): ESTILO MAPA. Todo lo que se dibuja pasa a polígono como el borde de la Comunidad de Madrid: curvas hechas de tramos rectos, rectas con un quiebro irregular fijo (no tiembla), esquinas en chaflán y trazos de final recto. `?suave` lo apaga para comparar. Mismo gasto que sin él.
 - [x] v41 (27-11-2026): estilo mapa marcado. Sin quiebro de boceto: rectas limpias, círculos de 6-7 lados algo irregulares, chaflanes marcados. Gas en polígonos con contorno, humo que sube en capas como curvas de nivel, escarcha en mosaico de triángulos y el final (gas rojo y logo) en mosaico de triángulos.
 - [x] 27-11-2026: vuelta a la v37 como nevera principal (mucho ASCII y algunas cosas en sólido); el estilo de las v38-v41 no convenció. La v41 queda en `ui/nevera-v41.html` (de ahí se pueden rescatar: modo demo, mapa con bordes reales, bocadillo de una pieza, logos sólidos, sin nevera de fondo en las escenas, Mayús+D en la espera, demo adelante/atrás).
-- [ ] Seguir desde la v37.
+- [x] v42 (27-11-2026): la v37 (ASCII) más lo bueno de la v38: modo demo (Mayús+D, también en la espera; ← →; botones en la web), mapa liso con los bordes reales de la Comunidad de Madrid y del término de Buitrago, bocadillo de una pieza con el texto encajado, logos sólidos (estrobo y logo de gas), escenas limpias (sin el recuerdo de fondo ni cubitos, cuchillos o carámbanos por delante), sin las fotos de Berlín y del club de la lucha.
+- [ ] Seguir desde la v42.
 - [ ] Reducir el glitch horizontal.
 - [ ] Probar la v38 con música en la tele y ajustar cuánto salen las escenas, los golpes, los cortes y los destellos.
   - Arreglos: durante una escena ya no se gastan frases ni salen fotos; las frases de la historia no se rompen hasta la venganza; la lluvia de neveras sale desde el acto 3.
