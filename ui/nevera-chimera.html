@@ -52,6 +52,7 @@ function onVis(rest) {
   S.live = true; S.lastFrame = performance.now(); S.run = run; if (bpm >= 40 && bpm <= 300) S.bpm = bpm;
   if (hits & 3) S.lastHit = T;   // golpe de verdad: deja de simular
   if (hits & 1) hitKick(); if (hits & 2) hitSnare(); if (hits & 0x60) S.hat = 1;
+  if (S.sim) return;   // simulando (Freon sin música): no pisar el espectro ni el máster simulados
   S.master = Math.max(S.master * 0.6, Math.min(1, Math.pow(10, db / 20) * 1.6));
   const n = Math.min(s.length, 512), step = n / 64;
   for (let i = 0; i < 64; i++) { let v = 0; for (let k = Math.floor(i * step); k < Math.floor((i + 1) * step); k++) v = Math.max(v, s.charCodeAt(k)); S.spec[i] = Math.max(S.spec[i] * 0.7, v / 255); }
@@ -231,13 +232,6 @@ function viewEspecimen() {
   dbl(ev, 3, '#9FE1CB', COL.greenG, 0.9);
   thin(() => { for (let k = 0; k < 9; k++) { const cx = inL + h * (0.13 + (k * 0.037) % 0.2), cy = inT + h * (0.03 + ((k * 7) % 5) * 0.04), r = h * 0.01; for (let a = 0; a < 3; a++) { const an = a * Math.PI / 3; g.moveTo(cx - Math.cos(an) * r, cy - Math.sin(an) * r); g.lineTo(cx + Math.cos(an) * r, cy + Math.sin(an) * r); } } }, '#B5D4F4', 0.8);
   dbl(() => rr(inL + h * 0.11, split - h * 0.12, bxx - inL - h * 0.13, h * 0.1, 6), 2, '#9CC6EC', '#1F4E79', 0.8);
-  // 7. el ojo, de perfil, junto a la puerta del congelador: párpados, iris en anillos y pupila que mira
-  const ox = x1 - t - h * 0.075, oy = y0 + h * 0.1, orx = h * 0.05, blink = (T % 4.3) < 0.12 ? 1 : 0;
-  dbl(() => { g.moveTo(ox - orx, oy); g.quadraticCurveTo(ox, oy - orx * (0.9 - 0.85 * blink), ox + orx, oy); g.quadraticCurveTo(ox, oy + orx * (0.9 - 0.85 * blink), ox - orx, oy); }, 2.5);
-  if (!blink) { const lk = Math.sin(T * 0.7) * orx * 0.3; g.save(); g.beginPath(); g.moveTo(ox - orx, oy); g.quadraticCurveTo(ox, oy - orx * 0.9, ox + orx, oy); g.quadraticCurveTo(ox, oy + orx * 0.9, ox - orx, oy); g.clip();
-    thin(() => { g.arc(ox + lk, oy, orx * 0.48, 0, Math.PI * 2); }, COL.line, 1); thin(() => { g.arc(ox + lk, oy, orx * 0.36, 0, Math.PI * 2); }, '#5B8DBF', 0.8);
-    g.fillStyle = COL.line; g.beginPath(); g.arc(ox + lk, oy, orx * 0.2 * (1 + S.kick * 0.3), 0, Math.PI * 2); g.fill(); g.restore(); }
-  const ang = 0.1 + S.snare * 0.4; dbl(() => { g.moveTo(ox - orx * 1.1, oy - orx * 0.95); g.quadraticCurveTo(ox, oy - orx * (1.15 + ang), ox + orx * 1.1, oy - orx * (0.85 - ang * 1.5)); }, 2.2);
   // 8. la cuchillada: en la puerta de abajo, naranja
   const wx = x1 - t * 0.5, wy = split + h * 0.18;
   neon(() => { [[0, -0.05], [-0.4, 0], [0.3, 0.04], [-0.3, 0.09], [0.2, 0.13]].forEach(([u, v], i) => i ? g.lineTo(wx + u * t * 0.8, wy + v * h) : g.moveTo(wx + u * t * 0.8, wy + v * h)); }, COL.orange, COL.orangeG, 1.5);
@@ -273,7 +267,6 @@ function viewEspecimen() {
   tag(fx - fr * 0.7, fy - fr * 0.7, LX, fy - h * 0.12, 'VENTILADOR', COL.green);
   tag(cpx, cpy - h * 0.07, LX, y1 + h * 0.02, 'COMPRESOR', COL.pink);
   tag(x1 - t - 6, y0 + h * 0.25, x1 + h * 0.22, y0 + h * 0.2, 'JUNTA');
-  tag(ox + orx, oy, x1 + h * 0.22, y0 + h * 0.06, 'OJO');
   tag(thx + thr, thy, x1 + h * 0.22, split + h * 0.04, 'TERMOSTATO', COL.orange);
   tag(wx + t * 0.4, wy + h * 0.04, x1 + h * 0.22, split + h * 0.2, 'CUCHILLADA', COL.orange);
   tag(bxx + bw, split + h * 0.42, x1 + h * 0.22, split + h * 0.38, 'CAJONES DE LA PUERTA');
@@ -292,114 +285,240 @@ function viewEspecimen() {
   txt('10 CM', 48 + h * 0.058, H - 100, { size: 10 });
 }
 
-/* ---------- lámina 2: la autopsia (el cuchillazo de 2010) ---------- */
-function person(cx, base, h, armA, col = COL.line, glow = COL.glow, w = 1.4) {   // persona de perfil, en contorno
-  const hr = h * 0.075, hy = base - h + hr, sh = hy + hr * 1.55;
-  neon(() => { g.arc(cx, hy, hr, 0, Math.PI * 2); }, col, glow, w);
-  neon(() => { g.moveTo(cx - h * 0.09, base); g.lineTo(cx - h * 0.07, base - h * 0.45); g.quadraticCurveTo(cx - h * 0.12, sh, cx, sh - hr * 0.3); g.quadraticCurveTo(cx + h * 0.12, sh, cx + h * 0.07, base - h * 0.45); g.lineTo(cx + h * 0.09, base); }, col, glow, w);
-  if (armA == null) return [cx, sh, sh];   // sin brazo (de frente, en la rueda)
-  const ax = cx + Math.cos(armA) * h * 0.32, ay = sh + hr * 0.4 + Math.sin(armA) * h * 0.32;
-  neon(() => { g.moveTo(cx, sh + hr * 0.4); g.lineTo(ax, ay); }, col, glow, w);
-  return [ax, ay, sh + hr * 0.4];
+/* ---------- piezas comunes de las láminas con detalle ---------- */
+// fila de arriba, dentro del marco: modos a la izquierda (uno marcado) y botones a la derecha
+function topBar(left, active, right) {
+  let x = 30; left.forEach((t, i) => { const w = t.length * 7 + 22; if (i === active) { g.strokeStyle = COL.line; g.lineWidth = 1; g.strokeRect(x + 0.5, 64.5, w, 22); } txt(t, x + w / 2, 80, { size: 10, col: i === active ? COL.text : COL.dim, align: 'center' }); x += w + 8; });
+  wire3d(x + 22, 76, 11);
+  let bx = W - 30; for (const [t, o] of right.slice().reverse()) { const w = t.length * 7.5 + 26; bx -= w + 6; button(bx, 64, w, t, o); }
 }
+// lecturas grandes en columna, en la esquina derecha
+function colRead(items, y0 = 236) {
+  const rx = W - 180, fs = Math.min(30, H * 0.042);
+  items.forEach((it, i) => { const ly = y0 + i * 66;
+    g.fillStyle = it.col; g.beginPath(); g.arc(rx + 4, ly - 4, 3.5, 0, Math.PI * 2); g.fill(); txt(it.label, rx + 14, ly, { size: 10, col: it.col });
+    txt(it.value, rx, ly + 34, { size: fs, col: it.col, font: SANS, spacing: 0 });
+    if (it.unit) { g.save(); g.font = `${fs}px ${SANS}`; const vw = g.measureText(it.value).width; g.restore(); txt(it.unit, rx + vw + 6, ly + 34, { size: 10, col: it.col }); } });
+}
+function cornerHz(lines, y0 = 112) { lines.forEach(([k, v], i) => { txt(k, W - 150, y0 + i * 18, { size: 10, col: COL.orange }); txt(v, W - 34, y0 + i * 18, { size: 12, col: COL.orange, align: 'right' }); }); }
+function gridBg(step = 24) { g.save(); g.strokeStyle = '#0E2A44'; g.lineWidth = 0.5; for (let x = 40; x < W - 30; x += step) { g.beginPath(); g.moveTo(x, 100); g.lineTo(x, H - 90); g.stroke(); } for (let y = 100; y < H - 90; y += step) { g.beginPath(); g.moveTo(30, y); g.lineTo(W - 30, y); g.stroke(); } g.restore(); }
+function scaleBar(px, label) { thin(() => { g.moveTo(40, H - 104); g.lineTo(40 + px, H - 104); g.moveTo(40, H - 108); g.lineTo(40, H - 100); g.moveTo(40 + px, H - 108); g.lineTo(40 + px, H - 100); }, COL.text, 1); txt(label, 48 + px, H - 100, { size: 10 }); }
+function brackets(x, y, w, h, col) { const k = Math.min(w, h) * 0.18; thin(() => { for (const [cx, cy, sx, sy] of [[x, y, 1, 1], [x + w, y, -1, 1], [x, y + h, 1, -1], [x + w, y + h, -1, -1]]) { g.moveTo(cx + sx * k, cy); g.lineTo(cx, cy); g.lineTo(cx, cy + sy * k); } }, col, 1.2); }
+
+// FIGURA anatómica de frente: silueta en dos líneas y, dentro, cráneo, columna en vértebras, costillas, pelvis y huesos con articulaciones
+function figure(cx, base, h, o = {}) {
+  const col = o.col || COL.line, glow = o.glow || COL.glow, inner = o.inner || '#2E5F8E', f = o.face ?? 1;
+  const hr = h * 0.065, hy = base - h + hr, sh = hy + hr * 1.7, sw = h * 0.11, waist = base - h * 0.47;
+  const body = () => {
+    g.moveTo(cx - h * 0.03, hy + hr * 0.92); g.lineTo(cx - h * 0.032, sh - h * 0.012); g.quadraticCurveTo(cx - sw, sh - h * 0.005, cx - sw, sh + h * 0.04);
+    g.lineTo(cx - h * 0.085, waist); g.quadraticCurveTo(cx - h * 0.1, waist + h * 0.04, cx - h * 0.09, waist + h * 0.08); g.lineTo(cx - h * 0.075, base - h * 0.012); g.lineTo(cx - h * 0.015, base - h * 0.012);
+    g.lineTo(cx - h * 0.008, waist + h * 0.1); g.lineTo(cx + h * 0.008, waist + h * 0.1); g.lineTo(cx + h * 0.015, base - h * 0.012); g.lineTo(cx + h * 0.075, base - h * 0.012);
+    g.lineTo(cx + h * 0.09, waist + h * 0.08); g.quadraticCurveTo(cx + h * 0.1, waist + h * 0.04, cx + h * 0.085, waist); g.lineTo(cx + sw, sh + h * 0.04); g.quadraticCurveTo(cx + sw, sh - h * 0.005, cx + h * 0.032, sh - h * 0.012); g.lineTo(cx + h * 0.03, hy + hr * 0.92); };
+  dbl(body, o.gap ?? 3, col, glow, 1);
+  dbl(() => g.arc(cx, hy, hr, 0, Math.PI * 2), o.gap ?? 3, col, glow, 1);
+  if (o.detail !== false) {
+    thin(() => { g.arc(cx, hy - hr * 0.08, hr * 0.72, Math.PI * 0.85, Math.PI * 2.15); g.moveTo(cx - hr * 0.45, hy + hr * 0.45); g.quadraticCurveTo(cx, hy + hr * 0.75, cx + hr * 0.45, hy + hr * 0.45); }, inner, 0.8);   // cráneo y mandíbula
+    thin(() => { const n = 14; for (let k = 0; k < n; k++) { const yy = sh - h * 0.01 + k * (waist + h * 0.04 - sh) / n; rr(cx - h * 0.009, yy, h * 0.018, (waist - sh) / n * 0.7, 1.5); } }, inner, 0.7);   // columna
+    thin(() => { for (let k = 0; k < 6; k++) { const yy = sh + h * 0.03 + k * h * 0.022, rw = sw * (0.78 - k * 0.04); g.moveTo(cx - h * 0.01, yy); g.quadraticCurveTo(cx - rw, yy - h * 0.004, cx - rw * 0.92, yy + h * 0.018); g.moveTo(cx + h * 0.01, yy); g.quadraticCurveTo(cx + rw, yy - h * 0.004, cx + rw * 0.92, yy + h * 0.018); } }, inner, 0.7);   // costillas
+    thin(() => { g.moveTo(cx - h * 0.075, waist + h * 0.03); g.quadraticCurveTo(cx, waist + h * 0.12, cx + h * 0.075, waist + h * 0.03); g.quadraticCurveTo(cx, waist + h * 0.07, cx - h * 0.075, waist + h * 0.03); }, inner, 0.8);   // pelvis
+    thin(() => { for (const s of [-1, 1]) { g.moveTo(cx + s * h * 0.05, waist + h * 0.08); g.lineTo(cx + s * h * 0.045, base - h * 0.25); g.lineTo(cx + s * h * 0.045, base - h * 0.03); } }, inner, 0.8);   // fémur y tibia
+    for (const s of [-1, 1]) thin(() => g.arc(cx + s * h * 0.045, base - h * 0.25, h * 0.008, 0, Math.PI * 2), inner, 0.8);   // rodillas
+  }
+  // brazos: hombro → codo → muñeca, como un tubo en dos líneas; el que no se mueve, caído
+  const arm = (sx, a1, a2) => { const x0 = cx + sx * sw * 0.86, y0 = sh + h * 0.03, ex = x0 + Math.cos(a1) * h * 0.17, ey = y0 + Math.sin(a1) * h * 0.17, wx = ex + Math.cos(a2) * h * 0.15, wy = ey + Math.sin(a2) * h * 0.15;
+    dbl(() => { g.moveTo(x0, y0); g.lineTo(ex, ey); g.lineTo(wx, wy); }, o.gap ?? 3, col, glow, 1); return { x0, y0, ex, ey, wx, wy, a2 }; };
+  arm(-f, Math.PI / 2 + f * 0.12, Math.PI / 2 + f * 0.05);
+  const A = o.armA != null ? arm(f, o.armA, o.armA + (o.bend || 0)) : arm(f, Math.PI / 2 - f * 0.12, Math.PI / 2 - f * 0.05);
+  return { hy, hr, sh, ...A };
+}
+// cuchillo en dos líneas, con el filo siempre hacia abajo
+function knife2(x, y, ang, L) {
+  g.save(); g.translate(x, y); g.rotate(ang); if (Math.cos(ang) < 0) g.scale(1, -1);   // si apunta a la izquierda, se voltea para que el filo quede abajo
+  dbl(() => { g.moveTo(0, -L * 0.03); g.lineTo(L * 0.3, -L * 0.03); g.lineTo(L * 0.3, L * 0.03); g.lineTo(0, L * 0.03); g.closePath(); }, 2, COL.dim, '#1F4E79', 0.8);   // mango
+  dbl(() => { g.moveTo(L * 0.32, -L * 0.045); g.lineTo(L * 0.9, -L * 0.035); g.quadraticCurveTo(L * 1.0, -L * 0.02, L * 1.02, 0); g.quadraticCurveTo(L * 0.75, L * 0.075, L * 0.32, L * 0.07); g.closePath(); }, 2.2, COL.orange, COL.orangeG, 1);
+  thin(() => { g.moveTo(L * 0.34, L * 0.055); g.quadraticCurveTo(L * 0.75, L * 0.06, L * 1.0, L * 0.005); }, COL.orange, 1.4);   // filo
+  g.restore();
+  return [x + Math.cos(ang) * L * 1.02, y + Math.sin(ang) * L * 1.02];
+}
+// la nevera de frente, en dos líneas y con rayos X (baldas y cajones por dentro)
+function fridgeFront2(F, cracks = 0) {
+  const { x, y, w, h, split } = F;
+  dbl(() => rr(x, y, w, h * 0.96, h * 0.04), 5);
+  thin(() => rr(x + h * 0.025, y + h * 0.025, w - h * 0.05, h * 0.91, h * 0.025), '#2E5F8E', 0.8, [2, 3]);
+  dbl(() => { g.moveTo(x + 3, split); g.lineTo(x + w - 3, split); }, 4);
+  dbl(() => { g.moveTo(x + w * 0.84, y + h * 0.1); g.lineTo(x + w * 0.84, y + h * 0.26); g.moveTo(x + w * 0.84, split + h * 0.06); g.lineTo(x + w * 0.84, split + h * 0.3); }, 3);
+  thin(() => { for (const yy of [split + h * 0.2, split + h * 0.36]) { g.moveTo(x + w * 0.1, yy); g.lineTo(x + w * 0.74, yy); } rr(x + w * 0.1, y + h * 0.8, w * 0.64, h * 0.1, 4); rr(x + w * 0.12, y + h * 0.1, w * 0.6, h * 0.14, 4); }, '#24557F', 0.8, [3, 3]);
+  dbl(() => { g.moveTo(x + w * 0.1, y + h * 0.96); g.lineTo(x + w * 0.1, y + h); g.moveTo(x + w * 0.9, y + h * 0.96); g.lineTo(x + w * 0.9, y + h); }, 2.5);
+}
+
+/* ---------- lámina 2: la autopsia, con figura anatómica ---------- */
 function viewAutopsia() {
-  header('AUTOPSIA', 'BUITRAGO DEL LOZOYA · SEPTIEMBRE 2010', 'Reconstrucción del golpe. Cada caja, una risa.', 'CASO ABIERTO', `${S.kicks % 1000} GOLPES`);
-  const base = H * 0.72, fh = Math.min(H * 0.46, W * 0.5), F = fridgeGeom(W * 0.36, base - fh * 0.5, fh);
-  drawFridge(F, { wound: true });
-  const swing = Math.pow(S.kick, 0.6), armA = Math.PI + 0.9 - swing * 0.85, px = W * 0.36 + F.w * 0.95;
-  const [ax, ay, shY] = person(px, base, fh * 0.92, armA);
-  // el cuchillo: sigue al brazo, filo abajo
-  const kl = fh * 0.2, kx = ax + Math.cos(armA) * kl, ky = ay + Math.sin(armA) * kl;
-  neon(() => { g.moveTo(ax, ay); g.lineTo(kx, ky); }, COL.orange, COL.orangeG, 2.4);
-  // la trayectoria y su ángulo
-  neon(() => { g.arc(px, shY, fh * 0.32 + kl, Math.PI + 0.05, Math.PI + 0.9); }, COL.dim, COL.glow, 0.8, [3, 5]);
-  const deg = Math.round((Math.PI + 0.9 - armA) / Math.PI * 180);
-  tag(kx, ky, kx - 70, ky - 50, `ÁNGULO ${deg}°`, COL.orange);
-  tag(px, shY - fh * 0.12, px + 80, shY - fh * 0.2, 'PHIBS');
-  // los otros cuatro, riéndose con la caja
-  ['KAKS', 'JASJ', 'MOX', 'MIKI'].forEach((n, i) => {
-    const cx = W * 0.62 + i * W * 0.085, jump = S.snare * 8 * ((i + S.snares) % 2);
-    person(cx, base - jump, fh * 0.55, -0.8 + Math.sin(T * 9 + i) * 0.25, COL.dim, '#1F4E79', 1.1);
-    txt(n, cx, base + 22, { size: 10, col: COL.dim, align: 'center' });
-    if (S.snare > 0.4 && (i + S.snares) % 2 === 0) txt('JA', cx + 12, base - fh * 0.62 - jump, { size: 12, col: COL.pink });
-  });
-  readouts([{ label: 'GOLPES · BOMBO', value: String(S.kicks % 1000), col: COL.green },
-    { label: 'RISAS · CAJA', value: String(S.snares % 1000), col: COL.orange },
-    { label: 'FUERZA', value: (swing * 9.8).toFixed(1), unit: 'N·M', col: COL.pink },
-    { label: 'TESTIGOS', value: '4', col: COL.white }], H - 150);
+  topBar(['RECONSTRUCCIÓN', 'TESTIGOS', 'IMPACTO'], Math.floor(S.bar / 4) % 3, [['3D', true], ['TRAYECTORIA', true], ['ESQUELETO', S.bar % 8 < 6], ['REJILLA', false]]);
+  cornerHz([['FECHA', '09·2010'], ['HORA', '03:14'], ['LUGAR', 'COCINA']]);
+  txt(S.snare > 0.4 ? 'RISAS' : 'SILENCIO', W - 34, 176, { size: 10, col: COL.text, align: 'right' });
+  gridBg();
+  const base = H * 0.78, fh = Math.min(H * 0.52, W * 0.42), F = { x: W * 0.2, y: base - fh, w: fh * 0.56, h: fh, split: base - fh + fh * 0.34 };
+  const hits = Math.min(8, S.kicks);
+  fridgeFront2(F);
+  const swing = Math.pow(S.kick, 0.6), armA = 3.74 + (2.22 - 3.74) * swing, px = F.x + F.w + fh * 0.3;   // brazo en alto → hacia la puerta
+  // trayectoria y transportador alrededor del hombro
+  const fig = figure(px, base, fh * 0.98, { face: -1, armA, bend: -0.4 + swing * 0.75, detail: S.bar % 8 < 6 });
+  const r0 = fh * 0.34, sx = fig.x0, sy = fig.y0;
+  thin(() => { g.arc(sx, sy, r0, 2.1, 3.85); }, COL.dim, 0.9, [3, 4]);
+  thin(() => { for (let k = 0; k <= 18; k++) { const a = 2.1 + k * 1.75 / 18, l = k % 3 ? 4 : 9; g.moveTo(sx + Math.cos(a) * r0, sy + Math.sin(a) * r0); g.lineTo(sx + Math.cos(a) * (r0 + l), sy + Math.sin(a) * (r0 + l)); } }, COL.dim, 0.8);
+  const [tx, ty] = knife2(fig.wx, fig.wy, fig.a2, fh * 0.22);
+  // impacto: punto de mira y grietas que crecen con cada golpe
+  if (swing > 0.85) S.imp = [(tx - F.x) / F.w, (ty - F.y) / F.h];   // el impacto, donde llega la punta en el golpe
+  const ix = F.x + F.w * (S.imp ? S.imp[0] : 0.8), iy = F.y + F.h * (S.imp ? S.imp[1] : 0.45);
+  thin(() => { for (let k = 0; k < hits; k++) { const a = k * 2.4 + 0.3, l = F.h * (0.05 + 0.02 * (k % 3)); g.moveTo(ix, iy); g.lineTo(ix + Math.cos(a) * l * 0.6, iy + Math.sin(a) * l * 0.6); g.lineTo(ix + Math.cos(a + 0.3) * l, iy + Math.sin(a + 0.3) * l); } }, COL.orange, 1.1);
+  cross(ix, iy, 6 + S.kick * 6, COL.orange, COL.orangeG);
+  for (const [jx, jy] of [[fig.x0, fig.y0], [fig.ex, fig.ey], [fig.wx, fig.wy]]) thin(() => { g.arc(jx, jy, 4, 0, Math.PI * 2); }, COL.pink, 1.2);
+  const deg = Math.round((3.74 - armA) / Math.PI * 180);
+  const RX = Math.min(W - 230, px + fh * 0.5);
+  tag(px, fig.hy - fig.hr, RX, fig.hy - fig.hr - 24, 'PHIBS');
+  tag(fig.x0, fig.y0, RX, fig.y0 + fh * 0.02, 'HOMBRO', COL.pink);
+  tag(fig.ex, fig.ey, RX, fig.y0 + fh * 0.1, 'CODO', COL.pink);
+  tag(sx + Math.cos(2.4) * r0, sy + Math.sin(2.4) * r0, F.x - 20, F.y + fh * 0.04, `TRAYECTORIA · ${deg}°`);
+  tag(tx, ty, F.x - 20, F.y + fh * 0.16, 'CUCHILLO · 20 CM', COL.orange);
+  tag(fig.wx, fig.wy, F.x - 20, F.y + fh * 0.28, 'MUÑECA', COL.pink);
+  tag(ix, iy, F.x - 20, iy + fh * 0.14, 'IMPACTO', COL.orange);
+  // los testigos, al fondo, sin esqueleto
+  ['KAKS', 'JASJ', 'MOX', 'MIKI'].forEach((n, i) => { const cx = px + fh * 0.3 + i * fh * 0.13; if (cx > W - 235) return; const jump = S.snare * 6 * ((i + S.snares) % 2);
+    figure(cx, base - jump, fh * 0.5, { col: '#5B8DBF', glow: '#1F4E79', detail: false, gap: 2, armA: -Math.PI / 2 - 0.4 + Math.sin(T * 9 + i) * 0.2, bend: -0.3 });
+    txt(n, cx, base + 16, { size: 10, col: COL.dim, align: 'center' }); if (S.snare > 0.4 && (i + S.snares) % 2 === 0) txt('JA', cx + 10, base - fh * 0.6 - jump, { size: 12, col: COL.pink }); });
+  scaleBar(fh * 0.058, '10 CM');
+  colRead([{ label: 'GOLPES · BOMBO', value: String(S.kicks % 1000), col: COL.green }, { label: 'ÁNGULO', value: String(deg), unit: '°', col: COL.orange },
+    { label: 'FUERZA', value: (swing * 9.8).toFixed(1), unit: 'N·M', col: COL.pink }, { label: 'RISAS · CAJA', value: String(S.snares % 1000), col: COL.white }]);
 }
 
-/* ---------- lámina 3: el mapa (Comunidad de Madrid → término de Buitrago) ---------- */
+/* ---------- lámina 3: el mapa, con detalle de carta topográfica ---------- */
+const A1 = [[40.452, -3.665], [40.54, -3.64], [40.62, -3.63], [40.67, -3.615], [40.73, -3.585], [40.8, -3.6], [40.86, -3.615], [40.93, -3.625], [40.985, -3.635], [41.05, -3.62], [41.13, -3.585]];
+const LOZOYA = [[40.9, -3.88], [40.92, -3.83], [40.935, -3.79], [40.96, -3.74], [40.985, -3.69], [40.99, -3.655], [40.985, -3.625], [40.97, -3.59], [40.955, -3.56], [40.93, -3.53], [40.91, -3.49], [40.9, -3.46], [40.87, -3.43]];
+const EMBALSES = [['PINILLA', 40.935, -3.8, 0.03, 0.012], ['RIOSEQUILLO', 40.99, -3.68, 0.022, 0.009], ['PUENTES VIEJAS', 40.968, -3.585, 0.02, 0.012], ['EL ATAZAR', 40.91, -3.48, 0.04, 0.016]];
+const SIERRA = [[40.6, -4.3], [40.72, -4.1], [40.8, -4.0], [40.87, -3.92], [40.94, -3.83], [41.0, -3.74], [41.06, -3.65], [41.12, -3.55], [41.16, -3.45]];
+const PUEBLOS = [['SAN AGUSTÍN', 40.68, -3.62], ['LA CABRERA', 40.865, -3.61], ['SOMOSIERRA', 41.13, -3.58], ['RASCAFRÍA', 40.904, -3.88], ['TORRELAGUNA', 40.828, -3.537]];
 function viewMapa() {
-  header('MAPA', 'COMUNIDAD DE MADRID → BUITRAGO DEL LOZOYA', 'Aquí murió una nevera.', 'LOCALIZADO', '40°59\'18.2"N 3°38\'11.6"W');
-  const e0 = Math.min(1, Math.max(0, ((T - viewT) / (60 / S.bpm * 4) - 4) / 8)), e = e0 * e0 * (3 - 2 * e0);   // 4 compases Madrid, 8 de zoom
+  const e0 = Math.min(1, Math.max(0, ((T - viewT) / (60 / S.bpm * 4) - 4) / 8)), e = e0 * e0 * (3 - 2 * e0);
+  topBar(['REGIÓN', 'COMARCA', 'TÉRMINO'], e < 0.3 ? 0 : e < 0.8 ? 1 : 2, [['3D', false], ['RELIEVE', true], ['AGUA', true], ['CARRETERAS', true]]);
+  cornerHz([['LAT', '40.9884'], ['LON', '-3.6366'], ['ALT', '975 M']]);
+  txt('LOCALIZADO', W - 34, 176, { size: 10, col: COL.text, align: 'right' });
   const box = (pts) => { let a = 90, b = -90, c = 180, d = -180; for (const [la, lo] of pts) { a = Math.min(a, la); b = Math.max(b, la); c = Math.min(c, lo); d = Math.max(d, lo); } return [a, b, c, d]; };
-  const A = box(MADRID_CA), B = box(BUITRAGO_T).map((v, i) => v + [-0.02, 0.02, -0.03, 0.03][i]);
+  const A = box(MADRID_CA), B = box(BUITRAGO_T).map((v, i) => v + [-0.03, 0.03, -0.05, 0.05][i]);
   const L = A.map((v, i) => v + (B[i] - v) * e), k = Math.cos(41 * Math.PI / 180);
-  const pw = W - 120, ph = H - 330, sc = Math.min(pw / ((L[3] - L[2]) * k), ph / (L[1] - L[0])), cx = W / 2, cy = 150 + ph / 2;
+  const x0 = 40, x1 = W - 230, y0 = 100, y1 = H - 96, pw = x1 - x0, ph = y1 - y0;
+  const sc = Math.min(pw / ((L[3] - L[2]) * k), ph / (L[1] - L[0])), cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
   const P = (la, lo) => [cx + (lo - (L[2] + L[3]) / 2) * k * sc, cy - (la - (L[0] + L[1]) / 2) * sc];
-  // rejilla
-  const stp = sc > 4000 ? 0.01 : sc > 800 ? 0.05 : 0.25;
-  g.save(); g.strokeStyle = '#163A5C'; g.lineWidth = 0.6;
-  for (let la = Math.floor(L[0] / stp) * stp - stp * 4; la < L[1] + stp * 4; la += stp) { const [, yy] = P(la, 0); g.beginPath(); g.moveTo(40, yy); g.lineTo(W - 40, yy); g.stroke(); }
-  for (let lo = Math.floor(L[2] / stp) * stp - stp * 6; lo < L[3] + stp * 6; lo += stp) { const [xx] = P(0, lo); g.beginPath(); g.moveTo(xx, 140); g.lineTo(xx, H - 180); g.stroke(); }
-  g.restore();
-  g.save(); g.beginPath(); g.rect(17, 53, W - 34, H - 130); g.clip();
-  neon(() => MADRID_CA.forEach(([la, lo], i) => { const [x, y] = P(la, lo); i ? g.lineTo(x, y) : g.moveTo(x, y); }), COL.line, COL.glow, 1.3);
-  neon(() => { BUITRAGO_T.forEach(([la, lo], i) => { const [x, y] = P(la, lo); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.closePath(); }, COL.green, COL.greenG, 1.2 + e);
-  const [bx, by] = P(...BUITRAGO), [mx, my] = P(...MADRID);
-  // la A-1: de Madrid a Buitrago, discontinua, corriendo al tempo
-  neon(() => { g.moveTo(mx, my); g.lineTo(bx, by); }, COL.dim, COL.glow, 0.9, [4, 6], -T * S.bpm * 0.4);
-  if (my < H - 190) { cross(mx, my, 5, COL.text, COL.glow); tag(mx, my, mx + 60, my + 20, 'MADRID'); }
+  const line = pts => () => pts.forEach(([la, lo], i) => { const [x, y] = P(la, lo); i ? g.lineTo(x, y) : g.moveTo(x, y); });
+  g.save(); g.beginPath(); g.rect(x0, y0, pw, ph); g.clip();
+  // rejilla de meridianos y paralelos, con sus grados en el borde
+  const stp = sc > 6000 ? 0.01 : sc > 1500 ? 0.05 : 0.1;
+  g.strokeStyle = '#0E2A44'; g.lineWidth = 0.6;
+  const every = Math.max(1, Math.ceil(46 / (stp * sc)));   // rótulos espaciados: como mucho uno cada ~46 px
+  let li = 0, lj = 0;
+  for (let la = Math.ceil((L[0] - 1) / stp) * stp; la < L[1] + 1; la += stp) { const [, yy] = P(la, 0); if (yy < y0 || yy > y1) continue; g.beginPath(); g.moveTo(x0, yy); g.lineTo(x1, yy); g.stroke(); if (li++ % every) continue; txt(la.toFixed(stp <= 0.05 ? 2 : 1) + '°', x0 + 4, yy - 3, { size: 9, col: '#3D6E9E' }); }
+  for (let lo = Math.ceil((L[2] - 1) / stp) * stp; lo < L[3] + 1; lo += stp) { const [xx] = P(0, lo); if (xx < x0 || xx > x1) continue; g.beginPath(); g.moveTo(xx, y0); g.lineTo(xx, y1); g.stroke(); if (lj++ % (every * 2)) continue; txt(lo.toFixed(stp <= 0.05 ? 2 : 1) + '°', xx + 3, y0 + 12, { size: 9, col: '#3D6E9E' }); }
+  // relieve: la sierra como curvas de nivel paralelas
+  for (let j = 0; j < 5; j++) thin(line(SIERRA.map(([la, lo]) => [la - 0.035 + j * 0.018, lo - 0.02 + j * 0.01])), j === 2 ? '#3D6E9E' : '#1F4E79', j === 2 ? 1 : 0.7, j === 2 ? null : [4, 4]);
+  // la Comunidad de Madrid: borde en dos líneas
+  dbl(() => { line(MADRID_CA)(); g.closePath(); }, 3, COL.line, COL.glow, 1);
+  // el agua: el Lozoya y los embalses
+  neon(line(LOZOYA), '#85B7EB', '#185FA5', 1.1);
+  for (const [n, la, lo, rx, ry] of EMBALSES) { const [ex, ey] = P(la, lo); dbl(() => g.ellipse(ex, ey, rx * k * sc, ry * sc, -0.35, 0, Math.PI * 2), 2, '#85B7EB', '#185FA5', 0.8); if (rx * k * sc > 14) txt(n, ex, ey - ry * sc - 6, { size: 9, col: '#85B7EB', align: 'center' }); }
+  // el término de Buitrago, verde, en dos líneas
+  dbl(() => { line(BUITRAGO_T)(); g.closePath(); }, 2.5 + e * 2, COL.green, COL.greenG, 1);
+  // la A-1 en dos líneas, con el flujo corriendo hacia Madrid
+  dbl(line(A1), 3, '#B4B2A9', '#444441', 0.8);
+  neon(line(A1), COL.dim, COL.glow, 0.8, [4, 6], T * S.bpm * 0.4);
+  // pueblos
+  for (const [n, la, lo] of PUEBLOS) { const [px, py] = P(la, lo); if (px < x0 || px > x1 || py < y0 || py > y1) continue; thin(() => rr(px - 3, py - 3, 6, 6, 1), COL.text, 0.9); txt(n, px + 8, py + 3, { size: 9, col: COL.dim }); }
+  const [mx, my] = P(...MADRID), [bx, by] = P(...BUITRAGO);
+  if (my < y1 - 10) { cross(mx, my, 5, COL.text, COL.glow); txt('MADRID', mx + 10, my + 4, { size: 10, col: COL.text }); }
+  // Buitrago: anillos de distancia y punto de mira
+  for (let r = 1; r <= 3; r++) thin(() => g.arc(bx, by, r * 0.02 * sc * (1 - 0.6 * e) + 8, 0, Math.PI * 2), '#7A4A12', 0.8, [2, 4]);
   cross(bx, by, 7 + S.kick * 6, COL.orange, COL.orangeG);
-  tag(bx, by, bx + 90, by - 50, 'BUITRAGO DEL LOZOYA', COL.orange);
-  if (e < 0.5) tag(...P(40.2, -4.3), ...P(40.0, -4.7), 'COMUNIDAD DE MADRID'); else tag(...P(40.97, -3.665), ...P(40.95, -3.72), 'TÉRMINO MUNICIPAL', COL.green);
+  tag(bx, by, Math.min(x1 - 160, bx + 80), by - 60, 'BUITRAGO DEL LOZOYA', COL.orange);
   g.restore();
-  const km = Math.round(75 * (1 - e) + 0.5);
-  readouts([{ label: 'LATITUD', value: '40.988', unit: '° N', col: COL.green }, { label: 'LONGITUD', value: '3.636', unit: '° O', col: COL.orange },
-    { label: 'ZOOM', value: '×' + Math.round(sc / 300), col: COL.pink }, { label: 'A MADRID', value: '75', unit: 'KM · A-1, SALIDA 76', col: COL.white }], H - 150);
+  // rosa de los vientos y escala en km
+  const nx = x1 - 30, ny = y0 + 40; thin(() => { g.moveTo(nx, ny + 16); g.lineTo(nx, ny - 16); g.moveTo(nx - 5, ny - 9); g.lineTo(nx, ny - 16); g.lineTo(nx + 5, ny - 9); g.arc(nx, ny, 10, 0, Math.PI * 2); }, COL.text, 0.9); txt('N', nx, ny - 22, { size: 10, align: 'center' });
+  const kmPx = sc / 111; let km = 1; for (const c of [1, 2, 5, 10, 20, 50]) if (c * kmPx < 140) km = c; scaleBar(km * kmPx, km + ' KM');
+  thin(() => { g.strokeRect(x0 + 0.5, y0 + 0.5, pw, ph); }, '#1F4E79', 1);
+  colRead([{ label: 'A MADRID', value: '75', unit: 'KM', col: COL.white }, { label: 'SALIDA', value: '76', unit: 'A-1', col: COL.orange },
+    { label: 'ZOOM', value: '×' + Math.round(sc / 300), col: COL.pink }, { label: 'TÉRMINO', value: '27', unit: 'KM²', col: COL.green }]);
 }
 
-/* ---------- lámina 4: rueda de reconocimiento ---------- */
+/* ---------- lámina 4: rueda de reconocimiento, con detalle ---------- */
 const SUSP = [['KAKS', 178, 'SECADOR DE PELO'], ['JASJ', 183, 'ESTABA EN EL BAÑO'], ['PHIBS', 175, 'NINGUNA'], ['MOX', 180, 'DORMÍA'], ['MIKI', 172, 'COMPRABA HIELO']];
+function fingerprint(x, y, r) {   // huella: espirales de líneas finas que giran despacio
+  thin(() => { for (let k = 1; k <= 11; k++) { const rr2 = r * k / 11; g.moveTo(x + rr2, y); g.ellipse(x, y, rr2, rr2 * 1.3, Math.sin(T * 0.3) * 0.2, 0, Math.PI * (1.6 + 0.4 * Math.sin(k + T))); } }, COL.pink, 0.8);
+}
 function viewSospechosos() {
   const i = S.beats % 5, [n, cm, al] = SUSP[i];
-  header('SOSPECHOSOS', 'RUEDA DE RECONOCIMIENTO · 5 INDIVIDUOS', 'Uno de ellos lo hizo. Cada tiempo, otro sospechoso.', 'SEÑALADO', n);
-  const base = H * 0.72, top = H * 0.3, hpx = (base - top) / 215;   // píxeles por cm, desde el suelo
-  g.save(); g.strokeStyle = '#163A5C'; g.lineWidth = 0.7;
-  for (let c = 150; c <= 210; c += 10) { const y = base - c * hpx; g.beginPath(); g.moveTo(60, y); g.lineTo(W - 60, y); g.stroke(); txt(String(c), 48, y + 4, { size: 10, col: COL.dim, align: 'right' }); }
-  g.restore();
+  topBar(['FILA 1', 'FILA 2'], 0, [['3D', true], ['ALTURA', true], ['ESQUELETO', S.bar % 8 < 6], ['HUELLAS', true]]);
+  cornerHz([['Nº', String(i + 1).padStart(2, '0')], ['EXP.', '2010-BL'], ['ESTADO', 'ABIERTO']]);
+  txt('SEÑALADO', W - 34, 176, { size: 10, col: COL.text, align: 'right' });
+  const base = H * 0.8, top = 110, hpx = (base - top) / 215, xL = 70, xR = W - 230;
+  // pared de alturas: raya larga cada 10 cm, corta cada 5, números en los dos lados
+  g.save(); for (let c = 0; c <= 210; c += 5) { const y = base - c * hpx; if (y < top) continue; g.strokeStyle = c % 10 ? '#0E2A44' : '#163A5C'; g.lineWidth = c % 10 ? 0.5 : 0.8; g.beginPath(); g.moveTo(xL, y); g.lineTo(xR, y); g.stroke();
+    if (c % 10 === 0 && c >= 120) { txt(String(c), xL - 6, y + 3, { size: 9, col: COL.dim, align: 'right' }); txt(String(c), xR + 6, y + 3, { size: 9, col: COL.dim }); } } g.restore();
+  const sp = (xR - xL) / 5;
   SUSP.forEach(([nm, c], j) => {
-    const cx = W * (0.2 + j * 0.15), h = c * hpx, on = j === i;
-    person(cx, base, h, null, on ? COL.pink : COL.dim, on ? COL.pinkG : '#1F4E79', on ? 1.6 : 1.1);
-    txt(nm, cx, base + 22, { size: 11, col: on ? COL.pink : COL.dim, align: 'center' });
-    if (on) cross(cx, base - h + h * 0.075, 10 + S.kick * 8, COL.pink, COL.pinkG);
+    const cx = xL + sp * (j + 0.5), h = c * hpx, on = j === i;
+    figure(cx, base, h, on ? { col: COL.pink, glow: COL.pinkG, inner: '#993556', detail: S.bar % 8 < 6 } : { col: '#5B8DBF', glow: '#1F4E79', detail: S.bar % 8 < 6, inner: '#163A5C' });
+    dbl(() => rr(cx - sp * 0.28, base + 8, sp * 0.56, 22, 3), 2, on ? COL.pink : COL.dim, on ? COL.pinkG : '#1F4E79', 0.8);   // cartel con el número
+    txt(String(j + 1).padStart(2, '0') + ' · ' + nm, cx, base + 23, { size: 10, col: on ? COL.pink : COL.dim, align: 'center' });
+    if (on) {
+      cross(cx, base - h + h * 0.065, 9 + S.kick * 6, COL.pink, COL.pinkG);
+    }
   });
-  readouts([{ label: 'NOMBRE', value: n, col: COL.pink }, { label: 'ALTURA', value: String(cm), unit: 'CM', col: COL.green },
-    { label: 'COARTADA', value: al.split(' ')[0], unit: al, col: COL.orange }, { label: 'CULPA', value: (n === 'PHIBS' ? 97 : 20 + (S.beats * 7) % 60) + '%', col: COL.white }], H - 150);
+  { const cx = xL + sp * (i + 0.5), h = cm * hpx, mx = cx + h * 0.2;   // cota y esquinas del señalado, por encima de todo
+    brackets(cx - h * 0.16, base - h - 8, h * 0.32, h + 8, COL.pink);
+    thin(() => { g.moveTo(mx, base); g.lineTo(mx, base - h); g.moveTo(mx - 4, base - h); g.lineTo(mx + 4, base - h); g.moveTo(mx - 4, base); g.lineTo(mx + 4, base); }, COL.pink, 0.9);
+    g.fillStyle = '#000'; g.fillRect(mx + 3, base - h / 2 - 10, 50, 14); txt(cm + ' CM', mx + 6, base - h / 2, { size: 10, col: COL.pink }); }
+  fingerprint(W - 110, 210, 34 + S.snare * 4);
+  colRead([{ label: 'NOMBRE', value: n, col: COL.pink }, { label: 'ALTURA', value: String(cm), unit: 'CM', col: COL.green },
+    { label: 'COARTADA', value: al.split(' ')[0], col: COL.orange }, { label: 'CULPA', value: (n === 'PHIBS' ? 97 : 20 + (S.beats * 7) % 60) + '%', col: COL.white }], 290);
 }
 
-/* ---------- lámina 5: la presión del freón (el espectro, dentro de la tubería) ---------- */
+/* ---------- lámina 5: la presión, en corte transversal y longitudinal ---------- */
 function viewPresion() {
   const peak = Math.max(...S.spec);
-  header('PRESIÓN', 'CIRCUITO DE FREÓN · CORTE TRANSVERSAL', 'El sonido de la Freon, dentro de la tubería.', peak > 0.85 ? 'FUGA' : 'ESTABLE', `${(1 + peak * 4).toFixed(2)} BAR`);
-  const x0 = 60, x1 = W - 60, cy = H * 0.47, r = H * 0.18;
-  neon(() => { g.moveTo(x0, cy - r); g.lineTo(x1, cy - r); g.moveTo(x0, cy + r); g.lineTo(x1, cy + r); });
-  neon(() => { g.moveTo(x0, cy - r - 8); g.lineTo(x1, cy - r - 8); g.moveTo(x0, cy + r + 8); g.lineTo(x1, cy + r + 8); }, COL.line, COL.glow, 0.6);
-  const n = 64, dx = (x1 - x0) / (n - 1);
-  const wave = s => () => { for (let i = 0; i < n; i++) { const v = S.spec[i] * r * 0.95 * s; i ? g.lineTo(x0 + i * dx, cy - v) : g.moveTo(x0, cy - v); } };
-  neon(wave(1), COL.green, COL.greenG, 1.5); neon(wave(-1), COL.green, COL.greenG, 1.5);
-  // partículas de freón que corren por la tubería al tempo
-  g.save(); g.fillStyle = COL.text;
-  for (let k = 0; k < 40; k++) { const u = ((k * 0.137 + T * S.bpm / 240) % 1), yy = cy + Math.sin(k * 12.9) * r * 0.8; g.globalAlpha = 0.5; g.fillRect(x0 + u * (x1 - x0), yy, 2, 2); }
-  g.restore();
+  topBar(['TRANSVERSAL', 'LONGITUDINAL'], (S.bar >> 2) % 2, [['3D', false], ['ESPECTRO', true], ['PARTÍCULAS', true], ['MANÓMETRO', true]]);
+  const N = S.notes && S.notes.some(v => v > 0) && !S.sim ? S.notes : [57, 64, 69];
+  cornerHz(N.map((v, k) => ['T' + (k + 1), String(Math.round(noteHz(v)))]));
+  txt(peak > 0.85 ? 'FUGA' : 'ESTABLE', W - 34, 176, { size: 10, col: COL.text, align: 'right' });
+  gridBg();
+  // corte transversal: aislante, pared de cobre y el freón que se expande con el bombo
+  const cx = 60 + H * 0.17, cy = H * 0.47, R = H * 0.15;
+  dbl(() => g.arc(cx, cy, R * 1.25, 0, Math.PI * 2), 3, '#5B8DBF', '#1F4E79', 0.8);
+  thin(() => { for (let k = 0; k < 48; k++) { const a = k * Math.PI / 24; g.moveTo(cx + Math.cos(a) * R * 1.05, cy + Math.sin(a) * R * 1.05); g.lineTo(cx + Math.cos(a + 0.1) * R * 1.2, cy + Math.sin(a + 0.1) * R * 1.2); } }, '#1F4E79', 0.7);   // aislante rayado
+  dbl(() => g.arc(cx, cy, R, 0, Math.PI * 2), 5, COL.line, COL.glow, 1.1);
+  const fr = R * (0.55 + 0.35 * S.kick); neon(() => g.arc(cx, cy, fr, 0, Math.PI * 2), COL.green, COL.greenG, 1.3);
+  thin(() => { for (let k = 0; k < 36; k++) { const a = k * Math.PI / 18 + T * 0.4; g.moveTo(cx + Math.cos(a) * fr * 0.3, cy + Math.sin(a) * fr * 0.3); g.lineTo(cx + Math.cos(a) * fr, cy + Math.sin(a) * fr); } }, '#5DCAA5', 0.6);
+  cross(cx, cy, 6, COL.green, COL.greenG);
+  tag(cx + R * 1.2, cy - R * 0.5, cx + R * 1.5, cy - R * 1.5, 'AISLANTE', COL.dim);
+  tag(cx - R * 0.7, cy + R * 0.7, cx - R * 0.6, cy + R * 1.7, 'PARED DE COBRE');
+  // corte longitudinal: paredes en dos líneas, el espectro dentro y el freón corriendo
+  const x0 = cx + R * 1.7, x1 = W - 230, ty = cy - R, by = cy + R;
+  dbl(() => { g.moveTo(x0, ty); g.lineTo(x1, ty); g.moveTo(x0, by); g.lineTo(x1, by); }, 5, COL.line, COL.glow, 1.1);
+  thin(() => { for (let x = x0; x < x1; x += 7) { g.moveTo(x, ty - 6); g.lineTo(x + 5, ty - 13); g.moveTo(x, by + 6); g.lineTo(x + 5, by + 13); } }, '#1F4E79', 0.7);
+  const n = 64, dx = (x1 - x0) / (n - 1), wave = sg => () => { for (let i = 0; i < n; i++) { const v = S.spec[i] * R * 0.9 * sg; i ? g.lineTo(x0 + i * dx, cy - v) : g.moveTo(x0, cy - v); } };
+  neon(wave(1), COL.green, COL.greenG, 1.4); neon(wave(-1), COL.green, COL.greenG, 1.4);
+  thin(() => { for (let i = 0; i < n; i += 2) { const v = S.spec[i] * R * 0.9; g.moveTo(x0 + i * dx, cy - v); g.lineTo(x0 + i * dx, cy + v); } }, '#0F6E56', 0.6);
+  g.save(); g.fillStyle = COL.text; for (let k = 0; k < 50; k++) { const u = ((k * 0.137 + T * S.bpm / 240) % 1), yy = cy + Math.sin(k * 12.9) * R * 0.8; g.globalAlpha = 0.5; g.fillRect(x0 + u * (x1 - x0), yy, 2, 2); } g.restore();
+  thin(() => { for (let k = 0; k < 6; k++) { const ax = x0 + ((k / 6 + T * S.bpm / 480) % 1) * (x1 - x0); g.moveTo(ax - 6, by + 22); g.lineTo(ax, by + 26); g.lineTo(ax - 6, by + 30); } }, COL.green, 1);   // flechas de flujo
+  // válvula (pajarita) y manómetro con aguja
+  const vx = x0 + (x1 - x0) * 0.72; dbl(() => { g.moveTo(vx - 12, ty - 22); g.lineTo(vx + 12, ty - 2); g.lineTo(vx + 12, ty - 22); g.lineTo(vx - 12, ty - 2); g.closePath(); }, 2, COL.line, COL.glow, 0.8);
+  const gx = x0 + (x1 - x0) * 0.3, gy = ty - R * 0.75, gr = R * 0.42;
+  dbl(() => g.arc(gx, gy, gr, 0, Math.PI * 2), 3); thin(() => { g.moveTo(gx, gy + gr); g.lineTo(gx, ty); }, COL.line, 1.2);
+  thin(() => { for (let k = 0; k <= 20; k++) { const a = Math.PI * (0.75 + k * 0.075), l = k % 5 ? 4 : 8; g.moveTo(gx + Math.cos(a) * (gr - 4), gy + Math.sin(a) * (gr - 4)); g.lineTo(gx + Math.cos(a) * (gr - 4 - l), gy + Math.sin(a) * (gr - 4 - l)); } }, COL.text, 0.8);
+  for (let k = 0; k <= 4; k++) { const a = Math.PI * (0.75 + k * 0.375); txt(String(k * 2.5), gx + Math.cos(a) * (gr - 20), gy + Math.sin(a) * (gr - 20) + 3, { size: 8, col: COL.dim, align: 'center' }); }
+  const na = Math.PI * (0.75 + 1.5 * Math.min(1, peak)); neon(() => { g.moveTo(gx, gy); g.lineTo(gx + Math.cos(na) * (gr - 8), gy + Math.sin(na) * (gr - 8)); }, COL.orange, COL.orangeG, 1.4);
   let hi = 0; for (let i = 1; i < n; i++) if (S.spec[i] > S.spec[hi]) hi = i;
-  tag(x0 + hi * dx, cy - S.spec[hi] * r * 0.95, x0 + hi * dx + 60, cy - r - 30, `PICO · ${Math.round(40 * Math.pow(500, hi / n))} HZ`, COL.orange);
-  tag(x1 - 10, cy + r, x1 - 40, cy + r + 40, 'PARED DE COBRE', COL.dim);
-  readouts([{ label: 'GRAVES', value: (S.spec.slice(0, 8).reduce((a, b) => a + b, 0) / 8).toFixed(2), col: COL.green },
-    { label: 'MEDIOS', value: (S.spec.slice(8, 32).reduce((a, b) => a + b, 0) / 24).toFixed(2), col: COL.orange },
-    { label: 'AGUDOS', value: (S.spec.slice(32).reduce((a, b) => a + b, 0) / 32).toFixed(2), col: COL.pink },
-    { label: 'FUGA · MÁSTER', value: Math.round(S.master * 100) + '%', col: COL.white }], H - 150);
+  tag(x0 + hi * dx, cy - S.spec[hi] * R * 0.9, Math.min(x1 - 140, x0 + hi * dx + 60), by + 50, `PICO · ${Math.round(40 * Math.pow(500, hi / n))} HZ`, COL.orange);
+  tag(gx + gr * 0.7, gy - gr * 0.7, gx + gr + 60, gy - gr - 10, 'MANÓMETRO', COL.orange);
+  tag(vx + 12, ty - 12, vx + 60, ty - R * 0.9, 'VÁLVULA');
+  colRead([{ label: 'PRESIÓN', value: (1 + peak * 9).toFixed(1), unit: 'BAR', col: COL.orange }, { label: 'GRAVES', value: (S.spec.slice(0, 8).reduce((a, b) => a + b, 0) / 8).toFixed(2), col: COL.green },
+    { label: 'AGUDOS', value: (S.spec.slice(32).reduce((a, b) => a + b, 0) / 32).toFixed(2), col: COL.pink }, { label: 'FUGA · MÁSTER', value: Math.round(S.master * 100) + '%', col: COL.white }]);
 }
 
 /* ---------- bucle ---------- */
