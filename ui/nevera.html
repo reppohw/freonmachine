@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="google" content="notranslate">
-<title>FUGA DE FREÓN · LA NEVERA v40 · FREON MACHINE</title>
+<title>FUGA DE FREÓN · LA NEVERA v41 · FREON MACHINE</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
   :root { --fg:#e6e6e6; --bg:#000; --fs:4.1vw; }
@@ -2163,39 +2163,35 @@ const POW16 = Float32Array.from({ length: 256 }, (_, i) => Math.pow(i / 255, 1.6
 const POW14 = Float32Array.from({ length: 1024 }, (_, i) => Math.pow(i / 1023, 1.4));
 const FONT = 'Menlo, "SF Mono", Consolas, "DejaVu Sans Mono", "Liberation Mono", monospace';
 
-/* ---------- v40: ESTILO MAPA. Todo lo que se dibuja pasa a polígono, como el borde de la Comunidad de Madrid:
-   las curvas (arcos, elipses, curvas) se hacen con tramos rectos y cada recta larga se parte en tramos con un pequeño
-   quiebro irregular. El quiebro sale de la posición (no del azar), así que una forma quieta no tiembla.
-   Las esquinas redondeadas pasan a chaflanes y los trazos acaban en esquina, no en redondo. ?suave lo apaga. ---------- */
+/* ---------- v41: ESTILO MAPA, marcado. Todo lo que se dibuja pasa a polígono limpio:
+   las curvas (arcos, elipses, curvas) se hacen con pocos tramos rectos (un círculo = 6-7 lados, algo irregulares,
+   como una silueta de mapa; siempre el mismo dibujo, no tiembla), las rectas quedan rectas, las esquinas redondeadas
+   pasan a chaflán y los trazos acaban en esquina. ?suave lo apaga. ---------- */
 const POLY_ON = !/[?&]suave\b/.test(location.search);
 function polyCtx(g) {
   if (!POLY_ON || !g || g.__poly) return; g.__poly = true;
-  const P = CanvasRenderingContext2D.prototype, SEG = 1.1, J = 0.11;   // unidades de celda: tramos de ~1,1 celdas, quiebro de ±0,11
+  const P = CanvasRenderingContext2D.prototype;
   let cx0 = 0, cy0 = 0, sx = 0, sy = 0, has = false;
-  const hsh = (x, y) => { const n = Math.sin(Math.round(x * 3) * 12.9898 + Math.round(y * 3) * 78.233) * 43758.5453; return n - Math.floor(n) - 0.5; };
-  const jag = (x2, y2) => {
-    if (!has) { P.moveTo.call(g, x2, y2); cx0 = sx = x2; cy0 = sy = y2; has = true; return; }
-    const dx = x2 - cx0, dy = y2 - cy0, L = Math.hypot(dx, dy), n = L > 80 || g.__polyOff ? 0 : Math.min(24, Math.floor(L / SEG));   // las muy largas (casi siempre fuera de pantalla), rectas: no gastan
-    if (n >= 2) { const nx = -dy / L, ny = dx / L; for (let i = 1; i < n; i++) { const t = i / n, px = cx0 + dx * t, py = cy0 + dy * t, j = hsh(px, py) * 2 * J; P.lineTo.call(g, px + nx * j, py + ny * j); } }
-    P.lineTo.call(g, x2, y2); cx0 = x2; cy0 = y2;
-  };
+  const hsh = (x, y) => { const n = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453; return n - Math.floor(n) - 0.5; };
+  const to = (x2, y2) => { if (!has) { P.moveTo.call(g, x2, y2); cx0 = sx = x2; cy0 = sy = y2; has = true; return; } P.lineTo.call(g, x2, y2); cx0 = x2; cy0 = y2; };
   const arcPts = (x, y, rx, ry, rot, a0, a1, ccw) => {
+    if (g.__polyOff) { if (has) P.lineTo.call(g, x + Math.cos(a0) * rx, y + Math.sin(a0) * ry); else P.moveTo.call(g, x + Math.cos(a0) * rx, y + Math.sin(a0) * ry); P.ellipse.call(g, x, y, Math.abs(rx), Math.abs(ry), rot, a0, a1, ccw); cx0 = x + Math.cos(a1) * rx; cy0 = y + Math.sin(a1) * ry; has = true; return; }
     let sw = a1 - a0; if (!ccw && sw < 0) sw = sw % (Math.PI * 2) + Math.PI * 2; if (ccw && sw > 0) sw = sw % (Math.PI * 2) - Math.PI * 2; if (Math.abs(sw) > Math.PI * 2) sw = Math.sign(sw) * Math.PI * 2;
-    const r = Math.max(Math.abs(rx), Math.abs(ry)), n = Math.max(5, Math.min(36, Math.round(Math.abs(sw) * Math.sqrt(Math.max(0.01, r)) * 1.0))), c = Math.cos(rot), s2 = Math.sin(rot);
-    for (let k = 0; k <= n; k++) { const a = a0 + sw * k / n, ex = Math.cos(a) * rx, ey = Math.sin(a) * ry; jag(x + ex * c - ey * s2, y + ex * s2 + ey * c); }
+    const full = Math.abs(sw) > Math.PI * 1.99, n = Math.max(full ? 6 : 2, Math.round(Math.abs(sw) / (Math.PI * 2) * 7)), c = Math.cos(rot), s2 = Math.sin(rot);
+    for (let k = 0; k <= n; k++) { const kk = full && k === n ? 0 : k, a = a0 + sw * k / n, q = full ? 1 + hsh(kk * 3.7, 11) * 0.22 : 1, ex = Math.cos(a) * rx * q, ey = Math.sin(a) * ry * q; to(x + ex * c - ey * s2, y + ex * s2 + ey * c); }
   };
   g.beginPath = function () { P.beginPath.call(g); has = false; };
   g.moveTo = function (x, y) { P.moveTo.call(g, x, y); cx0 = sx = x; cy0 = sy = y; has = true; };
-  g.lineTo = function (x, y) { jag(x, y); };
-  g.closePath = function () { if (has && (cx0 !== sx || cy0 !== sy)) jag(sx, sy); P.closePath.call(g); cx0 = sx; cy0 = sy; };
+  g.lineTo = function (x, y) { to(x, y); };
+  g.closePath = function () { P.closePath.call(g); cx0 = sx; cy0 = sy; };
   g.arc = function (x, y, r, a0, a1, ccw) { arcPts(x, y, r, r, 0, a0, a1, !!ccw); };
   g.ellipse = function (x, y, rx, ry, rot, a0, a1, ccw) { arcPts(x, y, rx, ry, rot, a0, a1, !!ccw); };
-  g.quadraticCurveTo = function (qx, qy, x, y) { const x0 = cx0, y0 = cy0, n = 6; for (let k = 1; k <= n; k++) { const t = k / n, u = 1 - t; jag(u * u * x0 + 2 * u * t * qx + t * t * x, u * u * y0 + 2 * u * t * qy + t * t * y); } };
-  g.bezierCurveTo = function (ax, ay, bx, by, x, y) { const x0 = cx0, y0 = cy0, n = 8; for (let k = 1; k <= n; k++) { const t = k / n, u = 1 - t; jag(u * u * u * x0 + 3 * u * u * t * ax + 3 * u * t * t * bx + t * t * t * x, u * u * u * y0 + 3 * u * u * t * ay + 3 * u * t * t * by + t * t * t * y); } };
-  g.arcTo = function (x1, y1, x2, y2, r) {   // esquina en chaflán
-    const ax = x1 - cx0, ay = y1 - cy0, la = Math.hypot(ax, ay) || 1, bx = x2 - x1, by = y2 - y1, lb = Math.hypot(bx, by) || 1, k = Math.min(r * 0.7, la * 0.5, lb * 0.5);
-    jag(x1 - ax / la * k, y1 - ay / la * k); jag(x1 + bx / lb * k, y1 + by / lb * k); };
-  g.rect = function (x, y, w, h) { g.moveTo(x, y); jag(x + w, y); jag(x + w, y + h); jag(x, y + h); g.closePath(); };
+  g.quadraticCurveTo = function (qx, qy, x, y) { const x0 = cx0, y0 = cy0, n = 3; for (let k = 1; k <= n; k++) { const t = k / n, u = 1 - t; to(u * u * x0 + 2 * u * t * qx + t * t * x, u * u * y0 + 2 * u * t * qy + t * t * y); } };
+  g.bezierCurveTo = function (ax, ay, bx, by, x, y) { const x0 = cx0, y0 = cy0, n = 4; for (let k = 1; k <= n; k++) { const t = k / n, u = 1 - t; to(u * u * u * x0 + 3 * u * u * t * ax + 3 * u * t * t * bx + t * t * t * x, u * u * u * y0 + 3 * u * u * t * ay + 3 * u * t * t * by + t * t * t * y); } };
+  g.arcTo = function (x1, y1, x2, y2, r) {   // esquina en chaflán marcado
+    const ax = x1 - cx0, ay = y1 - cy0, la = Math.hypot(ax, ay) || 1, bx = x2 - x1, by = y2 - y1, lb = Math.hypot(bx, by) || 1, k = Math.min(r * 1.1, la * 0.5, lb * 0.5);
+    to(x1 - ax / la * k, y1 - ay / la * k); to(x1 + bx / lb * k, y1 + by / lb * k); };
+  g.rect = function (x, y, w, h) { g.moveTo(x, y); to(x + w, y); to(x + w, y + h); to(x, y + h); g.closePath(); };
   // trazos con esquinas y finales rectos, como un mapa
   const dc = Object.getOwnPropertyDescriptor(P, 'lineCap'), dj = Object.getOwnPropertyDescriptor(P, 'lineJoin');
   Object.defineProperty(g, 'lineCap', { get() { return dc.get.call(g); }, set() { dc.set.call(g, 'butt'); }, configurable: true });
@@ -2224,7 +2220,7 @@ function asciiResize() {
   AS.K = AS.ch / AS.cw;                                     // las celdas son altas: corregimos proporciones
   AS.cols = Math.ceil(W / AS.cw); AS.rows = Math.ceil(H / AS.ch);
   AS.dpr = d; for (const c of [AS.bg, AS.fg]) { c.width = Math.round(W * d); c.height = Math.round(H * d); }   // a resolución de pantalla; se dibuja en unidades de celda con la transformación
-  AS.fog = document.createElement('canvas'); AS.fog.width = AS.cols; AS.fog.height = AS.rows; AS.fogX = AS.fog.getContext('2d'); AS.fogD = AS.fogX.createImageData(AS.cols, AS.rows);
+
   AS.frost = new Float32Array(AS.cols * AS.rows);
   // pantalla completa / cambio de tamaño a mitad de algo: el logo de gas y el final se recolocan en la rejilla nueva
   if (oc && or && (oc !== AS.cols || or !== AS.rows)) {
@@ -2726,7 +2722,8 @@ function asciiDraw(a, p, stabbed, E) {
   gb.globalAlpha = 0.9 * B; for (const f of AS.flakes) sprite(gb, f.x, f.y, q => drawFlake(q, f.r), f.rot);
   // nieve fina y gas
   for (const q of AS.parts) { gb.globalAlpha = 0.9 * B; gray(gb, 1); gb.fillRect(q.x, q.y, 0.7, 0.7); }
-  for (const q of AS.gas) { gb.globalAlpha = Math.max(0, q.life) * 0.55 * B; gray(gb, 1); gb.beginPath(); gb.ellipse(q.x, q.y, q.r * K, q.r, 0, 0, Math.PI * 2); gb.fill(); }
+  for (const q of AS.gas) { const a = Math.max(0, q.life) * B; if (a < 0.02) continue; gb.beginPath(); gb.ellipse(q.x, q.y, q.r * K, q.r, q.ph || 0, 0, Math.PI * 2);   // gas: polígonos con relleno tenue y contorno (no manchas)
+    gb.globalAlpha = a * 0.5; gray(gb, 0.22); gb.fill(); gb.globalAlpha = Math.min(1, a * 1.1); gray(gb, 0.85); gb.lineWidth = 0.28; gb.stroke(); }
   for (const r of AS.rings) { gb.globalAlpha = Math.max(0, r.life) * B; gray(gb, 1); gb.lineWidth = 0.9; gb.beginPath(); gb.ellipse(r.x, r.y, r.r * K, r.r, 0, 0, Math.PI * 2); gb.stroke(); }   // timbales: ondas
   // gotas
   for (const d of AS.drips) { const gr = gb.createLinearGradient(0, d.y - d.len, 0, d.y); gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(1, `rgba(255,255,255,${0.9 * B})`); gb.globalAlpha = 1; gb.fillStyle = gr; gb.fillRect(d.x, d.y - d.len, 0.8, d.len); }
@@ -2787,14 +2784,29 @@ function asciiDraw(a, p, stabbed, E) {
     for (let y = 0; y < rows; y++) nzY[y] = Math.sin(y * 0.19 - AS.t * 0.6);
     for (let k = 0; k < cols + rows; k++) nzD[k] = Math.sin(k * 0.05 + AS.t * 1.1) * 0.6;
   }
-  if (AS.fogD && AS.fogD.width === cols && AS.fogD.height === rows) {
-    const fd = AS.fogD.data; let any = false;
-    for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
-      const i = y * cols + x; let v = fr[i] * frK;
-      if (fl > 0.02) { const yn = 1 - y / rows, nz = nzX[x] * nzY[y] + nzD[x + y], edge = fl * 1.08 + nz * 0.06 - yn; if (edge > 0) v += Math.min(1, edge * 6) * (0.24 + 0.2 * nz) * (1 + 1.2 * gp); }
-      const c8 = v > 0.03 ? Math.min(255, v * 230) | 0 : 0; if (c8) any = true; fd[i * 4] = fd[i * 4 + 1] = fd[i * 4 + 2] = c8; fd[i * 4 + 3] = 255;
+  // escarcha: mosaico de triángulos (facetas de hielo), por bloques de 3 celdas
+  { const Bk = 3; gb.save(); gb.globalAlpha = 1;
+    for (let by = 0; by < rows; by += Bk) for (let bx = 0; bx < cols; bx += Bk) {
+      const i = Math.min(rows - 1, by + 1) * cols + Math.min(cols - 1, bx + 1), v = Math.min(1, fr[i] * frK); if (v < 0.08) continue;
+      const flip = ((bx / Bk + by / Bk) & 1) === 1;
+      gray(gb, v * 0.75); gb.beginPath(); if (flip) { gb.moveTo(bx, by); gb.lineTo(bx + Bk, by); gb.lineTo(bx, by + Bk); } else { gb.moveTo(bx, by); gb.lineTo(bx + Bk, by); gb.lineTo(bx + Bk, by + Bk); } gb.closePath(); gb.fill();
+      gray(gb, v * 0.45); gb.beginPath(); if (flip) { gb.moveTo(bx + Bk, by); gb.lineTo(bx + Bk, by + Bk); gb.lineTo(bx, by + Bk); } else { gb.moveTo(bx, by); gb.lineTo(bx + Bk, by + Bk); gb.lineTo(bx, by + Bk); } gb.closePath(); gb.fill();
     }
-    if (any) { AS.fogX.putImageData(AS.fogD, 0, 0); gb.save(); gb.globalCompositeOperation = 'lighter'; gb.imageSmoothingEnabled = true; gb.globalAlpha = 1; gb.drawImage(AS.fog, 0, 0, cols, rows); gb.restore(); }
+    gb.restore(); }
+  // humo que sube: capas como curvas de nivel de un mapa, con tramos rectos (cada capa, un poco más baja y más clara)
+  if (fl > 0.02) {
+    const step = 11, layers = 5; gb.save();
+    for (let k = 0; k < layers; k++) {
+      const h = fl * 1.08 - k * 0.075; if (h <= 0) break;
+      gb.beginPath(); gb.moveTo(0, rows);
+      for (let x = 0, vi = 0; x <= cols + step; x += step, vi++) { const xx = Math.min(cols, x), nz = nzX[Math.min(cols - 1, xx | 0)] * 0.6 + nzD[Math.min(cols + rows - 1, (xx | 0) + k * 9)] * 0.7,
+          hj = Math.sin(vi * 91.7 + k * 13.3) * 43758.5453, jt = (hj - Math.floor(hj) - 0.5) * 0.06;   // cada vértice, un saliente fijo: perfil de curva de nivel
+        gb.lineTo(xx, rows * (1 - h - nz * 0.045 - jt)); }
+      gb.lineTo(cols, rows); gb.closePath();
+      gb.globalAlpha = 1; gray(gb, Math.min(0.5, (0.07 + 0.035 * k) * (1 + 1.2 * gp))); gb.fill();
+      gray(gb, 0.75); gb.lineWidth = 0.35; gb.stroke();
+    }
+    gb.restore();
   }
   // los dos lienzos grises pasan al color del show (multiplicar: el negro sigue negro, el blanco se vuelve el color)
   const flashOn = document.body.classList.contains('flash');
@@ -2874,26 +2886,24 @@ function asciiEndTick(dt) {
   // gas: sube en 3 s hasta cubrirlo todo, aguanta, y entre los 6 y los 15 s se va disipando (de arriba abajo, con remolinos)
   const cover = Math.min(1, e / 3), clear = Math.max(0, Math.min(1, (e - 6) / 9));
   const cx = AS.cx; cx.clearRect(0, 0, innerWidth, innerHeight); cx.font = `${AS.ch}px ${FONT}`; cx.fillStyle = '#ff1414';
-  // v39: sin ASCII: el gas y el logo que deja se calculan por celda y se pintan como una niebla roja suavizada
-  if (!E.cv || E.cv.width !== cols || E.cv.height !== rows) { E.cv = document.createElement('canvas'); E.cv.width = cols; E.cv.height = rows; E.cq = E.cv.getContext('2d'); E.img = E.cq.createImageData(cols, rows); }
-  const px8 = E.img.data;
-  const sa = Math.max(0, Math.min(1, (e - 12) / 3)), logoBottom = E.lineY[0] ? E.lineY[0][0] : rows * 0.38;
-  for (let y = 0; y < rows; y++) {
-    const yn = y / rows;
-    for (let x = 0; x < cols; x++) {
-      const i = y * cols + x;
+  // v41: el gas y el logo que deja, en mosaico de triángulos rojos (bloques de 3 celdas): el logo se forma en facetas
+  const sa = Math.max(0, Math.min(1, (e - 12) / 3)), logoBottom = E.lineY[0] ? E.lineY[0][0] : rows * 0.38, Bk = 3, bw = Bk * AS.cw, bh = Bk * AS.ch;
+  for (let by = 0; by < rows; by += Bk) {
+    const y = Math.min(rows - 1, by + 1), yn = y / rows;
+    for (let bx = 0; bx < cols; bx += Bk) {
+      const x = Math.min(cols - 1, bx + 1), i = y * cols + x;
       const nz = Math.sin(x * 0.11 + AS.t * 0.8) * Math.sin(y * 0.19 - AS.t * 0.6) + Math.sin((x + y) * 0.05 + AS.t * 1.1) * 0.6;
       const gone = clear * 1.4 - yn * 0.4 - E.seed[i] * 0.25 + nz * 0.08;        // > 0: aquí el gas ya se ha ido
       const covered = (1 - yn) < cover * 1.15 + nz * 0.05;
       const k = E.kind[i], m = E.mask[i];
-      // lo que queda escrito: el logo aparece al irse el gas (y se apaga cuando entra el logo liso)
-      let v = k === 1 && gone > 0 ? Math.pow(m, 0.8) * (y < logoBottom ? 1 - sa : 1) : 0;
-      // el gas
-      if (covered && gone < 0.15) v = Math.max(v, 0.55 * Math.min(1, 0.35 + 0.25 * nz + (gone > 0 ? -gone * 3 : 0)) * 0.6);
-      const o = (y * cols + x) * 4; px8[o] = 255 * v; px8[o + 1] = 20 * v; px8[o + 2] = 20 * v; px8[o + 3] = 255 * Math.min(1, v * 1.4);
+      let v = k === 1 && gone > 0 ? Math.pow(m, 0.8) * (y < logoBottom ? 1 - sa : 1) : 0;   // el logo aparece al irse el gas
+      if (covered && gone < 0.15) v = Math.max(v, 0.33 * Math.min(1, 0.35 + 0.25 * nz + (gone > 0 ? -gone * 3 : 0)));   // el gas
+      if (v < 0.03) continue;
+      const X = bx * AS.cw, Y = by * AS.ch, flip = ((bx / Bk + by / Bk) & 1) === 1;
+      cx.fillStyle = `rgba(255,20,20,${Math.min(1, v)})`; cx.beginPath(); if (flip) { cx.moveTo(X, Y); cx.lineTo(X + bw, Y); cx.lineTo(X, Y + bh); } else { cx.moveTo(X, Y); cx.lineTo(X + bw, Y); cx.lineTo(X + bw, Y + bh); } cx.closePath(); cx.fill();
+      cx.fillStyle = `rgba(255,20,20,${Math.min(1, v * 0.62)})`; cx.beginPath(); if (flip) { cx.moveTo(X + bw, Y); cx.lineTo(X + bw, Y + bh); cx.lineTo(X, Y + bh); } else { cx.moveTo(X, Y); cx.lineTo(X + bw, Y + bh); cx.lineTo(X, Y + bh); } cx.closePath(); cx.fill();
     }
   }
-  E.cq.putImageData(E.img, 0, 0); cx.imageSmoothingEnabled = true; cx.drawImage(E.cv, 0, 0, cols * AS.cw, rows * AS.ch);
   if (sa > 0 && AS.logoImg && AS.logoImg.complete) {
     const lh = rows * 0.34, lw = lh * (788 / 550) * AS.K, pw = lw * AS.cw, ph = lh * AS.ch, px = (cols - lw) / 2 * AS.cw, py = rows * 0.04 * AS.ch;
     if (!E.solid || E.solid.width !== Math.round(pw * 2)) {
