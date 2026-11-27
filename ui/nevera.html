@@ -4189,8 +4189,9 @@ addEventListener('keydown', e => {
   if (!analyser || e.repeat || keyGrab || $('start')) return;   // en la pantalla de inicio las teclas no son órdenes
   // pantalla completa: Cmd+F o Cmd+E (Ctrl en Windows/Linux)
   if ((e.metaKey || (e.ctrlKey && !e.altKey)) && ['f', 'e'].includes(keyOf(e))) { e.preventDefault(); fsEl() ? fsExit() : fsEnter(); return; }
-  if (waiting) {   // pantalla de espera: solo Mayús+S arranca el show
+  if (waiting) {   // pantalla de espera: Mayús+S arranca el show; Mayús+D, la demo
     if (e.shiftKey && keyOf(e) === 's') { e.preventDefault(); if (ac && ac.state !== 'running') ac.resume().catch(() => {}); waiting(); }
+    else if (e.shiftKey && actionOf(keyOf(e)) === 'data') { e.preventDefault(); if (ac && ac.state !== 'running') ac.resume().catch(() => {}); demoStart(); }
     return;
   }
   if (e.metaKey || (e.ctrlKey && !e.altKey)) return;   // Cmd+C, Ctrl+R...: no son órdenes del show (AltGr = Ctrl+Alt sí pasa)
